@@ -1,0 +1,475 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { formatDate, formatTime, getDateRange } from '@/lib/utils/date'
+import { Fixture, getFixtures, getOdds } from '@/lib/api-football'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { CircularProgress } from '@/components/ui/circular-progress'
+import Image from 'next/image'
+import { cn } from '@/lib/utils'
+
+const FILTERS = [
+  { id: 'free', label: 'Free Tips' },
+  { id: 'all', label: 'All Tips' },
+  { id: 'super_single', label: 'Super Single' },
+  { id: 'double_chance', label: 'Double Chance' },
+  { id: 'home_win', label: 'Home Win' },
+  { id: 'away_win', label: 'Away Win' },
+  { id: 'over_1_5', label: '1.5 Goals' },
+  { id: 'over_2_5', label: '2.5 Goals' },
+  { id: 'btts', label: 'BTTS/GG' },
+]
+
+interface FreePrediction {
+  id: string
+  home_team: string
+  away_team: string
+  league: string
+  prediction_type: string
+  odds: number
+  confidence: number
+  kickoff_time: string
+  status: 'not_started' | 'live' | 'finished'
+  home_team_logo?: string
+  away_team_logo?: string
+  home_score?: string
+  away_score?: string
+  match_id?: string
+}
+
+export function FreePredictionsSection() {
+  const [predictions, setPredictions] = useState<FreePrediction[]>([])
+  const [selectedFilter, setSelectedFilter] = useState('free')
+  const [dateType, setDateType] = useState<'previous' | 'today' | 'tomorrow'>('today')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchPredictions = async () => {
+      setLoading(true)
+      try {
+        const { from, to } = getDateRange(dateType)
+        console.log('Date range:', { from, to, dateType })
+        
+        // Fetch fixtures from API Football
+        const fixtures = await getFixtures(from, undefined, to)
+        console.log('Fixtures response:', fixtures)
+        console.log('Fixtures count:', Array.isArray(fixtures) ? fixtures.length : 'Not an array')
+        
+        if (!Array.isArray(fixtures) || fixtures.length === 0) {
+          console.log('No fixtures found or fixtures is not an array')
+          setPredictions([])
+          setLoading(false)
+          return
+        }
+
+        // Convert fixtures to predictions
+        const allPredictions: FreePrediction[] = []
+        
+        // Process fixtures until we have 5 predictions
+        for (const fixture of fixtures) {
+          // Stop if we have enough predictions
+          if (allPredictions.length >= 5) {
+            break
+          }
+          
+          try {
+            // Fetch odds for this fixture
+            let oddsData: any = null
+            try {
+              console.log(`Fetching odds for match_id: ${fixture.match_id}`)
+              const odds = await getOdds(fixture.match_id)
+              console.log(`Odds response for ${fixture.match_id}:`, odds)
+              if (Array.isArray(odds) && odds.length > 0) {
+                oddsData = odds[0]
+                console.log(`Odds data for ${fixture.match_id}:`, oddsData)
+              } else {
+                console.log(`No odds data found for ${fixture.match_id}`)
+              }
+            } catch (oddsError) {
+              // If odds fetch fails, continue without odds data
+              console.error('Error fetching odds:', oddsError)
+            }
+
+            // Determine prediction types based on filter
+            const predictionTypes: string[] = []
+            
+            if (selectedFilter === 'free' || selectedFilter === 'all') {
+              // Add multiple prediction types for free/all
+              if (oddsData) {
+                if (oddsData.odd_1) predictionTypes.push('Home Win')
+                if (oddsData.odd_2) predictionTypes.push('Away Win')
+                if (oddsData['o+2.5']) predictionTypes.push('Over 2.5')
+                if (oddsData['o+1.5']) predictionTypes.push('Over 1.5')
+                if (oddsData.bts_yes) predictionTypes.push('BTTS')
+                if (oddsData.odd_1x) predictionTypes.push('Double Chance')
+              } else {
+                // Default predictions if no odds
+                predictionTypes.push('Over 2.5', 'Home Win', 'BTTS')
+              }
+            } else {
+              // Filter-specific predictions
+              if (selectedFilter === 'home_win' && oddsData?.odd_1) {
+                predictionTypes.push('Home Win')
+              } else if (selectedFilter === 'away_win' && oddsData?.odd_2) {
+                predictionTypes.push('Away Win')
+              } else if (selectedFilter === 'over_2_5' && oddsData?.['o+2.5']) {
+                predictionTypes.push('Over 2.5')
+              } else if (selectedFilter === 'over_1_5' && oddsData?.['o+1.5']) {
+                predictionTypes.push('Over 1.5')
+              } else if (selectedFilter === 'btts' && oddsData?.bts_yes) {
+                predictionTypes.push('BTTS')
+              } else if (selectedFilter === 'double_chance' && oddsData?.odd_1x) {
+                predictionTypes.push('Double Chance')
+              } else if (selectedFilter === 'super_single') {
+                // Super single - pick the best odds prediction
+                if (oddsData) {
+                  const bestOdds = Math.max(
+                    parseFloat(oddsData.odd_1 || '0'),
+                    parseFloat(oddsData.odd_2 || '0'),
+                    parseFloat(oddsData['o+2.5'] || '0')
+                  )
+                  if (bestOdds === parseFloat(oddsData.odd_1 || '0')) {
+                    predictionTypes.push('Home Win')
+                  } else if (bestOdds === parseFloat(oddsData.odd_2 || '0')) {
+                    predictionTypes.push('Away Win')
+                  } else {
+                    predictionTypes.push('Over 2.5')
+                  }
+                } else {
+                  predictionTypes.push('Over 2.5')
+                }
+              }
+            }
+
+            // Create predictions for each type (limit to 1 per fixture to get exactly 5)
+            const predictionType = predictionTypes[0] || 'Over 2.5'
+            
+            // Stop if we already have 5
+            if (allPredictions.length >= 5) {
+              break
+            }
+            
+            let odds = 1.85
+            let confidence = 75
+
+            // Get odds for this prediction type
+            if (oddsData) {
+              if (predictionType === 'Home Win' && oddsData.odd_1) {
+                odds = parseFloat(oddsData.odd_1)
+                confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
+              } else if (predictionType === 'Away Win' && oddsData.odd_2) {
+                odds = parseFloat(oddsData.odd_2)
+                confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
+              } else if (predictionType === 'Over 2.5' && oddsData['o+2.5']) {
+                odds = parseFloat(oddsData['o+2.5'])
+                confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
+              } else if (predictionType === 'Over 1.5' && oddsData['o+1.5']) {
+                odds = parseFloat(oddsData['o+1.5'])
+                confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
+              } else if (predictionType === 'BTTS' && oddsData.bts_yes) {
+                odds = parseFloat(oddsData.bts_yes)
+                confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
+              } else if (predictionType === 'Double Chance' && oddsData.odd_1x) {
+                odds = parseFloat(oddsData.odd_1x)
+                confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
+              }
+            }
+
+            allPredictions.push({
+              id: `${fixture.match_id}-${predictionType}`,
+              home_team: fixture.match_hometeam_name || 'Home Team',
+              away_team: fixture.match_awayteam_name || 'Away Team',
+              league: fixture.league_name || 'Unknown League',
+              prediction_type: predictionType,
+              odds: odds,
+              confidence: confidence,
+              kickoff_time: `${fixture.match_date} ${fixture.match_time || '00:00'}`,
+              status: fixture.match_status === 'Finished' ? 'finished' : 
+                      fixture.match_live === '1' ? 'live' : 'not_started',
+              home_team_logo: fixture.team_home_badge,
+              away_team_logo: fixture.team_away_badge,
+              home_score: fixture.match_hometeam_score || undefined,
+              away_score: fixture.match_awayteam_score || undefined,
+              match_id: fixture.match_id,
+            })
+          } catch (error) {
+            console.error(`Error processing fixture ${fixture.match_id}:`, error)
+          }
+        }
+
+        // Limit to 5 predictions and ensure we have exactly 5
+        const finalPredictions = allPredictions.slice(0, 5)
+        console.log('Final predictions:', finalPredictions)
+        console.log('Total predictions created:', allPredictions.length)
+        setPredictions(finalPredictions)
+      } catch (error) {
+        console.error('Error fetching predictions:', error)
+        setPredictions([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchPredictions()
+  }, [selectedFilter, dateType])
+
+  const getFilterLabel = () => {
+    const filter = FILTERS.find((f) => f.id === selectedFilter)
+    return filter ? filter.label : 'Free Safe Picks'
+  }
+
+  const getDateLabel = () => {
+    if (dateType === 'today') return formatDate(new Date())
+    if (dateType === 'tomorrow') {
+      const tomorrow = new Date()
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      return formatDate(tomorrow)
+    }
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    return formatDate(yesterday)
+  }
+
+  return (
+    <section className="py-16 bg-white">
+      <div className="container mx-auto px-4">
+        <div className="mb-8">
+          <h2 className="text-4xl font-bold mb-2 text-[#1e40af]">Free Predictions</h2>
+          <p className="text-gray-600">Get expert predictions for today's matches</p>
+        </div>
+
+        <div className="mb-8">
+          <Tabs value={selectedFilter} onValueChange={setSelectedFilter}>
+            <TabsList className="grid w-full grid-cols-5 lg:grid-cols-9 bg-gray-100 p-1 rounded-lg">
+              {FILTERS.map((filter) => (
+                <TabsTrigger 
+                  key={filter.id} 
+                  value={filter.id} 
+                  className="text-xs sm:text-sm font-semibold data-[state=active]:bg-[#1e40af] data-[state=active]:text-white rounded-md transition-all"
+                >
+                  {filter.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h3 className="text-2xl font-bold text-[#1e40af]">{getFilterLabel()}</h3>
+            <p className="text-gray-600 mt-1">{getDateLabel()}</p>
+          </div>
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+            <button
+              onClick={() => setDateType('previous')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                dateType === 'previous'
+                  ? 'bg-[#1e40af] text-white shadow-sm'
+                  : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
+              }`}
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setDateType('today')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                dateType === 'today'
+                  ? 'bg-[#1e40af] text-white shadow-sm'
+                  : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
+              }`}
+            >
+              Today
+            </button>
+            <button
+              onClick={() => setDateType('tomorrow')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                dateType === 'tomorrow'
+                  ? 'bg-[#1e40af] text-white shadow-sm'
+                  : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
+              }`}
+            >
+              Tomorrow
+            </button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="space-y-0 border rounded-lg overflow-hidden bg-white">
+            <div className="bg-blue-600 text-white px-6 py-3 grid grid-cols-12 gap-4 items-center font-semibold text-sm">
+              <div className="col-span-2">Time & League</div>
+              <div className="col-span-5">Teams</div>
+              <div className="col-span-1 text-center">Score</div>
+              <div className="col-span-1 text-center">Tip</div>
+              <div className="col-span-1 text-center">Odd</div>
+              <div className="col-span-2 text-center">Confidence</div>
+            </div>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="px-6 py-4 grid grid-cols-12 gap-4 items-center border-t animate-pulse">
+                <div className="col-span-2">
+                  <div className="h-4 w-16 bg-gray-200 rounded" />
+                  <div className="h-3 w-24 bg-gray-200 rounded mt-2" />
+                </div>
+                <div className="col-span-5 flex items-center gap-3">
+                  <div className="h-6 w-6 bg-gray-200 rounded-full" />
+                  <div className="h-4 w-32 bg-gray-200 rounded" />
+                  <span className="text-gray-400">vs</span>
+                  <div className="h-6 w-6 bg-gray-200 rounded-full" />
+                  <div className="h-4 w-32 bg-gray-200 rounded" />
+                </div>
+                <div className="col-span-1">
+                  <div className="h-4 w-12 bg-gray-200 rounded mx-auto" />
+                </div>
+                <div className="col-span-1">
+                  <div className="h-6 w-16 bg-gray-200 rounded mx-auto" />
+                </div>
+                <div className="col-span-1">
+                  <div className="h-4 w-12 bg-gray-200 rounded mx-auto" />
+                </div>
+                <div className="col-span-2 flex justify-center">
+                  <div className="h-12 w-12 bg-gray-200 rounded-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : predictions.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <p className="text-muted-foreground">No predictions available for this date.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-0 border-2 border-gray-200 rounded-xl overflow-hidden bg-white shadow-lg">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white px-6 py-4 grid grid-cols-12 gap-4 items-center font-bold text-sm shadow-md">
+              <div className="col-span-2">Time & League</div>
+              <div className="col-span-5">Teams</div>
+              <div className="col-span-1 text-center">Score</div>
+              <div className="col-span-1 text-center">Tip</div>
+              <div className="col-span-1 text-center">Odd</div>
+              <div className="col-span-2 text-center">Confidence</div>
+            </div>
+
+            {/* Predictions */}
+            {predictions.map((prediction, index) => (
+              <div
+                key={prediction.id}
+                onClick={() => {
+                  const matchId = `${prediction.match_id}-${prediction.prediction_type}`
+                  window.location.href = `/match/${encodeURIComponent(matchId)}`
+                }}
+                className={cn(
+                  'px-6 py-5 grid grid-cols-12 gap-4 items-center border-b border-gray-100 bg-white hover:bg-gradient-to-r hover:from-blue-50 hover:to-green-50 hover:shadow-md transition-all duration-300 cursor-pointer transform hover:scale-[1.01] hover:border-l-4 hover:border-l-[#22c55e]',
+                  index === predictions.length - 1 && 'border-b-0',
+                  index % 2 === 0 && 'bg-gray-50/50'
+                )}
+              >
+                {/* Time & League */}
+                <div className="col-span-2">
+                  <div className="text-sm font-medium text-gray-900">
+                    {formatTime(prediction.kickoff_time)}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">{prediction.league}</div>
+                </div>
+
+                {/* Teams */}
+                <div className="col-span-5 flex items-center gap-3">
+                  <div className="flex items-center gap-2 flex-1">
+                    {prediction.home_team_logo ? (
+                      <div className="relative w-6 h-6 flex-shrink-0">
+                        <Image
+                          src={prediction.home_team_logo}
+                          alt={prediction.home_team}
+                          width={24}
+                          height={24}
+                          className="object-contain"
+                          unoptimized
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none'
+                            const parent = e.currentTarget.parentElement
+                            if (parent) {
+                              parent.innerHTML = `<div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">${prediction.home_team.charAt(0)}</div>`
+                            }
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        {prediction.home_team.charAt(0)}
+                      </div>
+                    )}
+                    <span className="text-sm font-medium text-gray-900 truncate">
+                      {prediction.home_team}
+                    </span>
+                  </div>
+                  <span className="text-gray-400 mx-1">vs</span>
+                  <div className="flex items-center gap-2 flex-1">
+                    {prediction.away_team_logo ? (
+                      <div className="relative w-6 h-6 flex-shrink-0">
+                        <Image
+                          src={prediction.away_team_logo}
+                          alt={prediction.away_team}
+                          width={24}
+                          height={24}
+                          className="object-contain"
+                          unoptimized
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none'
+                            const parent = e.currentTarget.parentElement
+                            if (parent) {
+                              parent.innerHTML = `<div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">${prediction.away_team.charAt(0)}</div>`
+                            }
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        {prediction.away_team.charAt(0)}
+                      </div>
+                    )}
+                    <span className="text-sm font-medium text-gray-900 truncate">
+                      {prediction.away_team}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Score */}
+                <div className="col-span-1 text-center">
+                  {prediction.home_score !== undefined && prediction.away_score !== undefined ? (
+                    <div className="text-sm font-semibold text-gray-900">
+                      {prediction.home_score} - {prediction.away_score}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-400">-</div>
+                  )}
+                </div>
+
+                {/* Tip */}
+                <div className="col-span-1 text-center">
+                  <Badge variant="secondary" className="text-xs">
+                    {prediction.prediction_type === 'Over 1.5' ? 'Ov 1.5' :
+                     prediction.prediction_type === 'Over 2.5' ? 'Ov 2.5' :
+                     prediction.prediction_type}
+                  </Badge>
+                </div>
+
+                {/* Odd */}
+                <div className="col-span-1 text-center">
+                  <span className="text-sm font-semibold text-gray-900">{prediction.odds.toFixed(2)}</span>
+                </div>
+
+                {/* Confidence */}
+                <div className="col-span-2 flex justify-center">
+                  <CircularProgress value={prediction.confidence} size={50} strokeWidth={5} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
