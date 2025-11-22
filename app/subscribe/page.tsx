@@ -9,6 +9,11 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Plan, PlanPrice, Country } from '@/types'
+import { Database } from '@/types/database'
+
+type CountryOption = 'Nigeria' | 'Ghana' | 'Kenya' | 'Other'
+
+type UserProfile = Pick<Database['public']['Tables']['users']['Row'], 'country'>
 
 export default function SubscribePage() {
   const router = useRouter()
@@ -21,7 +26,7 @@ export default function SubscribePage() {
   const [selectedDuration, setSelectedDuration] = useState<number>(7)
   const [selectedPrice, setSelectedPrice] = useState<PlanPrice | null>(null)
   const [user, setUser] = useState<any>(null)
-  const [country, setCountry] = useState<Country | null>(null)
+  const [userCountry, setUserCountry] = useState<CountryOption>('Nigeria')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -37,14 +42,16 @@ export default function SubscribePage() {
       setUser(user)
 
       // Get user country
-      const { data: userProfile } = await supabase
+      const result = await supabase
         .from('users')
-        .select('country_id, countries(*)')
+        .select('country')
         .eq('id', user.id)
-        .single()
+        .maybeSingle()
+      
+      const userProfile = result.data as UserProfile | null
 
-      if (userProfile?.countries) {
-        setCountry(userProfile.countries as Country)
+      if (userProfile?.country && ['Nigeria', 'Ghana', 'Kenya', 'Other'].includes(userProfile.country)) {
+        setUserCountry(userProfile.country as CountryOption)
       }
 
       // Get plan
@@ -59,21 +66,24 @@ export default function SubscribePage() {
         if (planData) {
           setPlan(planData)
 
-          // Get prices for user's country or default to USD
-          const countryId = (userProfile?.countries as Country)?.id
+          // Get prices for user's country
+          const countryName = userProfile?.country || 'Nigeria'
           const { data: pricesData } = await supabase
             .from('plan_prices')
             .select('*')
-            .eq('plan_id', planData.id)
+            .eq('plan_id', (planData as Plan)?.id)
             .eq('duration_days', selectedDuration)
-            .or(countryId ? `country_id.eq.${countryId},currency.eq.USD` : 'currency.eq.USD')
-            .order('country_id', { ascending: false })
 
           if (pricesData && pricesData.length > 0) {
             setPrices(pricesData)
-            // Prefer country-specific price, fallback to USD
-            const countryPrice = pricesData.find((p) => p.country_id === countryId)
-            setSelectedPrice(countryPrice || pricesData[0])
+            // Prefer country-specific price, fallback to Nigeria, then any price
+            const countryPrice = pricesData.find((p: any) => p.country === countryName)
+            if (countryPrice) {
+              setSelectedPrice(countryPrice)
+            } else {
+              const nigeriaPrice = pricesData.find((p: any) => p.country === 'Nigeria')
+              setSelectedPrice(nigeriaPrice || pricesData[0])
+            }
           }
         }
       }
@@ -116,12 +126,16 @@ export default function SubscribePage() {
     )
   }
 
-  // Determine currency - Naira for Nigeria, USD for others
+  // Determine currency - Naira for Nigeria/Other, others based on country
   const getCurrencySymbol = () => {
-    if (country?.code === 'NG') {
+    if (userCountry === 'Nigeria' || userCountry === 'Other') {
       return '₦'
+    } else if (userCountry === 'Ghana') {
+      return '₵'
+    } else if (userCountry === 'Kenya') {
+      return 'KSh'
     }
-    return '$'
+    return '₦' // Default to Naira
   }
   const currency = getCurrencySymbol()
 

@@ -39,10 +39,7 @@ export default async function AdminPredictionsPage() {
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Manage Predictions</h1>
-          <p className="text-muted-foreground">Add and manage predictions</p>
-        </div>
+        <p className="text-muted-foreground">Add and manage predictions</p>
 
         <PredictionsManager
           predictions={predictions || []}

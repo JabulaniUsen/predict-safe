@@ -12,6 +12,9 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Combobox } from '@/components/ui/combobox'
 import { toast } from 'sonner'
+import { Database } from '@/types/database'
+
+type UserInsert = Database['public']['Tables']['users']['Insert']
 
 interface Country {
   name: {
@@ -91,52 +94,40 @@ export default function SignupPage() {
       if (authError) throw authError
 
       if (authData.user) {
-        // Find or create country in database
-        let dbCountryId = null
+        // Map selected country code to country name
+        let countryName = 'Nigeria' // Default
         if (selectedCountry) {
-          const supabase = createClient()
-          // Check if country exists
-          const { data: existingCountry } = await supabase
-            .from('countries')
-            .select('id')
-            .eq('code', selectedCountry)
-            .single()
-
-          if (existingCountry) {
-            dbCountryId = existingCountry.id
-          } else {
-            // Get country name
+          // Get country name from REST Countries API
+          try {
             const countryResponse = await fetch(`https://restcountries.com/v3.1/alpha/${selectedCountry}?fields=name,cca2,cca3`)
             const countryData = await countryResponse.json()
+            const countryCommonName = countryData?.name?.common || ''
             
-            // Create country if it doesn't exist
-            const { data: newCountry, error: countryError } = await supabase
-              .from('countries')
-              .insert({
-                name: countryData.name.common,
-                code: selectedCountry,
-                currency: 'USD', // Default, can be updated
-                currency_symbol: '$',
-                is_active: true,
-              })
-              .select('id')
-              .single()
-
-            if (!countryError && newCountry) {
-              dbCountryId = newCountry.id
+            // Map to our supported countries
+            if (['Nigeria', 'Ghana', 'Kenya'].includes(countryCommonName)) {
+              countryName = countryCommonName
+            } else {
+              countryName = 'Other' // For any other country
             }
+          } catch (error) {
+            console.error('Error fetching country name:', error)
+            // Default to Nigeria if API fails
+            countryName = 'Nigeria'
           }
         }
 
         // Create user profile
-        const { error: profileError } = await supabase
+        const userData: UserInsert = {
+          id: authData.user.id,
+          email,
+          full_name: fullName,
+          country: countryName,
+        }
+        const result: any = await supabase
           .from('users')
-          .insert({
-            id: authData.user.id,
-            email,
-            full_name: fullName,
-            country_id: dbCountryId,
-          })
+          // @ts-expect-error - Supabase type inference issue
+          .insert(userData)
+        const { error: profileError } = result
 
         if (profileError) throw profileError
 

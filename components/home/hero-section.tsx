@@ -44,12 +44,12 @@ export function HeroSection() {
     if (!user) {
       router.push('/login')
     } else {
-      router.push('/dashboard')
+      router.push('/subscriptions')
     }
   }
 
   return (
-    <section className="relative min-h-[600px] flex items-center overflow-hidden -mt-[300px] pt-[300px]">
+    <section className="relative min-h-[600px] flex items-center overflow-hidden">
       {/* Background Image */}
       <div className="absolute inset-0 z-0">
         <Image

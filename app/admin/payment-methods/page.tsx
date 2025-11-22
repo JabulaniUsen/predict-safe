@@ -1,12 +1,12 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { AdminLayout } from '@/components/admin/admin-layout'
-import { PlansManager } from '@/components/admin/plans-manager'
+import { PaymentMethodsManager } from '@/components/admin/payment-methods-manager'
 import { Database } from '@/types/database'
 
 type UserProfile = Pick<Database['public']['Tables']['users']['Row'], 'is_admin'>
 
-export default async function AdminPlansPage() {
+export default async function AdminPaymentMethodsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -27,29 +27,18 @@ export default async function AdminPlansPage() {
     redirect('/dashboard')
   }
 
-  // Get all plans with prices (no countries join needed anymore)
-  const { data: plans } = await supabase
-    .from('plans')
-    .select(`
-      *,
-      plan_prices (*)
-    `)
-    .order('created_at')
-
-  // Get subscribers per plan
-  const { data: subscriptions } = await supabase
-    .from('user_subscriptions')
-    .select('plan_id, plan_status')
+  // Get all payment methods
+  const { data: paymentMethods } = await supabase
+    .from('payment_methods')
+    .select('*')
+    .order('display_order')
 
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <p className="text-muted-foreground">Create and manage subscription plans</p>
+        <p className="text-muted-foreground">Manage payment methods available to users during checkout</p>
 
-        <PlansManager
-          plans={plans || []}
-          subscriptions={subscriptions || []}
-        />
+        <PaymentMethodsManager paymentMethods={paymentMethods || []} />
       </div>
     </AdminLayout>
   )

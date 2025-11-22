@@ -1,12 +1,12 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { AdminLayout } from '@/components/admin/admin-layout'
-import { PlansManager } from '@/components/admin/plans-manager'
+import { TransactionsManager } from '@/components/admin/transactions-manager'
 import { Database } from '@/types/database'
 
 type UserProfile = Pick<Database['public']['Tables']['users']['Row'], 'is_admin'>
 
-export default async function AdminPlansPage() {
+export default async function AdminTransactionsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -27,27 +27,29 @@ export default async function AdminPlansPage() {
     redirect('/dashboard')
   }
 
-  // Get all plans with prices (no countries join needed anymore)
-  const { data: plans } = await supabase
-    .from('plans')
+  // Get all transactions with user and plan info
+  const { data: transactions } = await supabase
+    .from('transactions')
     .select(`
       *,
-      plan_prices (*)
+      users(email, full_name),
+      plans(name)
     `)
-    .order('created_at')
+    .order('created_at', { ascending: false })
 
-  // Get subscribers per plan
+  // Get all subscriptions
   const { data: subscriptions } = await supabase
     .from('user_subscriptions')
-    .select('plan_id, plan_status')
+    .select('*')
+    .order('created_at', { ascending: false })
 
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <p className="text-muted-foreground">Create and manage subscription plans</p>
+        <p className="text-muted-foreground">Review payments and activate user subscriptions</p>
 
-        <PlansManager
-          plans={plans || []}
+        <TransactionsManager 
+          transactions={transactions || []} 
           subscriptions={subscriptions || []}
         />
       </div>

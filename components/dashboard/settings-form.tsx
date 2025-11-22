@@ -9,19 +9,25 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { Country } from '@/types'
+import { Database } from '@/types/database'
+
+type CountryOption = 'Nigeria' | 'Ghana' | 'Kenya' | 'Other'
+type UserUpdate = Database['public']['Tables']['users']['Update']
 
 interface SettingsFormProps {
   user: any
   userProfile: any
-  countries: Country[]
 }
 
-export function SettingsForm({ user, userProfile, countries }: SettingsFormProps) {
+export function SettingsForm({ user, userProfile }: SettingsFormProps) {
   const router = useRouter()
   const [fullName, setFullName] = useState(userProfile?.full_name || '')
   const [email, setEmail] = useState(user.email || '')
-  const [countryId, setCountryId] = useState(userProfile?.country_id || '')
+  const [country, setCountry] = useState<CountryOption>(
+    (userProfile?.country && ['Nigeria', 'Ghana', 'Kenya', 'Other'].includes(userProfile.country))
+      ? userProfile.country as CountryOption
+      : 'Nigeria'
+  )
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -34,13 +40,17 @@ export function SettingsForm({ user, userProfile, countries }: SettingsFormProps
       const supabase = createClient()
 
       // Update user profile
-      const { error: profileError } = await supabase
+      const updateData: UserUpdate = {
+        full_name: fullName,
+        country: country,
+        updated_at: new Date().toISOString(),
+      }
+      const result: any = await supabase
         .from('users')
-        .update({
-          full_name: fullName,
-          country_id: countryId || null,
-        })
+        // @ts-expect-error - Supabase type inference issue
+        .update(updateData)
         .eq('id', user.id)
+      const { error: profileError } = result
 
       if (profileError) throw profileError
 
@@ -116,16 +126,15 @@ export function SettingsForm({ user, userProfile, countries }: SettingsFormProps
             </div>
             <div className="space-y-2">
               <Label htmlFor="country">Country</Label>
-              <Select value={countryId} onValueChange={setCountryId}>
+              <Select value={country} onValueChange={(value) => setCountry(value as CountryOption)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select your country" />
                 </SelectTrigger>
                 <SelectContent>
-                  {countries.map((country) => (
-                    <SelectItem key={country.id} value={country.id}>
-                      {country.name}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="Nigeria">Nigeria</SelectItem>
+                  <SelectItem value="Ghana">Ghana</SelectItem>
+                  <SelectItem value="Kenya">Kenya</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>

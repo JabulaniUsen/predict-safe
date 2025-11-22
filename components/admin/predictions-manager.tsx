@@ -15,6 +15,8 @@ import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { Prediction, CorrectScorePrediction } from '@/types'
 import { SyncPredictionsButton } from './sync-predictions-button'
+import { TeamSelector } from './team-selector'
+import { LeagueSelector } from './league-selector'
 
 interface PredictionsManagerProps {
   predictions: Prediction[]
@@ -23,6 +25,14 @@ interface PredictionsManagerProps {
 
 export function PredictionsManager({ predictions, correctScorePredictions }: PredictionsManagerProps) {
   const [loading, setLoading] = useState(false)
+  const [leagueId, setLeagueId] = useState('')
+  const [leagueName, setLeagueName] = useState('')
+  const [homeTeam, setHomeTeam] = useState('')
+  const [awayTeam, setAwayTeam] = useState('')
+  const [correctScoreLeagueId, setCorrectScoreLeagueId] = useState('')
+  const [correctScoreLeagueName, setCorrectScoreLeagueName] = useState('')
+  const [correctScoreHomeTeam, setCorrectScoreHomeTeam] = useState('')
+  const [correctScoreAwayTeam, setCorrectScoreAwayTeam] = useState('')
 
   const handleAddPrediction = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -31,9 +41,9 @@ export function PredictionsManager({ predictions, correctScorePredictions }: Pre
     const formData = new FormData(e.currentTarget)
     const data = {
       plan_type: formData.get('plan_type'),
-      home_team: formData.get('home_team'),
-      away_team: formData.get('away_team'),
-      league: formData.get('league'),
+      home_team: homeTeam || formData.get('home_team'),
+      away_team: awayTeam || formData.get('away_team'),
+      league: leagueName || formData.get('league'),
       prediction_type: formData.get('prediction_type'),
       odds: parseFloat(formData.get('odds') as string),
       confidence: parseInt(formData.get('confidence') as string),
@@ -48,11 +58,19 @@ export function PredictionsManager({ predictions, correctScorePredictions }: Pre
       if (error) throw error
 
       toast.success('Prediction added successfully!')
-      e.currentTarget.reset()
-      window.location.reload()
+      
+      // Reset form state (form will be cleared on reload)
+      setLeagueId('')
+      setLeagueName('')
+      setHomeTeam('')
+      setAwayTeam('')
+      
+      // Small delay before reload to show toast
+      setTimeout(() => {
+        window.location.reload()
+      }, 500)
     } catch (error: any) {
       toast.error(error.message || 'Failed to add prediction')
-    } finally {
       setLoading(false)
     }
   }
@@ -63,9 +81,9 @@ export function PredictionsManager({ predictions, correctScorePredictions }: Pre
 
     const formData = new FormData(e.currentTarget)
     const data = {
-      home_team: formData.get('home_team'),
-      away_team: formData.get('away_team'),
-      league: formData.get('league'),
+      home_team: correctScoreHomeTeam || formData.get('home_team'),
+      away_team: correctScoreAwayTeam || formData.get('away_team'),
+      league: correctScoreLeagueName || formData.get('league'),
       score_prediction: formData.get('score_prediction'),
       odds: formData.get('odds') ? parseFloat(formData.get('odds') as string) : null,
       kickoff_time: formData.get('kickoff_time'),
@@ -79,11 +97,19 @@ export function PredictionsManager({ predictions, correctScorePredictions }: Pre
       if (error) throw error
 
       toast.success('Correct score prediction added successfully!')
-      e.currentTarget.reset()
-      window.location.reload()
+      
+      // Reset form state (form will be cleared on reload)
+      setCorrectScoreLeagueId('')
+      setCorrectScoreLeagueName('')
+      setCorrectScoreHomeTeam('')
+      setCorrectScoreAwayTeam('')
+      
+      // Small delay before reload to show toast
+      setTimeout(() => {
+        window.location.reload()
+      }, 500)
     } catch (error: any) {
       toast.error(error.message || 'Failed to add prediction')
-    } finally {
       setLoading(false)
     }
   }
@@ -135,21 +161,44 @@ export function PredictionsManager({ predictions, correctScorePredictions }: Pre
                         <Input name="prediction_type" placeholder="e.g., Over 2.5, Home Win" required />
                       </div>
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="league">League</Label>
+                      <LeagueSelector
+                        value={leagueId}
+                        onValueChange={(id, name) => {
+                          setLeagueId(id)
+                          setLeagueName(name)
+                          // Reset teams when league changes
+                          setHomeTeam('')
+                          setAwayTeam('')
+                        }}
+                        placeholder="Select league..."
+                      />
+                      <input type="hidden" name="league" value={leagueName} required />
+                    </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="home_team">Home Team</Label>
-                        <Input name="home_team" required />
+                        <TeamSelector
+                          value={homeTeam}
+                          onValueChange={setHomeTeam}
+                          placeholder={leagueId ? "Select home team..." : "Select league first"}
+                          leagueId={leagueId}
+                        />
+                        <input type="hidden" name="home_team" value={homeTeam} required />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="away_team">Away Team</Label>
-                        <Input name="away_team" required />
+                        <TeamSelector
+                          value={awayTeam}
+                          onValueChange={setAwayTeam}
+                          placeholder={leagueId ? "Select away team..." : "Select league first"}
+                          leagueId={leagueId}
+                        />
+                        <input type="hidden" name="away_team" value={awayTeam} required />
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="league">League</Label>
-                        <Input name="league" required />
-                      </div>
                       <div className="space-y-2">
                         <Label htmlFor="odds">Odds</Label>
                         <Input name="odds" type="number" step="0.01" required />
@@ -173,6 +222,7 @@ export function PredictionsManager({ predictions, correctScorePredictions }: Pre
                   </form>
                 </DialogContent>
               </Dialog>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -240,21 +290,44 @@ export function PredictionsManager({ predictions, correctScorePredictions }: Pre
                     <DialogDescription>Fill in the details for the correct score prediction</DialogDescription>
                   </DialogHeader>
                   <form onSubmit={handleAddCorrectScore} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="home_team">Home Team</Label>
-                        <Input name="home_team" required />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="away_team">Away Team</Label>
-                        <Input name="away_team" required />
-                      </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="correct_score_league">League</Label>
+                      <LeagueSelector
+                        value={correctScoreLeagueId}
+                        onValueChange={(id, name) => {
+                          setCorrectScoreLeagueId(id)
+                          setCorrectScoreLeagueName(name)
+                          // Reset teams when league changes
+                          setCorrectScoreHomeTeam('')
+                          setCorrectScoreAwayTeam('')
+                        }}
+                        placeholder="Select league..."
+                      />
+                      <input type="hidden" name="league" value={correctScoreLeagueName} required />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="league">League</Label>
-                        <Input name="league" required />
+                        <Label htmlFor="correct_score_home_team">Home Team</Label>
+                        <TeamSelector
+                          value={correctScoreHomeTeam}
+                          onValueChange={setCorrectScoreHomeTeam}
+                          placeholder={correctScoreLeagueId ? "Select home team..." : "Select league first"}
+                          leagueId={correctScoreLeagueId}
+                        />
+                        <input type="hidden" name="home_team" value={correctScoreHomeTeam} required />
                       </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="correct_score_away_team">Away Team</Label>
+                        <TeamSelector
+                          value={correctScoreAwayTeam}
+                          onValueChange={setCorrectScoreAwayTeam}
+                          placeholder={correctScoreLeagueId ? "Select away team..." : "Select league first"}
+                          leagueId={correctScoreLeagueId}
+                        />
+                        <input type="hidden" name="away_team" value={correctScoreAwayTeam} required />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="score_prediction">Score Prediction</Label>
                         <Input name="score_prediction" placeholder="e.g., 2-1" required />

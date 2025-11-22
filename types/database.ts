@@ -14,7 +14,7 @@ export interface Database {
           id: string
           email: string
           full_name: string | null
-          country_id: string | null
+          country: string
           avatar_url: string | null
           created_at: string
           updated_at: string
@@ -24,7 +24,7 @@ export interface Database {
           id: string
           email: string
           full_name?: string | null
-          country_id?: string | null
+          country?: string
           avatar_url?: string | null
           created_at?: string
           updated_at?: string
@@ -34,43 +34,11 @@ export interface Database {
           id?: string
           email?: string
           full_name?: string | null
-          country_id?: string | null
+          country?: string
           avatar_url?: string | null
           created_at?: string
           updated_at?: string
           is_admin?: boolean
-        }
-      }
-      countries: {
-        Row: {
-          id: string
-          name: string
-          code: string
-          currency: string
-          currency_symbol: string
-          payment_gateway: string | null
-          is_active: boolean
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          name: string
-          code: string
-          currency: string
-          currency_symbol: string
-          payment_gateway?: string | null
-          is_active?: boolean
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          name?: string
-          code?: string
-          currency?: string
-          currency_symbol?: string
-          payment_gateway?: string | null
-          is_active?: boolean
-          created_at?: string
         }
       }
       plans: {
@@ -115,7 +83,7 @@ export interface Database {
         Row: {
           id: string
           plan_id: string
-          country_id: string
+          country: string
           duration_days: number
           price: number
           activation_fee: number | null
@@ -126,7 +94,7 @@ export interface Database {
         Insert: {
           id?: string
           plan_id: string
-          country_id: string
+          country: string
           duration_days: number
           price: number
           activation_fee?: number | null
@@ -137,7 +105,7 @@ export interface Database {
         Update: {
           id?: string
           plan_id?: string
-          country_id?: string
+          country?: string
           duration_days?: number
           price?: number
           activation_fee?: number | null
@@ -151,7 +119,7 @@ export interface Database {
           id: string
           user_id: string
           plan_id: string
-          plan_status: 'inactive' | 'pending_activation' | 'active' | 'expired'
+          plan_status: 'inactive' | 'pending' | 'pending_activation' | 'active' | 'expired'
           subscription_fee_paid: boolean
           activation_fee_paid: boolean
           start_date: string | null
@@ -163,7 +131,7 @@ export interface Database {
           id?: string
           user_id: string
           plan_id: string
-          plan_status?: 'inactive' | 'pending_activation' | 'active' | 'expired'
+          plan_status?: 'inactive' | 'pending' | 'pending_activation' | 'active' | 'expired'
           subscription_fee_paid?: boolean
           activation_fee_paid?: boolean
           start_date?: string | null
@@ -175,7 +143,7 @@ export interface Database {
           id?: string
           user_id?: string
           plan_id?: string
-          plan_status?: 'inactive' | 'pending_activation' | 'active' | 'expired'
+          plan_status?: 'inactive' | 'pending' | 'pending_activation' | 'active' | 'expired'
           subscription_fee_paid?: boolean
           activation_fee_paid?: boolean
           start_date?: string | null
@@ -448,6 +416,41 @@ export interface Database {
           message?: string
           read?: boolean
           created_at?: string
+        }
+      }
+      payment_methods: {
+        Row: {
+          id: string
+          name: string
+          type: 'bank_transfer' | 'crypto'
+          currency: string | null
+          details: Json
+          is_active: boolean
+          display_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          type: 'bank_transfer' | 'crypto'
+          currency?: string | null
+          details: Json
+          is_active?: boolean
+          display_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          type?: 'bank_transfer' | 'crypto'
+          currency?: string | null
+          details?: Json
+          is_active?: boolean
+          display_order?: number
+          created_at?: string
+          updated_at?: string
         }
       }
     }

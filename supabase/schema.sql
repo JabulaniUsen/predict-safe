@@ -1,32 +1,13 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Countries table
-CREATE TABLE IF NOT EXISTS countries (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name VARCHAR(100) NOT NULL UNIQUE,
-  code VARCHAR(10) NOT NULL UNIQUE, -- Supports CCA2 (2-letter) codes from REST Countries API
-  currency VARCHAR(10) NOT NULL,
-  currency_symbol VARCHAR(5) NOT NULL,
-  payment_gateway VARCHAR(50),
-  api_name VARCHAR(255), -- Full country name from API
-  cca3_code VARCHAR(3), -- 3-letter country code (optional)
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  CONSTRAINT check_code_uppercase CHECK (code = UPPER(code))
-);
-
--- Indexes for countries table
-CREATE INDEX IF NOT EXISTS idx_countries_code ON countries(code);
-CREATE INDEX IF NOT EXISTS idx_countries_name ON countries(name);
-
 -- Users table (extends auth.users)
--- Note: Only country is stored, not city
+-- Note: Only country name is stored as VARCHAR, not city
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email VARCHAR(255) NOT NULL UNIQUE,
   full_name VARCHAR(255),
-  country_id UUID REFERENCES countries(id), -- Only country reference, no city
+  country VARCHAR(100) DEFAULT 'Nigeria',
   avatar_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -34,7 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- Index for users table
-CREATE INDEX IF NOT EXISTS idx_users_country_id ON users(country_id);
+CREATE INDEX IF NOT EXISTS idx_users_country ON users(country);
 
 -- Plans table
 CREATE TABLE IF NOT EXISTS plans (
@@ -54,14 +35,14 @@ CREATE TABLE IF NOT EXISTS plans (
 CREATE TABLE IF NOT EXISTS plan_prices (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   plan_id UUID REFERENCES plans(id) ON DELETE CASCADE,
-  country_id UUID REFERENCES countries(id) ON DELETE CASCADE,
+  country VARCHAR(100) NOT NULL DEFAULT 'Nigeria',
   duration_days INTEGER NOT NULL CHECK (duration_days IN (7, 30)),
   price DECIMAL(10, 2) NOT NULL,
   activation_fee DECIMAL(10, 2),
   currency VARCHAR(10) NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(plan_id, country_id, duration_days)
+  UNIQUE(plan_id, country, duration_days)
 );
 
 -- User subscriptions table
@@ -69,7 +50,7 @@ CREATE TABLE IF NOT EXISTS user_subscriptions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   plan_id UUID REFERENCES plans(id) ON DELETE CASCADE,
-  plan_status VARCHAR(20) DEFAULT 'inactive' CHECK (plan_status IN ('inactive', 'pending_activation', 'active', 'expired')),
+  plan_status VARCHAR(20) DEFAULT 'inactive' CHECK (plan_status IN ('inactive', 'pending', 'pending_activation', 'active', 'expired')),
   subscription_fee_paid BOOLEAN DEFAULT false,
   activation_fee_paid BOOLEAN DEFAULT false,
   start_date TIMESTAMP WITH TIME ZONE,
@@ -199,36 +180,44 @@ END;
 $$ language 'plpgsql';
 
 -- Triggers for updated_at
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_plans_updated_at ON plans;
 CREATE TRIGGER update_plans_updated_at BEFORE UPDATE ON plans
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_plan_prices_updated_at ON plan_prices;
 CREATE TRIGGER update_plan_prices_updated_at BEFORE UPDATE ON plan_prices
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_user_subscriptions_updated_at ON user_subscriptions;
 CREATE TRIGGER update_user_subscriptions_updated_at BEFORE UPDATE ON user_subscriptions
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_predictions_updated_at ON predictions;
 CREATE TRIGGER update_predictions_updated_at BEFORE UPDATE ON predictions
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_correct_score_predictions_updated_at ON correct_score_predictions;
 CREATE TRIGGER update_correct_score_predictions_updated_at BEFORE UPDATE ON correct_score_predictions
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_blog_posts_updated_at ON blog_posts;
 CREATE TRIGGER update_blog_posts_updated_at BEFORE UPDATE ON blog_posts
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_site_config_updated_at ON site_config;
 CREATE TRIGGER update_site_config_updated_at BEFORE UPDATE ON site_config
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_transactions_updated_at ON transactions;
 CREATE TRIGGER update_transactions_updated_at BEFORE UPDATE ON transactions
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Row Level Security (RLS) Policies
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE countries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE plan_prices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_subscriptions ENABLE ROW LEVEL SECURITY;
@@ -241,35 +230,134 @@ ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
 -- Users policies
+DROP POLICY IF EXISTS "Users can view their own profile" ON users;
 CREATE POLICY "Users can view their own profile" ON users
   FOR SELECT USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update their own profile" ON users;
 CREATE POLICY "Users can update their own profile" ON users
   FOR UPDATE USING (auth.uid() = id);
 
--- Countries policies (public read)
-CREATE POLICY "Countries are viewable by everyone" ON countries
-  FOR SELECT USING (is_active = true);
-
--- Plans policies (public read)
+-- Plans policies
+DROP POLICY IF EXISTS "Active plans are viewable by everyone" ON plans;
 CREATE POLICY "Active plans are viewable by everyone" ON plans
   FOR SELECT USING (is_active = true);
 
--- Plan prices policies (public read)
+DROP POLICY IF EXISTS "Admins can view all plans" ON plans;
+CREATE POLICY "Admins can view all plans" ON plans
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM users
+      WHERE users.id = auth.uid() AND users.is_admin = true
+    )
+  );
+
+DROP POLICY IF EXISTS "Admins can insert plans" ON plans;
+CREATE POLICY "Admins can insert plans" ON plans
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM users
+      WHERE users.id = auth.uid() AND users.is_admin = true
+    )
+  );
+
+DROP POLICY IF EXISTS "Admins can update plans" ON plans;
+CREATE POLICY "Admins can update plans" ON plans
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM users
+      WHERE users.id = auth.uid() AND users.is_admin = true
+    )
+  );
+
+DROP POLICY IF EXISTS "Admins can delete plans" ON plans;
+CREATE POLICY "Admins can delete plans" ON plans
+  FOR DELETE USING (
+    EXISTS (
+      SELECT 1 FROM users
+      WHERE users.id = auth.uid() AND users.is_admin = true
+    )
+  );
+
+-- Plan prices policies
+DROP POLICY IF EXISTS "Plan prices are viewable by everyone" ON plan_prices;
 CREATE POLICY "Plan prices are viewable by everyone" ON plan_prices
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Admins can insert plan prices" ON plan_prices;
+CREATE POLICY "Admins can insert plan prices" ON plan_prices
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM users
+      WHERE users.id = auth.uid() AND users.is_admin = true
+    )
+  );
+
+DROP POLICY IF EXISTS "Admins can update plan prices" ON plan_prices;
+CREATE POLICY "Admins can update plan prices" ON plan_prices
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM users
+      WHERE users.id = auth.uid() AND users.is_admin = true
+    )
+  );
+
+DROP POLICY IF EXISTS "Admins can delete plan prices" ON plan_prices;
+CREATE POLICY "Admins can delete plan prices" ON plan_prices
+  FOR DELETE USING (
+    EXISTS (
+      SELECT 1 FROM users
+      WHERE users.id = auth.uid() AND users.is_admin = true
+    )
+  );
+
 -- User subscriptions policies
+DROP POLICY IF EXISTS "Users can view their own subscriptions" ON user_subscriptions;
 CREATE POLICY "Users can view their own subscriptions" ON user_subscriptions
   FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own subscriptions" ON user_subscriptions;
+CREATE POLICY "Users can update their own subscriptions" ON user_subscriptions
+  FOR UPDATE USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert their own subscriptions" ON user_subscriptions;
 CREATE POLICY "Users can insert their own subscriptions" ON user_subscriptions
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+-- Admin policies for user_subscriptions
+DROP POLICY IF EXISTS "Admins can view all subscriptions" ON user_subscriptions;
+CREATE POLICY "Admins can view all subscriptions" ON user_subscriptions
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM users
+      WHERE users.id = auth.uid() AND users.is_admin = true
+    )
+  );
+
+DROP POLICY IF EXISTS "Admins can update all subscriptions" ON user_subscriptions;
+CREATE POLICY "Admins can update all subscriptions" ON user_subscriptions
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM users
+      WHERE users.id = auth.uid() AND users.is_admin = true
+    )
+  );
+
+DROP POLICY IF EXISTS "Admins can insert subscriptions" ON user_subscriptions;
+CREATE POLICY "Admins can insert subscriptions" ON user_subscriptions
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM users
+      WHERE users.id = auth.uid() AND users.is_admin = true
+    )
+  );
+
 -- Predictions policies
+DROP POLICY IF EXISTS "Free predictions are viewable by everyone" ON predictions;
 CREATE POLICY "Free predictions are viewable by everyone" ON predictions
   FOR SELECT USING (plan_type = 'free');
 
+DROP POLICY IF EXISTS "Users can view predictions for their active plans" ON predictions;
 CREATE POLICY "Users can view predictions for their active plans" ON predictions
   FOR SELECT USING (
     EXISTS (
@@ -285,6 +373,7 @@ CREATE POLICY "Users can view predictions for their active plans" ON predictions
   );
 
 -- Correct score predictions policies
+DROP POLICY IF EXISTS "Users can view correct score if they have active subscription" ON correct_score_predictions;
 CREATE POLICY "Users can view correct score if they have active subscription" ON correct_score_predictions
   FOR SELECT USING (
     EXISTS (
@@ -296,35 +385,33 @@ CREATE POLICY "Users can view correct score if they have active subscription" ON
   );
 
 -- VIP winnings policies (public read)
+DROP POLICY IF EXISTS "VIP winnings are viewable by everyone" ON vip_winnings;
 CREATE POLICY "VIP winnings are viewable by everyone" ON vip_winnings
   FOR SELECT USING (true);
 
 -- Blog posts policies (public read published posts)
+DROP POLICY IF EXISTS "Published blog posts are viewable by everyone" ON blog_posts;
 CREATE POLICY "Published blog posts are viewable by everyone" ON blog_posts
   FOR SELECT USING (published = true AND published_at IS NOT NULL AND published_at <= NOW());
 
 -- Site config policies (public read)
+DROP POLICY IF EXISTS "Site config is viewable by everyone" ON site_config;
 CREATE POLICY "Site config is viewable by everyone" ON site_config
   FOR SELECT USING (true);
 
 -- Transactions policies
+DROP POLICY IF EXISTS "Users can view their own transactions" ON transactions;
 CREATE POLICY "Users can view their own transactions" ON transactions
   FOR SELECT USING (auth.uid() = user_id);
 
 -- Notifications policies
+DROP POLICY IF EXISTS "Users can view their own notifications" ON notifications;
 CREATE POLICY "Users can view their own notifications" ON notifications
   FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own notifications" ON notifications;
 CREATE POLICY "Users can update their own notifications" ON notifications
   FOR UPDATE USING (auth.uid() = user_id);
-
--- Insert initial data (using CCA2 country codes from REST Countries API)
-INSERT INTO countries (name, code, currency, currency_symbol, payment_gateway) VALUES
-  ('Nigeria', 'NG', 'NGN', '₦', 'flutterwave'),
-  ('Ghana', 'GH', 'GHS', '₵', 'flutterwave'),
-  ('Kenya', 'KE', 'KES', 'KSh', 'flutterwave'),
-  ('United States', 'US', 'USD', '$', 'stripe')
-ON CONFLICT (code) DO NOTHING;
 
 -- Insert default plans
 INSERT INTO plans (name, slug, description, requires_activation, max_predictions_per_day) VALUES
@@ -344,31 +431,4 @@ INSERT INTO site_config (key, value) VALUES
   ('social_links', '{"facebook": "", "twitter": "", "instagram": "", "youtube": ""}')
 ON CONFLICT (key) DO NOTHING;
 
--- Function to get or create country (for REST Countries API integration)
--- This function is used when users sign up with a country code from the API
-CREATE OR REPLACE FUNCTION get_or_create_country(
-  country_code VARCHAR(10),
-  country_name VARCHAR(255) DEFAULT NULL,
-  currency_code VARCHAR(10) DEFAULT 'USD',
-  currency_symbol VARCHAR(5) DEFAULT '$'
-) RETURNS UUID AS $$
-DECLARE
-  country_uuid UUID;
-BEGIN
-  -- Try to find existing country by code (uppercase)
-  SELECT id INTO country_uuid
-  FROM countries
-  WHERE code = UPPER(country_code)
-  LIMIT 1;
-
-  -- If country doesn't exist, create it
-  IF country_uuid IS NULL THEN
-    INSERT INTO countries (code, name, currency, currency_symbol, is_active)
-    VALUES (UPPER(country_code), COALESCE(country_name, country_code), currency_code, currency_symbol, true)
-    RETURNING id INTO country_uuid;
-  END IF;
-
-  RETURN country_uuid;
-END;
-$$ LANGUAGE plpgsql;
 

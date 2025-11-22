@@ -40,7 +40,7 @@ export function Navbar() {
   }
 
   return (
-    <nav className="py-2 bg-white">
+    <nav className="relative z-50 py-2 bg-white">
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           <Link href="/" className="flex items-center gap-2 w-[300px] h-[150px]">

@@ -65,9 +65,13 @@ export default async function AdminDashboard() {
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+        <div className="flex items-center justify-between">
           <p className="text-muted-foreground">Overview of your platform</p>
+          <Button asChild className="bg-[#1e40af] hover:bg-[#1e3a8a]">
+            <Link href="/admin/plans">
+              Manage Packages
+            </Link>
+          </Button>
         </div>
 
         {/* KPI Cards */}

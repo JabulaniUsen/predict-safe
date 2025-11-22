@@ -5,11 +5,14 @@ export type PlanPrice = Database['public']['Tables']['plan_prices']['Row']
 export type UserSubscription = Database['public']['Tables']['user_subscriptions']['Row']
 export type Prediction = Database['public']['Tables']['predictions']['Row']
 export type CorrectScorePrediction = Database['public']['Tables']['correct_score_predictions']['Row']
-export type Country = Database['public']['Tables']['countries']['Row']
 export type BlogPost = Database['public']['Tables']['blog_posts']['Row']
 export type VIPWinning = Database['public']['Tables']['vip_winnings']['Row']
 export type Transaction = Database['public']['Tables']['transactions']['Row']
 export type Notification = Database['public']['Tables']['notifications']['Row']
+export type PaymentMethod = Database['public']['Tables']['payment_methods']['Row']
+
+// Country is now just a string: Nigeria, Ghana, Kenya, or Other
+export type Country = 'Nigeria' | 'Ghana' | 'Kenya' | 'Other'
 
 export type PlanStatus = 'inactive' | 'pending_activation' | 'active' | 'expired'
 export type PredictionStatus = 'not_started' | 'live' | 'finished'

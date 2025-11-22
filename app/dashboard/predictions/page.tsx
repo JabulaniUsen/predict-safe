@@ -18,7 +18,7 @@ export default async function PredictionsPage() {
     .eq('id', user.id)
     .single()
 
-  // Get user subscriptions
+  // Get user subscriptions (including pending so user can see what they've subscribed to)
   const { data: subscriptions } = await supabase
     .from('user_subscriptions')
     .select(`
@@ -26,7 +26,8 @@ export default async function PredictionsPage() {
       plan:plans(*)
     `)
     .eq('user_id', user.id)
-    .eq('plan_status', 'active')
+    .in('plan_status', ['active', 'pending', 'pending_activation'])
+    .order('created_at', { ascending: false })
 
   return (
     <DashboardLayout user={user} userProfile={userProfile}>

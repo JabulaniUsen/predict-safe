@@ -5,15 +5,17 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { PlanWithPrice, Country } from '@/types'
+import { PlanWithPrice } from '@/types'
 import { Badge } from '@/components/ui/badge'
 import { Check } from 'lucide-react'
+
+type CountryOption = 'Nigeria' | 'Ghana' | 'Kenya' | 'Other'
 
 export function VIPPackagesSection() {
   const router = useRouter()
   const [plans, setPlans] = useState<PlanWithPrice[]>([])
   const [user, setUser] = useState<any>(null)
-  const [userCountry, setUserCountry] = useState<Country | null>(null)
+  const [userCountry, setUserCountry] = useState<CountryOption>('Nigeria')
   const [loading, setLoading] = useState(true)
   const [billingPeriod, setBillingPeriod] = useState<'weekly' | 'monthly'>('monthly')
 
@@ -26,33 +28,41 @@ export function VIPPackagesSection() {
       setUser(user)
 
       if (user) {
-        // Get user country
+        // Get user country - use maybeSingle to handle case where user doesn't exist in users table yet
         const { data: userData } = await supabase
           .from('users')
-          .select('country_id, countries(*)')
+          .select('country')
           .eq('id', user.id)
-          .single()
+          .maybeSingle() as { data: { country: string } | null }
 
-        if (userData?.countries) {
-          setUserCountry(userData.countries as Country)
+        if (userData?.country && ['Nigeria', 'Ghana', 'Kenya', 'Other'].includes(userData.country)) {
+          setUserCountry(userData.country as CountryOption)
         }
       }
 
-      // Fetch plans with prices
+      // Fetch ALL active plans with ALL their prices from admin
       const { data: plansData } = await supabase
         .from('plans')
         .select(`
           *,
-          plan_prices (
-            *,
-            countries (*)
-          )
+          plan_prices (*)
         `)
         .eq('is_active', true)
         .order('created_at')
 
       if (plansData) {
-        setPlans(plansData as PlanWithPrice[])
+        // Map plan_prices to prices property and ensure we handle the data structure correctly
+        // This ensures all prices added by admin are available for display
+        const plansWithPrices: PlanWithPrice[] = plansData.map((plan: any) => {
+          // Handle both plan_prices (from query) and prices (already mapped)
+          // Filter out any null prices and ensure we have an array
+          const prices = (plan.plan_prices || plan.prices || []).filter((p: any) => p !== null)
+          return {
+            ...plan,
+            prices: prices
+          }
+        })
+        setPlans(plansWithPrices)
       }
 
       setLoading(false)
@@ -70,33 +80,36 @@ export function VIPPackagesSection() {
   }
 
   const getPriceForCountry = (plan: PlanWithPrice, durationDays: number) => {
-    if (!userCountry && plan.prices) {
-      // Default to USD if no country
-      const usdPrice = plan.prices.find(
-        (p: any) => p.duration_days === durationDays && p.currency === 'USD'
-      )
-      return usdPrice
-    }
+    if (!plan.prices || plan.prices.length === 0) return null
 
-    // Find country-specific price, fallback to USD
-    const countryPrice = plan.prices?.find(
-      (p: any) => p.duration_days === durationDays && p.country_id === userCountry?.id
+    // First, try to find country-specific price
+    const countryPrice = plan.prices.find(
+      (p: any) => p.duration_days === durationDays && p.country === userCountry
     )
-    
     if (countryPrice) return countryPrice
 
-    // Fallback to USD
-    return plan.prices?.find(
-      (p: any) => p.duration_days === durationDays && p.currency === 'USD'
+    // Fallback to Nigeria (default)
+    const nigeriaPrice = plan.prices.find(
+      (p: any) => p.duration_days === durationDays && p.country === 'Nigeria'
+    )
+    if (nigeriaPrice) return nigeriaPrice
+
+    // Final fallback: any price for this duration
+    return plan.prices.find(
+      (p: any) => p.duration_days === durationDays
     )
   }
 
-  // Determine currency symbol - Naira for Nigeria, USD for others
+  // Determine currency symbol based on country
   const getCurrencySymbol = () => {
-    if (userCountry?.code === 'NG') {
+    if (userCountry === 'Nigeria' || userCountry === 'Other') {
       return '₦'
+    } else if (userCountry === 'Ghana') {
+      return '₵'
+    } else if (userCountry === 'Kenya') {
+      return 'KSh'
     }
-    return '$'
+    return '₦' // Default to Naira
   }
   const currency = getCurrencySymbol()
 

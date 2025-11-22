@@ -2,6 +2,12 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { DashboardLayout } from '@/components/dashboard/dashboard-layout'
 import { DashboardContent } from '@/components/dashboard/dashboard-content'
+import { Database } from '@/types/database'
+import { UserSubscriptionWithPlan } from '@/types'
+
+type UserProfile = Database['public']['Tables']['users']['Row'] & {
+  country: string | null
+}
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -12,20 +18,22 @@ export default async function DashboardPage() {
   }
 
   // Get user profile with country
-  const { data: userProfile } = await supabase
+  const { data: userProfileRaw } = await supabase
     .from('users')
-    .select('*, countries(*)')
+    .select('*')
     .eq('id', user.id)
     .single()
+  const userProfile = userProfileRaw as UserProfile | null
 
   // Get user subscriptions
-  const { data: subscriptions } = await supabase
+  const { data: subscriptionsRaw } = await supabase
     .from('user_subscriptions')
     .select(`
       *,
       plan:plans(*)
     `)
     .eq('user_id', user.id)
+  const subscriptions = subscriptionsRaw as UserSubscriptionWithPlan[] | null
 
   // Count active subscriptions
   const activeSubscriptions = subscriptions?.filter(
@@ -38,7 +46,7 @@ export default async function DashboardPage() {
   // Calculate days since member
   const memberSince = userProfile?.created_at
     ? new Date(userProfile.created_at)
-    : new Date(user.created_at || Date.now())
+    : new Date()
   const daysSince = Math.floor(
     (Date.now() - memberSince.getTime()) / (1000 * 60 * 60 * 24)
   )

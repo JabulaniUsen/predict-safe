@@ -8,15 +8,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Check } from 'lucide-react'
-import { PlanWithPrice, Country } from '@/types'
-import { Combobox } from '@/components/ui/combobox'
+import { PlanWithPrice } from '@/types'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+
+type CountryOption = 'Nigeria' | 'Ghana' | 'Kenya' | 'Other'
 
 export default function SubscriptionsPage() {
   const router = useRouter()
   const [plans, setPlans] = useState<PlanWithPrice[]>([])
   const [user, setUser] = useState<any>(null)
-  const [selectedCountry, setSelectedCountry] = useState<Country | null>(null)
-  const [countries, setCountries] = useState<Array<{ value: string; label: string }>>([])
+  const [selectedCountry, setSelectedCountry] = useState<CountryOption>('Nigeria')
   const [loading, setLoading] = useState(true)
   const [billingPeriod, setBillingPeriod] = useState<'weekly' | 'monthly'>('monthly')
 
@@ -29,48 +30,41 @@ export default function SubscriptionsPage() {
       setUser(user)
 
       if (user) {
-        // Get user country
+        // Get user country - use maybeSingle to handle case where user doesn't exist in users table yet
         const { data: userData } = await supabase
           .from('users')
-          .select('country_id, countries(*)')
+          .select('country')
           .eq('id', user.id)
-          .single()
+          .maybeSingle() as { data: { country: string } | null }
 
-        if (userData?.countries) {
-          setSelectedCountry(userData.countries as Country)
+        if (userData?.country && ['Nigeria', 'Ghana', 'Kenya', 'Other'].includes(userData.country)) {
+          setSelectedCountry(userData.country as CountryOption)
         }
       }
 
-      // Fetch all countries for selection
-      const { data: countriesData } = await supabase
-        .from('countries')
-        .select('id, name, code')
-        .eq('is_active', true)
-        .order('name')
-
-      if (countriesData) {
-        const countryOptions = countriesData.map((c: any) => ({
-          value: c.id,
-          label: c.name,
-        }))
-        setCountries(countryOptions)
-      }
-
-      // Fetch plans with prices
+      // Fetch ALL active plans with ALL their prices from admin
       const { data: plansData } = await supabase
         .from('plans')
         .select(`
           *,
-          plan_prices (
-            *,
-            countries (*)
-          )
+          plan_prices (*)
         `)
         .eq('is_active', true)
         .order('created_at')
 
       if (plansData) {
-        setPlans(plansData as PlanWithPrice[])
+        // Map plan_prices to prices property and ensure we handle the data structure correctly
+        // This ensures all prices added by admin are available for display
+        const plansWithPrices: PlanWithPrice[] = plansData.map((plan: any) => {
+          // Handle both plan_prices (from query) and prices (already mapped)
+          // Filter out any null prices and ensure we have an array
+          const prices = (plan.plan_prices || plan.prices || []).filter((p: any) => p !== null)
+          return {
+            ...plan,
+            prices: prices
+          }
+        })
+        setPlans(plansWithPrices)
       }
 
       setLoading(false)
@@ -79,71 +73,48 @@ export default function SubscriptionsPage() {
     fetchData()
   }, [])
 
-  // Update prices when country changes
-  useEffect(() => {
-    const fetchPrices = async () => {
-      if (!selectedCountry) return
+  // No need to refetch prices when country changes - prices are already loaded
+  // We'll filter by country in getPriceForCountry function
 
-      const supabase = createClient()
-      const updatedPlans = await Promise.all(
-        plans.map(async (plan) => {
-          const { data: pricesData } = await supabase
-            .from('plan_prices')
-            .select('*, countries(*)')
-            .eq('plan_id', plan.id)
-            .or(`country_id.eq.${selectedCountry.id},currency.eq.USD`)
-            .order('country_id', { ascending: false })
-
-          return {
-            ...plan,
-            prices: pricesData || [],
-          }
-        })
-      )
-
-      setPlans(updatedPlans)
-    }
-
-    if (plans.length > 0 && selectedCountry) {
-      fetchPrices()
-    }
-  }, [selectedCountry])
-
-  const handlePlanClick = (planSlug: string) => {
+  const handlePlanClick = (planSlug: string, durationDays: number) => {
     if (!user) {
       router.push('/login')
     } else {
-      router.push(`/subscribe?plan=${planSlug}`)
+      router.push(`/checkout?plan=${planSlug}&duration=${durationDays}`)
     }
   }
 
   const getPriceForCountry = (plan: PlanWithPrice, durationDays: number) => {
-    if (!selectedCountry && plan.prices) {
-      // Default to USD if no country
-      return plan.prices.find(
-        (p: any) => p.duration_days === durationDays && p.currency === 'USD'
-      )
-    }
+    if (!plan.prices || plan.prices.length === 0) return null
 
-    // Find country-specific price, fallback to USD
-    const countryPrice = plan.prices?.find(
-      (p: any) => p.duration_days === durationDays && p.country_id === selectedCountry?.id
+    // First, try to find country-specific price
+    const countryPrice = plan.prices.find(
+      (p: any) => p.duration_days === durationDays && p.country === selectedCountry
     )
-    
     if (countryPrice) return countryPrice
 
-    // Fallback to USD
-    return plan.prices?.find(
-      (p: any) => p.duration_days === durationDays && p.currency === 'USD'
+    // Fallback to Nigeria (default)
+    const nigeriaPrice = plan.prices.find(
+      (p: any) => p.duration_days === durationDays && p.country === 'Nigeria'
+    )
+    if (nigeriaPrice) return nigeriaPrice
+
+    // Final fallback: any price for this duration
+    return plan.prices.find(
+      (p: any) => p.duration_days === durationDays
     )
   }
 
-  // Determine currency symbol - Naira for Nigeria, USD for others
+  // Determine currency symbol based on selected country
   const getCurrencySymbol = () => {
-    if (selectedCountry?.code === 'NG') {
+    if (selectedCountry === 'Nigeria' || selectedCountry === 'Other') {
       return '₦'
+    } else if (selectedCountry === 'Ghana') {
+      return '₵'
+    } else if (selectedCountry === 'Kenya') {
+      return 'KSh'
     }
-    return '$'
+    return '₦' // Default to Naira
   }
 
   const currency = getCurrencySymbol()
@@ -166,30 +137,17 @@ export default function SubscriptionsPage() {
         <div className="mb-8 flex items-center justify-center gap-4">
           <label className="text-sm font-semibold text-gray-700">Select Country:</label>
           <div className="w-64">
-            <Combobox
-              options={countries}
-              value={selectedCountry?.id || ''}
-              onValueChange={(countryId) => {
-                const country = countries.find((c) => c.value === countryId)
-                if (country) {
-                  // Find the full country object
-                  const supabase = createClient()
-                  supabase
-                    .from('countries')
-                    .select('*')
-                    .eq('id', countryId)
-                    .single()
-                    .then(({ data }) => {
-                      if (data) {
-                        setSelectedCountry(data as Country)
-                      }
-                    })
-                }
-              }}
-              placeholder="Select country"
-              searchPlaceholder="Search countries..."
-              emptyMessage="No country found."
-            />
+            <Select value={selectedCountry} onValueChange={(value) => setSelectedCountry(value as CountryOption)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select country" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Nigeria">Nigeria (₦)</SelectItem>
+                <SelectItem value="Ghana">Ghana (₵)</SelectItem>
+                <SelectItem value="Kenya">Kenya (KSh)</SelectItem>
+                <SelectItem value="Other">Other (₦)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="text-sm text-gray-600">
             Currency: <span className="font-bold">{currency}</span>
@@ -308,7 +266,7 @@ export default function SubscriptionsPage() {
                           ? 'bg-gradient-to-r from-[#f97316] to-[#ea580c] hover:from-[#ea580c] hover:to-[#f97316] text-white shadow-lg hover:shadow-xl'
                           : 'bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] hover:from-[#1e3a8a] hover:to-[#1e40af] text-white'
                       }`}
-                      onClick={() => handlePlanClick(plan.slug)}
+                      onClick={() => handlePlanClick(plan.slug, billingPeriod === 'weekly' ? 7 : 30)}
                     >
                       Get Started
                     </Button>

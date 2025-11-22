@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -15,16 +14,11 @@ import {
   HeadphonesIcon, 
   MessageCircle,
   FileText,
-  ScrollText,
-  MapPin,
-  Mail,
-  User,
-  Globe,
-  LogOut
+  ScrollText
 } from 'lucide-react'
 import { formatDate } from '@/lib/utils/date'
-import { createClient } from '@/lib/supabase/client'
-import { toast } from 'sonner'
+import { Badge } from '@/components/ui/badge'
+import { Clock, CheckCircle2, AlertCircle } from 'lucide-react'
 
 interface DashboardContentProps {
   user: any
@@ -44,77 +38,9 @@ export function DashboardContent({
   subscriptions = [],
 }: DashboardContentProps) {
   const router = useRouter()
-  const country = userProfile?.countries as any
-  const userName = userProfile?.full_name || user.email?.split('@')[0] || 'User'
-  const userInitial = userName.charAt(0).toUpperCase()
-
-  const handleLogout = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    toast.success('Logged out successfully')
-    router.push('/')
-    router.refresh()
-  }
 
   return (
     <div className="space-y-6">
-      {/* Profile Header */}
-      <div className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] rounded-lg p-6 text-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            {/* Avatar */}
-            <div className="w-20 h-20 bg-white/20 rounded-lg flex items-center justify-center text-3xl font-bold">
-              {userInitial}
-            </div>
-            
-            {/* User Info */}
-            <div>
-              <h2 className="text-2xl font-bold mb-2">{userName}</h2>
-              <div className="flex items-center gap-4 text-blue-100">
-                <div className="flex items-center gap-2">
-                  <Mail className="h-4 w-4" />
-                  <span className="text-sm">{user.email}</span>
-                </div>
-                {country && (
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4" />
-                    <span className="text-sm">{country.name}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-              onClick={() => router.push('/dashboard/settings')}
-            >
-              <User className="h-4 w-4 mr-2" />
-              Edit Profile
-            </Button>
-            <Button
-              variant="outline"
-              className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-              onClick={() => router.push('/dashboard/settings')}
-            >
-              <Globe className="h-4 w-4 mr-2" />
-              Country
-            </Button>
-            <Button
-              variant="outline"
-              className="bg-red-500/20 border-red-500/30 text-white hover:bg-red-500/30"
-              onClick={handleLogout}
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </Button>
-          </div>
-        </div>
-      </div>
-
       {/* Main Content */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left Column */}
@@ -127,42 +53,149 @@ export function DashboardContent({
                 My Subscription
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-center py-8">
-              {activeSubscriptions > 0 ? (
-                <>
-                  <div className="flex justify-center mb-4">
-                    <Crown className="h-16 w-16 text-yellow-500" />
-                  </div>
-                  <h3 className="text-2xl font-bold mb-2 text-[#22c55e]">
-                    {activeSubscriptions} Active {activeSubscriptions === 1 ? 'Subscription' : 'Subscriptions'}
-                  </h3>
-                  <p className="text-gray-600 mb-6">
-                    You have access to premium predictions and features.
-                  </p>
-                  <Button
-                    className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] hover:from-[#1e3a8a] hover:to-[#1e40af] text-white font-bold"
-                    onClick={() => router.push('/dashboard/predictions')}
-                  >
-                    View Predictions
-                  </Button>
-                </>
+            <CardContent className="py-8">
+              {subscriptions.length > 0 ? (
+                <div className="space-y-4">
+                  {subscriptions.map((subscription) => {
+                    const plan = subscription.plan
+                    const isActive = subscription.plan_status === 'active'
+                    const isPending = subscription.plan_status === 'pending'
+                    const isPendingActivation = subscription.plan_status === 'pending_activation'
+                    const isExpired = subscription.plan_status === 'expired'
+                    
+                    return (
+                      <div
+                        key={subscription.id}
+                        className="border rounded-lg p-4 space-y-3"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h3 className="font-semibold text-lg">{plan?.name || 'Unknown Plan'}</h3>
+                            {plan?.description && (
+                              <p className="text-sm text-gray-600 mt-1">{plan.description}</p>
+                            )}
+                          </div>
+                          <div>
+                            {isActive && (
+                              <Badge variant="default" className="gap-1 bg-green-50 text-green-700 border-green-200">
+                                <CheckCircle2 className="h-3 w-3" />
+                                Active
+                              </Badge>
+                            )}
+                            {isPending && (
+                              <Badge variant="outline" className="gap-1 bg-yellow-50 text-yellow-700 border-yellow-200">
+                                <Clock className="h-3 w-3" />
+                                Pending
+                              </Badge>
+                            )}
+                            {isPendingActivation && (
+                              <Badge variant="outline" className="gap-1 bg-orange-50 text-orange-700 border-orange-200">
+                                <AlertCircle className="h-3 w-3" />
+                                Pending Activation
+                              </Badge>
+                            )}
+                            {isExpired && (
+                              <Badge variant="destructive" className="gap-1">
+                                Expired
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {isPending && (
+                          <div className="rounded-lg bg-yellow-50 p-3 text-sm text-yellow-800 border border-yellow-200">
+                            <p className="font-medium mb-1">Payment Pending Review</p>
+                            <p>Your payment proof has been submitted and is awaiting admin confirmation. Your subscription will be activated once payment is verified.</p>
+                          </div>
+                        )}
+                        
+                        {isPendingActivation && (
+                          <div className="rounded-lg bg-orange-50 p-3 text-sm text-orange-800 border border-orange-200">
+                            <p className="font-medium mb-1">Activation Fee Required</p>
+                            <p>Your subscription is active but requires an activation fee to unlock predictions.</p>
+                          </div>
+                        )}
+                        
+                        {isActive && subscription.expiry_date && (
+                          <div className="text-sm text-gray-600">
+                            <span className="font-medium">Expires:</span>{' '}
+                            {formatDate(new Date(subscription.expiry_date))}
+                          </div>
+                        )}
+                        
+                        <div className="flex gap-2 pt-2">
+                          {isActive && (
+                            <Button
+                              size="sm"
+                              className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] hover:from-[#1e3a8a] hover:to-[#1e40af] text-white"
+                              onClick={() => router.push('/dashboard/predictions')}
+                            >
+                              View Predictions
+                            </Button>
+                          )}
+                          {isPendingActivation && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => router.push(`/subscribe?plan=${plan?.slug}&step=activation`)}
+                            >
+                              Pay Activation Fee
+                            </Button>
+                          )}
+                          {!isActive && !isPending && !isPendingActivation && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => router.push('/subscriptions')}
+                            >
+                              Subscribe
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                  
+                  {activeSubscriptions === 0 && subscriptions.some((s) => s.plan_status === 'pending' || s.plan_status === 'pending_activation') && (
+                    <div className="text-center pt-4 border-t">
+                      <Button
+                        className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] hover:from-[#1e3a8a] hover:to-[#1e40af] text-white font-bold"
+                        onClick={() => router.push('/subscriptions')}
+                      >
+                        <Crown className="h-4 w-4 mr-2" />
+                        Browse More Plans
+                      </Button>
+                    </div>
+                  )}
+                  
+                  {activeSubscriptions > 0 && (
+                    <div className="text-center pt-4 border-t">
+                      <Button
+                        className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] hover:from-[#1e3a8a] hover:to-[#1e40af] text-white font-bold"
+                        onClick={() => router.push('/dashboard/predictions')}
+                      >
+                        View All Predictions
+                      </Button>
+                    </div>
+                  )}
+                </div>
               ) : (
-                <>
+                <div className="text-center">
                   <div className="flex justify-center mb-4">
                     <Crown className="h-16 w-16 text-yellow-200" />
                   </div>
-                  <h3 className="text-2xl font-bold mb-4">No Active Subscription</h3>
+                  <h3 className="text-2xl font-bold mb-4">No Subscription</h3>
                   <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                    You don't have an active subscription. Subscribe now to unlock premium features and access exclusive content.
+                    You don't have any subscriptions. Subscribe now to unlock premium features and access exclusive content.
                   </p>
                   <Button
                     className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] hover:from-[#1e3a8a] hover:to-[#1e40af] text-white font-bold"
-                    onClick={() => router.push('/subscribe')}
+                    onClick={() => router.push('/subscriptions')}
                   >
                     <Crown className="h-4 w-4 mr-2" />
                     View Available Packages
                   </Button>
-                </>
+                </div>
               )}
             </CardContent>
           </Card>

@@ -14,16 +14,9 @@ export default async function SettingsPage() {
   // Get user profile with country
   const { data: userProfile } = await supabase
     .from('users')
-    .select('*, countries(*)')
+    .select('*')
     .eq('id', user.id)
     .single()
-
-  // Get all countries
-  const { data: countries } = await supabase
-    .from('countries')
-    .select('*')
-    .eq('is_active', true)
-    .order('name')
 
   return (
     <DashboardLayout user={user} userProfile={userProfile}>
@@ -35,7 +28,7 @@ export default async function SettingsPage() {
           </p>
         </div>
 
-        <SettingsForm user={user} userProfile={userProfile} countries={countries || []} />
+        <SettingsForm user={user} userProfile={userProfile} />
       </div>
     </DashboardLayout>
   )

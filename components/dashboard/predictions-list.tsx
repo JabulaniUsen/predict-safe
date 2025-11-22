@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Lock } from 'lucide-react'
 import { Prediction, CorrectScorePrediction, UserSubscriptionWithPlan } from '@/types'
 import { formatTime, getDateRange } from '@/lib/utils/date'
+import { toast } from 'sonner'
 
 interface PredictionsListProps {
   subscriptions: UserSubscriptionWithPlan[]
@@ -48,15 +49,21 @@ export function PredictionsList({ subscriptions }: PredictionsListProps) {
 
     if (plan.slug === 'correct-score') {
       // Fetch correct score predictions
+      // Convert date strings to proper timestamp format for comparison
+      // PostgreSQL will handle date string comparison with timestamps correctly
+      const fromTimestamp = `${from}T00:00:00.000Z`
+      const toTimestamp = `${to}T23:59:59.999Z`
+      
       const { data, error } = await supabase
         .from('correct_score_predictions')
         .select('*')
-        .gte('kickoff_time', from)
-        .lte('kickoff_time', to)
+        .gte('kickoff_time', fromTimestamp)
+        .lte('kickoff_time', toTimestamp)
         .order('kickoff_time', { ascending: true })
 
       if (error) {
         console.error('Error fetching correct score predictions:', error)
+        toast.error('Failed to load correct score predictions. Please try again.')
       } else {
         setCorrectScorePredictions(data || [])
         setPredictions([])
@@ -68,12 +75,16 @@ export function PredictionsList({ subscriptions }: PredictionsListProps) {
       if (plan.slug === 'profit-multiplier') planType = 'profit_multiplier'
       else if (plan.slug === 'daily-2-odds') planType = 'daily_2_odds'
 
+      // Convert date strings to proper timestamp format for comparison
+      const fromTimestamp = `${from}T00:00:00.000Z`
+      const toTimestamp = `${to}T23:59:59.999Z`
+
       let query = supabase
         .from('predictions')
         .select('*')
         .eq('plan_type', planType)
-        .gte('kickoff_time', from)
-        .lte('kickoff_time', to)
+        .gte('kickoff_time', fromTimestamp)
+        .lte('kickoff_time', toTimestamp)
         .order('kickoff_time', { ascending: true })
 
       // Apply plan-specific filters
@@ -104,6 +115,8 @@ export function PredictionsList({ subscriptions }: PredictionsListProps) {
   }
 
   const subscription = subscriptions.find((s) => s.plan_id === selectedPlan)
+  const plan = subscription?.plan
+  const isCorrectScorePlan = plan?.slug === 'correct-score'
   const isLocked = !subscription || subscription.plan_status !== 'active'
 
   if (subscriptions.length === 0) {
@@ -190,46 +203,57 @@ export function PredictionsList({ subscriptions }: PredictionsListProps) {
             </Card>
           ))}
         </div>
-      ) : correctScorePredictions.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {correctScorePredictions.map((prediction) => (
-            <Card key={prediction.id}>
-              <CardHeader>
-                <CardTitle className="text-lg">
-                  {prediction.home_team} vs {prediction.away_team}
-                </CardTitle>
-                <CardDescription>{prediction.league}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Badge variant="secondary">Score: {prediction.score_prediction}</Badge>
-                  {prediction.odds && <span className="text-sm font-medium">Odds: {prediction.odds}</span>}
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span>Kickoff: {formatTime(prediction.kickoff_time)}</span>
-                  <Badge
-                    variant={
-                      prediction.status === 'finished'
-                        ? 'default'
+      ) : isCorrectScorePlan ? (
+        correctScorePredictions.length > 0 ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {correctScorePredictions.map((prediction) => (
+              <Card key={prediction.id}>
+                <CardHeader>
+                  <CardTitle className="text-lg">
+                    {prediction.home_team} vs {prediction.away_team}
+                  </CardTitle>
+                  <CardDescription>{prediction.league}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="secondary">Score: {prediction.score_prediction}</Badge>
+                    {prediction.odds && <span className="text-sm font-medium">Odds: {prediction.odds}</span>}
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Kickoff: {formatTime(prediction.kickoff_time)}</span>
+                    <Badge
+                      variant={
+                        prediction.status === 'finished'
+                          ? 'default'
+                          : prediction.status === 'live'
+                          ? 'destructive'
+                          : 'outline'
+                      }
+                    >
+                      {prediction.status === 'finished'
+                        ? 'Finished'
                         : prediction.status === 'live'
-                        ? 'destructive'
-                        : 'outline'
-                    }
-                  >
-                    {prediction.status === 'finished'
-                      ? 'Finished'
-                      : prediction.status === 'live'
-                      ? 'Live'
-                      : 'Not Started'}
-                  </Badge>
-                </div>
-                {prediction.admin_notes && (
-                  <p className="text-sm text-muted-foreground">{prediction.admin_notes}</p>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                        ? 'Live'
+                        : 'Not Started'}
+                    </Badge>
+                  </div>
+                  {prediction.admin_notes && (
+                    <p className="text-sm text-muted-foreground">{prediction.admin_notes}</p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <p className="text-muted-foreground">
+                No correct score predictions available for {dateType === 'previous' ? 'yesterday' : dateType === 'today' ? 'today' : 'tomorrow'}.
+                Try selecting a different date.
+              </p>
+            </CardContent>
+          </Card>
+        )
       ) : predictions.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {predictions.map((prediction) => (

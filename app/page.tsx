@@ -29,7 +29,7 @@ export default function HomePage() {
                 asChild 
                 className="text-lg bg-gradient-to-r from-[#f97316] to-[#ea580c] hover:from-[#ea580c] hover:to-[#f97316] text-white px-8 py-6 rounded-lg font-bold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
               >
-                <Link href="/dashboard">Subscribe to VIP</Link>
+                <Link href="/subscriptions">Subscribe to VIP</Link>
               </Button>
               <Button 
                 size="lg" 
@@ -52,8 +52,8 @@ export default function HomePage() {
         <BlogSection />
         <LeagueTableSection />
         <AboutSection />
-        <Footer />
-      </PageLayout>
+      </main>
+      <Footer />
     </div>
   )
 }
