@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { PageLayout } from '@/components/layout/page-layout'
@@ -20,7 +20,7 @@ type TransactionInsert = Database['public']['Tables']['transactions']['Insert']
 type UserSubscriptionUpdate = Database['public']['Tables']['user_subscriptions']['Update']
 type UserSubscriptionInsert = Database['public']['Tables']['user_subscriptions']['Insert']
 
-export default function CheckoutPage() {
+function CheckoutContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const planSlug = searchParams.get('plan')
@@ -683,6 +683,20 @@ export default function CheckoutPage() {
         </div>
       </div>
     </PageLayout>
+  )
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={
+      <PageLayout title="Checkout">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-muted-foreground">Loading...</div>
+        </div>
+      </PageLayout>
+    }>
+      <CheckoutContent />
+    </Suspense>
   )
 }
 

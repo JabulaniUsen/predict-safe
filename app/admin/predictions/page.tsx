@@ -21,7 +21,7 @@ export default async function AdminPredictionsPage() {
     .select('is_admin')
     .eq('id', user.id)
     .single()
-  
+
   const userProfile = result.data as UserProfile | null
 
   if (!userProfile?.is_admin) {
