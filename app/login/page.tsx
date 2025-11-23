@@ -9,8 +9,8 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
+import { Navbar } from '@/components/layout/navbar'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -43,33 +43,48 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#1e40af]/5 via-white to-[#22c55e]/5 px-4 py-12">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="flex justify-center mb-8">
-          <Link href="/" className="flex items-center gap-2">
-            <Image
-              src="/logo.png"
-              alt="PredictSafe Logo"
-              width={60}
-              height={60}
-              className="h-16 w-auto"
-              priority
-            />
-          </Link>
+    <div className="flex min-h-screen flex-col">
+      <Navbar />
+      <div className="flex flex-1">
+      {/* Left Side - Hero Image */}
+      <div className="hidden lg:block lg:w-1/2 relative">
+        <div className="absolute inset-0">
+          <Image
+            src="/hero-pics/hero-bg2.jpeg"
+            alt="Football stadium background"
+            fill
+            className="object-cover"
+            priority
+            quality={90}
+          />
+          <div className="absolute inset-0 bg-gradient-to-br from-[#1e40af]/80 to-[#1e3a8a]/80" />
         </div>
+        <div className="relative z-10 h-full flex flex-col items-center justify-center p-12 text-white">
+          <div className="max-w-md text-center">
+            <h2 className="text-4xl font-bold mb-4">Welcome Back</h2>
+            <p className="text-xl text-white/90 leading-relaxed">
+              Access your personalized dashboard and continue your winning streak with our premium predictions.
+            </p>
+          </div>
+        </div>
+      </div>
 
-        <Card className="border-2 border-gray-200 shadow-2xl">
-          <CardHeader className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white rounded-t-lg">
-            <CardTitle className="text-2xl font-bold text-center">Welcome Back</CardTitle>
-            <CardDescription className="text-blue-100 text-center">
-              Sign in to your PredictSafe account
-            </CardDescription>
-          </CardHeader>
-          <form onSubmit={handleLogin}>
-            <CardContent className="space-y-5 p-6">
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-semibold text-gray-700">
+      {/* Right Side - Form */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center bg-white p-4 lg:p-12">
+        <div className="w-full max-w-lg">
+
+          {/* Form Container */}
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-br from-[#1e40af] via-[#1e3a8a] to-[#1e40af] p-8 text-center">
+              <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
+              <p className="text-blue-100 text-sm">Sign in to your PredictSafe account</p>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleLogin} className="p-8 space-y-6">
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-sm font-medium text-gray-700 ml-1">
                   Email Address
                 </Label>
                 <Input
@@ -79,11 +94,12 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="h-11 border-gray-300 focus:border-[#1e40af] focus:ring-[#1e40af]"
+                  className="h-12 border-2 border-gray-200 rounded-lg focus:border-[#1e40af] focus:ring-2 focus:ring-[#1e40af]/20 transition-all bg-gray-50/50"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm font-semibold text-gray-700">
+
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className="text-sm font-medium text-gray-700 ml-1">
                   Password
                 </Label>
                 <div className="relative">
@@ -94,12 +110,12 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="h-11 border-gray-300 focus:border-[#1e40af] focus:ring-[#1e40af] pr-10"
+                    className="h-12 border-2 border-gray-200 rounded-lg focus:border-[#1e40af] focus:ring-2 focus:ring-[#1e40af]/20 transition-all bg-gray-50/50 pr-12"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-[#1e40af] transition-colors"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#1e40af] transition-colors"
                   >
                     {showPassword ? (
                       <EyeOff className="h-5 w-5" />
@@ -109,24 +125,27 @@ export default function LoginPage() {
                   </button>
                 </div>
               </div>
-            </CardContent>
-            <CardFooter className="flex flex-col space-y-4 p-6 pt-0">
+
               <Button
                 type="submit"
-                className="w-full bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] hover:from-[#1e3a8a] hover:to-[#1e40af] text-white font-bold h-11 text-lg shadow-lg hover:shadow-xl transition-all duration-300"
+                className="w-full h-12 bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] hover:from-[#1e3a8a] hover:to-[#1e40af] text-white font-semibold text-base rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                 disabled={loading}
               >
                 {loading ? 'Logging in...' : 'Sign In'}
               </Button>
-              <p className="text-sm text-center text-gray-600">
-                Don't have an account?{' '}
-                <Link href="/signup" className="text-[#1e40af] font-semibold hover:underline">
-                  Sign up
-                </Link>
-              </p>
-            </CardFooter>
-          </form>
-        </Card>
+
+              <div className="text-center pt-4">
+                <p className="text-sm text-gray-600">
+                  Don't have an account?{' '}
+                  <Link href="/signup" className="text-[#1e40af] font-semibold hover:text-[#1e3a8a] transition-colors">
+                    Sign up
+                  </Link>
+                </p>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
       </div>
     </div>
   )

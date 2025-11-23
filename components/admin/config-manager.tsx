@@ -17,18 +17,46 @@ export function ConfigManager({ config }: ConfigManagerProps) {
   const [loading, setLoading] = useState(false)
   const configMap = new Map(config.map((c) => [c.key, c.value]))
 
+  // Parse social links from config - handle both string and object formats
+  const getSocialLinks = () => {
+    const socialLinksValue = configMap.get('social_links')
+    if (!socialLinksValue) return {}
+    
+    if (typeof socialLinksValue === 'string') {
+      try {
+        return JSON.parse(socialLinksValue)
+      } catch {
+        return {}
+      }
+    }
+    return socialLinksValue || {}
+  }
+  
+  const socialLinks = getSocialLinks()
+  
+  const [socialLinksState, setSocialLinksState] = useState({
+    facebook: socialLinks.facebook || '',
+    twitter: socialLinks.twitter || '',
+    instagram: socialLinks.instagram || '',
+    youtube: socialLinks.youtube || '',
+    linkedin: socialLinks.linkedin || '',
+  })
+
   const handleUpdateConfig = async (key: string, value: any) => {
     setLoading(true)
     try {
       const supabase = createClient()
+      // For JSONB, Supabase expects the value as-is (it will handle JSON conversion)
+      // For strings, we pass them directly
+      const jsonValue = typeof value === 'string' ? value : value
+      
       const { error } = await supabase
         .from('site_config')
-        .upsert({ key, value }, { onConflict: 'key' })
+        .upsert({ key, value: jsonValue }, { onConflict: 'key' })
 
       if (error) throw error
 
       toast.success('Configuration updated!')
-      window.location.reload()
     } catch (error: any) {
       toast.error(error.message || 'Failed to update config')
     } finally {
@@ -36,45 +64,102 @@ export function ConfigManager({ config }: ConfigManagerProps) {
     }
   }
 
+  const handleUpdateSocialLinks = async () => {
+    setLoading(true)
+    try {
+      const supabase = createClient()
+      // For JSONB fields, pass the object directly - Supabase will handle JSON conversion
+      const { error } = await supabase
+        .from('site_config')
+        .upsert({ key: 'social_links', value: socialLinksState }, { onConflict: 'key' })
+
+      if (error) throw error
+
+      toast.success('Social links updated!')
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update social links')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl lg:text-3xl font-bold">Site Configuration</h1>
+        <p className="text-sm lg:text-base text-muted-foreground mt-1">Manage site settings and content</p>
+      </div>
+
     <div className="grid gap-6 md:grid-cols-2">
-      <Card>
-        <CardHeader>
-          <CardTitle>Hero Section</CardTitle>
-          <CardDescription>Edit homepage hero content</CardDescription>
+        <Card className="border-2 border-gray-200 shadow-sm">
+          <CardHeader className="p-5 border-b border-gray-200">
+            <CardTitle className="text-lg font-semibold">Site Header</CardTitle>
+            <CardDescription className="text-sm mt-1">Website title and tagline</CardDescription>
+          </CardHeader>
+          <CardContent className="p-5 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="site_header">Site Title / Header</Label>
+              <Input
+                id="site_header"
+                defaultValue={configMap.get('site_header') || 'PredictSafe'}
+                onBlur={(e) => handleUpdateConfig('site_header', e.target.value)}
+                placeholder="PredictSafe"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="site_subheader">Site Subheader / Tagline</Label>
+              <Textarea
+                id="site_subheader"
+                defaultValue={configMap.get('site_subheader') || 'Your trusted source for accurate football predictions'}
+                onBlur={(e) => handleUpdateConfig('site_subheader', e.target.value)}
+                placeholder="Your trusted source for accurate football predictions"
+                rows={3}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-2 border-gray-200 shadow-sm">
+          <CardHeader className="p-5 border-b border-gray-200">
+            <CardTitle className="text-lg font-semibold">Hero Section</CardTitle>
+            <CardDescription className="text-sm mt-1">Homepage hero content</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+          <CardContent className="p-5 space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="hero_headline">Headline</Label>
+              <Label htmlFor="hero_headline">Hero Headline</Label>
             <Input
               id="hero_headline"
-              defaultValue={configMap.get('hero_headline') || ''}
+                defaultValue={configMap.get('hero_headline') || 'Welcome to PredictSafe'}
               onBlur={(e) => handleUpdateConfig('hero_headline', e.target.value)}
+                placeholder="Welcome to PredictSafe"
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="hero_subtext">Subtext</Label>
+              <Label htmlFor="hero_subtext">Hero Subtext</Label>
             <Textarea
               id="hero_subtext"
-              defaultValue={configMap.get('hero_subtext') || ''}
+                defaultValue={configMap.get('hero_subtext') || 'Your trusted source for accurate football predictions'}
               onBlur={(e) => handleUpdateConfig('hero_subtext', e.target.value)}
+                placeholder="Your trusted source for accurate football predictions"
+                rows={3}
             />
           </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Social Links</CardTitle>
-          <CardDescription>Manage social media links</CardDescription>
+        <Card className="border-2 border-gray-200 shadow-sm">
+          <CardHeader className="p-5 border-b border-gray-200">
+            <CardTitle className="text-lg font-semibold">Contact Information</CardTitle>
+            <CardDescription className="text-sm mt-1">Contact details and Telegram</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+          <CardContent className="p-5 space-y-4">
           <div className="space-y-2">
             <Label htmlFor="telegram_link">Telegram Link</Label>
             <Input
               id="telegram_link"
               defaultValue={configMap.get('telegram_link') || ''}
               onBlur={(e) => handleUpdateConfig('telegram_link', e.target.value)}
+                placeholder="https://t.me/yourchannel"
             />
           </div>
           <div className="space-y-2">
@@ -84,10 +169,71 @@ export function ConfigManager({ config }: ConfigManagerProps) {
               type="email"
               defaultValue={configMap.get('contact_email') || ''}
               onBlur={(e) => handleUpdateConfig('contact_email', e.target.value)}
+                placeholder="contact@predictsafe.com"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-2 border-gray-200 shadow-sm">
+          <CardHeader className="p-5 border-b border-gray-200">
+            <CardTitle className="text-lg font-semibold">Social Media Links</CardTitle>
+            <CardDescription className="text-sm mt-1">Manage all social media profiles</CardDescription>
+          </CardHeader>
+          <CardContent className="p-5 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="social_facebook">Facebook URL</Label>
+              <Input
+                id="social_facebook"
+                value={socialLinksState.facebook}
+                onChange={(e) => setSocialLinksState({ ...socialLinksState, facebook: e.target.value })}
+                onBlur={handleUpdateSocialLinks}
+                placeholder="https://facebook.com/yourpage"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="social_twitter">Twitter / X URL</Label>
+              <Input
+                id="social_twitter"
+                value={socialLinksState.twitter}
+                onChange={(e) => setSocialLinksState({ ...socialLinksState, twitter: e.target.value })}
+                onBlur={handleUpdateSocialLinks}
+                placeholder="https://twitter.com/yourhandle"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="social_instagram">Instagram URL</Label>
+              <Input
+                id="social_instagram"
+                value={socialLinksState.instagram}
+                onChange={(e) => setSocialLinksState({ ...socialLinksState, instagram: e.target.value })}
+                onBlur={handleUpdateSocialLinks}
+                placeholder="https://instagram.com/yourhandle"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="social_youtube">YouTube URL</Label>
+              <Input
+                id="social_youtube"
+                value={socialLinksState.youtube}
+                onChange={(e) => setSocialLinksState({ ...socialLinksState, youtube: e.target.value })}
+                onBlur={handleUpdateSocialLinks}
+                placeholder="https://youtube.com/@yourchannel"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="social_linkedin">LinkedIn URL</Label>
+              <Input
+                id="social_linkedin"
+                value={socialLinksState.linkedin}
+                onChange={(e) => setSocialLinksState({ ...socialLinksState, linkedin: e.target.value })}
+                onBlur={handleUpdateSocialLinks}
+                placeholder="https://linkedin.com/company/yourcompany"
             />
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   )
 }

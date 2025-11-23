@@ -233,39 +233,48 @@ export function FreePredictionsSection() {
     return formatDate(yesterday)
   }
 
+  const handleDateChange = (direction: 'previous' | 'next') => {
+    if (direction === 'previous') {
+      if (dateType === 'today') setDateType('previous')
+      else if (dateType === 'tomorrow') setDateType('today')
+    } else {
+      if (dateType === 'today') setDateType('tomorrow')
+      else if (dateType === 'previous') setDateType('today')
+    }
+  }
+
   return (
-    <section className="py-16 bg-white">
+    <section className="py-4 lg:py-8 bg-white">
       <div className="container mx-auto px-4">
-        <div className="mb-8">
-          <h2 className="text-4xl font-bold mb-2 text-[#1e40af]">Free Predictions</h2>
-          <p className="text-gray-600">Get expert predictions for today's matches</p>
-        </div>
-
-        <div className="mb-8">
-          <Tabs value={selectedFilter} onValueChange={setSelectedFilter}>
-            <TabsList className="grid w-full grid-cols-5 lg:grid-cols-9 bg-gray-100 p-1 rounded-lg">
-              {FILTERS.map((filter) => (
-                <TabsTrigger 
-                  key={filter.id} 
-                  value={filter.id} 
-                  className="text-xs sm:text-sm font-semibold data-[state=active]:bg-[#1e40af] data-[state=active]:text-white rounded-md transition-all"
-                >
-                  {filter.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-        </div>
-
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h3 className="text-2xl font-bold text-[#1e40af]">{getFilterLabel()}</h3>
-            <p className="text-gray-600 mt-1">{getDateLabel()}</p>
+        {/* Mobile Header */}
+        <div className="mb-4 lg:hidden">
+          <h2 className="text-xl font-bold mb-2 text-gray-900">Top Free Picks</h2>
+          <p className="text-sm text-gray-600 mb-4">{getDateLabel()}</p>
+          
+          {/* Mobile Filters */}
+          <div className="mb-4">
+            <Tabs value={selectedFilter} onValueChange={setSelectedFilter}>
+              <div className="overflow-x-auto">
+                <TabsList className="grid w-full grid-cols-5 bg-gray-100 p-1 rounded-lg min-w-[500px]">
+                  {FILTERS.map((filter) => (
+                    <TabsTrigger 
+                      key={filter.id} 
+                      value={filter.id} 
+                      className="text-xs font-semibold data-[state=active]:bg-[#1e40af] data-[state=active]:text-white rounded-md transition-all px-2"
+                    >
+                      {filter.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </div>
+            </Tabs>
           </div>
-          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+          
+          {/* Mobile Navigation */}
+          <div className="flex items-center justify-center gap-1 bg-gray-100 p-1 rounded-lg mb-4">
             <button
-              onClick={() => setDateType('previous')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              onClick={() => handleDateChange('previous')}
+              className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
                 dateType === 'previous'
                   ? 'bg-[#1e40af] text-white shadow-sm'
                   : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
@@ -275,7 +284,70 @@ export function FreePredictionsSection() {
             </button>
             <button
               onClick={() => setDateType('today')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                dateType === 'today'
+                  ? 'bg-[#1e40af] text-white shadow-sm'
+                  : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
+              }`}
+            >
+              Today
+            </button>
+            <button
+              onClick={() => handleDateChange('next')}
+              className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                dateType === 'tomorrow'
+                  ? 'bg-[#1e40af] text-white shadow-sm'
+                  : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
+              }`}
+            >
+              Tomorrow
+            </button>
+          </div>
+        </div>
+
+        {/* Desktop Header */}
+        <div className="mb-4 lg:mb-8 hidden lg:block">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1 lg:mb-2 text-[#1e40af]">Free Predictions</h2>
+          <p className="text-sm lg:text-base text-gray-600">Get expert predictions for today's matches</p>
+        </div>
+
+        <div className="mb-4 lg:mb-8 hidden lg:block">
+          <Tabs value={selectedFilter} onValueChange={setSelectedFilter}>
+            <div className="overflow-x-auto">
+              <TabsList className="grid w-full grid-cols-5 lg:grid-cols-9 bg-gray-100 p-1 rounded-lg min-w-[500px] lg:min-w-0">
+                {FILTERS.map((filter) => (
+                  <TabsTrigger 
+                    key={filter.id} 
+                    value={filter.id} 
+                    className="text-xs sm:text-sm font-semibold data-[state=active]:bg-[#1e40af] data-[state=active]:text-white rounded-md transition-all px-2 lg:px-4"
+                  >
+                    {filter.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
+          </Tabs>
+        </div>
+
+        <div className="mb-4 lg:mb-8 hidden lg:flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-[#1e40af]">{getFilterLabel()}</h3>
+            <p className="text-xs sm:text-sm lg:text-base text-gray-600 mt-0.5 lg:mt-1">{getDateLabel()}</p>
+          </div>
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+            <button
+              onClick={() => setDateType('previous')}
+              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                dateType === 'previous'
+                  ? 'bg-[#1e40af] text-white shadow-sm'
+                  : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
+              }`}
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setDateType('today')}
+              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
                 dateType === 'today'
                   ? 'bg-[#1e40af] text-white shadow-sm'
                   : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
@@ -285,7 +357,7 @@ export function FreePredictionsSection() {
             </button>
             <button
               onClick={() => setDateType('tomorrow')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
                 dateType === 'tomorrow'
                   ? 'bg-[#1e40af] text-white shadow-sm'
                   : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
@@ -297,7 +369,48 @@ export function FreePredictionsSection() {
         </div>
 
         {loading ? (
-          <div className="space-y-0 border rounded-lg overflow-hidden bg-white">
+          <>
+            {/* Mobile Loading State */}
+            <div className="lg:hidden space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="bg-gray-100 rounded-lg p-3 space-y-2 animate-pulse">
+                  {/* Top Row: Time and Home Team */}
+                  <div className="flex items-center justify-between">
+                    <div className="h-4 w-16 bg-gray-300 rounded" />
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-24 bg-gray-300 rounded" />
+                      <div className="h-6 w-6 bg-gray-300 rounded-full" />
+                    </div>
+                  </div>
+
+                  {/* Second Row: League and Away Team */}
+                  <div className="flex items-center justify-between">
+                    <div className="h-3 w-20 bg-gray-300 rounded" />
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-24 bg-gray-300 rounded" />
+                      <div className="h-6 w-6 bg-gray-300 rounded-full" />
+                    </div>
+                  </div>
+
+                  {/* Header Bar */}
+                  <div className="bg-[#1e40af] text-white px-3 py-2 rounded grid grid-cols-3 gap-2 text-xs font-semibold">
+                    <div>Tip</div>
+                    <div className="text-center">Odd</div>
+                    <div className="text-center">Confidence</div>
+                  </div>
+
+                  {/* Prediction Row */}
+                  <div className="bg-gray-200 px-3 py-2 rounded grid grid-cols-3 gap-2 items-center">
+                    <div className="h-4 w-12 bg-gray-300 rounded" />
+                    <div className="h-4 w-10 bg-gray-300 rounded mx-auto" />
+                    <div className="h-8 w-8 bg-gray-300 rounded-full mx-auto" />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Loading State */}
+            <div className="hidden lg:block space-y-0 border rounded-lg overflow-hidden bg-white">
             <div className="bg-blue-600 text-white px-6 py-3 grid grid-cols-12 gap-4 items-center font-semibold text-sm">
               <div className="col-span-2">Time & League</div>
               <div className="col-span-5">Teams</div>
@@ -334,6 +447,7 @@ export function FreePredictionsSection() {
               </div>
             ))}
           </div>
+          </>
         ) : predictions.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
@@ -341,42 +455,135 @@ export function FreePredictionsSection() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-0 border-2 border-gray-200 rounded-xl overflow-hidden bg-white shadow-lg">
+          <>
+            {/* Mobile View */}
+            <div className="lg:hidden space-y-3">
+              {predictions.map((prediction) => (
+                <div
+                  key={prediction.id}
+                  className="bg-gray-100 rounded-lg p-3 space-y-2"
+                >
+                  {/* Top Row: Time and Home Team */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700">
+                      {formatTime(prediction.kickoff_time)}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-gray-900">{prediction.home_team}</span>
+                      {prediction.home_team_logo ? (
+                        <div className="relative w-6 h-6 flex-shrink-0">
+                          <Image
+                            src={prediction.home_team_logo}
+                            alt={prediction.home_team}
+                            width={24}
+                            height={24}
+                            className="object-contain rounded-full"
+                            unoptimized
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none'
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs font-bold">
+                          {prediction.home_team.charAt(0)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Second Row: League and Away Team */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-600">{prediction.league}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-gray-900">{prediction.away_team}</span>
+                      {prediction.away_team_logo ? (
+                        <div className="relative w-6 h-6 flex-shrink-0">
+                          <Image
+                            src={prediction.away_team_logo}
+                            alt={prediction.away_team}
+                            width={24}
+                            height={24}
+                            className="object-contain rounded-full"
+                            unoptimized
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none'
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs font-bold">
+                          {prediction.away_team.charAt(0)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Header Bar */}
+                  <div className="bg-[#1e40af] text-white px-3 py-2 rounded grid grid-cols-3 gap-2 text-xs font-semibold">
+                    <div>Tip</div>
+                    <div className="text-center">Odd</div>
+                    <div className="text-center">Confidence</div>
+                  </div>
+
+                  {/* Prediction Row */}
+                  <div className="bg-gray-200 px-3 py-2 rounded grid grid-cols-3 gap-2 items-center">
+                    <div className="text-sm font-medium text-gray-900">
+                      {prediction.prediction_type === 'Over 1.5' ? 'Ov 1.5' :
+                       prediction.prediction_type === 'Over 2.5' ? 'Ov 2.5' :
+                       prediction.prediction_type === 'Home Win' ? '1' :
+                       prediction.prediction_type === 'Away Win' ? '2' :
+                       prediction.prediction_type === 'Double Chance' ? '12' :
+                       prediction.prediction_type}
+                    </div>
+                    <div className="text-sm font-semibold text-gray-900 text-center">
+                      {prediction.odds.toFixed(2)}
+                    </div>
+                    <div className="flex items-center justify-center">
+                      <CircularProgress value={prediction.confidence} size={32} strokeWidth={4} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop View */}
+            <div className="hidden lg:block space-y-0 border-2 border-gray-200 rounded-xl overflow-hidden bg-white shadow-lg">
             {/* Header */}
-            <div className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white px-6 py-4 grid grid-cols-12 gap-4 items-center font-bold text-sm shadow-md">
-              <div className="col-span-2">Time & League</div>
+            <div className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white px-3 sm:px-4 lg:px-6 py-3 lg:py-4 grid grid-cols-12 gap-2 lg:gap-4 items-center font-bold text-xs sm:text-sm shadow-md">
+              <div className="col-span-3 lg:col-span-2">Time & League</div>
               <div className="col-span-5">Teams</div>
-              <div className="col-span-1 text-center">Score</div>
+              <div className="col-span-1 text-center hidden sm:block">Score</div>
               <div className="col-span-1 text-center">Tip</div>
-              <div className="col-span-1 text-center">Odd</div>
-              <div className="col-span-2 text-center">Confidence</div>
+              <div className="col-span-1 text-center hidden md:block">Odd</div>
+              <div className="col-span-2 text-center hidden lg:block">Confidence</div>
             </div>
 
             {/* Predictions */}
             {predictions.map((prediction, index) => (
-              <div
-                key={prediction.id}
-                onClick={() => {
-                  const matchId = `${prediction.match_id}-${prediction.prediction_type}`
-                  window.location.href = `/match/${encodeURIComponent(matchId)}`
-                }}
-                className={cn(
-                  'px-6 py-5 grid grid-cols-12 gap-4 items-center border-b border-gray-100 bg-white hover:bg-gradient-to-r hover:from-blue-50 hover:to-green-50 hover:shadow-md transition-all duration-300 cursor-pointer transform hover:scale-[1.01] hover:border-l-4 hover:border-l-[#22c55e]',
-                  index === predictions.length - 1 && 'border-b-0',
-                  index % 2 === 0 && 'bg-gray-50/50'
-                )}
-              >
-                {/* Time & League */}
-                <div className="col-span-2">
-                  <div className="text-sm font-medium text-gray-900">
-                    {formatTime(prediction.kickoff_time)}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">{prediction.league}</div>
-                </div>
+                    <div
+                      key={prediction.id}
+                      onClick={() => {
+                        const matchId = `${prediction.match_id}-${prediction.prediction_type}`
+                        window.location.href = `/match/${encodeURIComponent(matchId)}`
+                      }}
+                      className={cn(
+                        'px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 grid grid-cols-12 gap-2 lg:gap-4 items-center border-b border-gray-100 bg-white hover:bg-gradient-to-r hover:from-blue-50 hover:to-green-50 hover:shadow-md transition-all duration-300 cursor-pointer transform hover:scale-[1.01] hover:border-l-4 hover:border-l-[#22c55e]',
+                        index === predictions.length - 1 && 'border-b-0',
+                        index % 2 === 0 && 'bg-gray-50/50'
+                      )}
+                    >
+                      {/* Time & League */}
+                      <div className="col-span-3 lg:col-span-2">
+                        <div className="text-xs sm:text-sm font-medium text-gray-900">
+                          {formatTime(prediction.kickoff_time)}
+                        </div>
+                        <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5 lg:mt-1 truncate">{prediction.league}</div>
+                      </div>
 
                 {/* Teams */}
-                <div className="col-span-5 flex items-center gap-3">
-                  <div className="flex items-center gap-2 flex-1">
+                <div className="col-span-5 flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
                     {prediction.home_team_logo ? (
                       <div className="relative w-6 h-6 flex-shrink-0">
                         <Image
@@ -404,8 +611,7 @@ export function FreePredictionsSection() {
                       {prediction.home_team}
                     </span>
                   </div>
-                  <span className="text-gray-400 mx-1">vs</span>
-                  <div className="flex items-center gap-2 flex-1">
+                  <div className="flex items-center gap-2">
                     {prediction.away_team_logo ? (
                       <div className="relative w-6 h-6 flex-shrink-0">
                         <Image
@@ -467,6 +673,7 @@ export function FreePredictionsSection() {
               </div>
             ))}
           </div>
+          </>
         )}
       </div>
     </section>

@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Kedebideri:wght@400;500;600;700;800;900&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,500;1,700&display=swap');
+
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -132,4 +134,38 @@
   --color-primary-green-dark: #16a34a;
   --color-primary-orange: #f97316;
   --color-primary-orange-dark: #ea580c;
+}
+
+.font-ubuntu {
+  font-family: 'Ubuntu', sans-serif !important;
+}
+
+/* Range slider styling */
+input[type="range"].range-slider {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input[type="range"].range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #1e40af;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+input[type="range"].range-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #1e40af;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  -moz-appearance: none;
+  appearance: none;
 }

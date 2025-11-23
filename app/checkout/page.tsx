@@ -9,9 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { Upload, X, Check, Copy } from 'lucide-react'
-import { Plan, PlanPrice, Country, PaymentMethod } from '@/types'
+import { Plan, PlanPrice, PaymentMethod } from '@/types'
 import { Database } from '@/types/database'
 import { toast } from 'sonner'
 
@@ -59,7 +58,7 @@ export default function CheckoutPage() {
         .select('country')
         .eq('id', user.id)
         .maybeSingle()
-      
+
       const userProfile = result.data as UserProfile | null
 
       if (userProfile?.country && ['Nigeria', 'Ghana', 'Kenya', 'Other'].includes(userProfile.country)) {
@@ -129,7 +128,7 @@ export default function CheckoutPage() {
         .select('country')
         .eq('id', user?.id)
         .maybeSingle()
-      
+
       const userProfile = result.data as UserProfile | null
       const countryName = userProfile?.country || 'Nigeria'
       const { data: pricesData } = await supabase
@@ -260,16 +259,16 @@ export default function CheckoutPage() {
 
       // Create transaction record
       const transactionData: TransactionInsert = {
-        user_id: user.id,
-        plan_id: plan.id,
-        amount: selectedPrice.price,
-        currency: selectedPrice.currency,
+          user_id: user.id,
+          plan_id: plan.id,
+          amount: selectedPrice.price,
+          currency: selectedPrice.currency,
         payment_gateway: selectedPaymentMethod.name,
-        payment_type: 'subscription',
-        status: 'pending',
-        metadata: {
-          payment_proof_url: proofUrl,
-          duration_days: selectedDuration,
+          payment_type: 'subscription',
+          status: 'pending',
+          metadata: {
+            payment_proof_url: proofUrl,
+            duration_days: selectedDuration,
           payment_method_id: selectedPaymentMethod.id,
           payment_method_name: selectedPaymentMethod.name,
           payment_method_type: selectedPaymentMethod.type,
@@ -300,9 +299,9 @@ export default function CheckoutPage() {
       if (existingSub) {
         // Update existing subscription
         const updateData: UserSubscriptionUpdate = {
-          subscription_fee_paid: false, // Will be true after admin confirms
-          plan_status: 'pending', // Pending admin confirmation
-          updated_at: new Date().toISOString(),
+            subscription_fee_paid: false, // Will be true after admin confirms
+            plan_status: 'pending', // Pending admin confirmation
+            updated_at: new Date().toISOString(),
         }
         const updateResult: any = await supabase
           .from('user_subscriptions')
@@ -317,11 +316,11 @@ export default function CheckoutPage() {
       } else {
         // Create new subscription
         const insertData: UserSubscriptionInsert = {
-          user_id: user.id,
-          plan_id: plan.id,
-          subscription_fee_paid: false,
-          activation_fee_paid: false,
-          plan_status: 'pending', // Pending admin confirmation
+            user_id: user.id,
+            plan_id: plan.id,
+            subscription_fee_paid: false,
+            activation_fee_paid: false,
+            plan_status: 'pending', // Pending admin confirmation
         }
         const insertResult: any = await supabase
           .from('user_subscriptions')
@@ -415,7 +414,12 @@ export default function CheckoutPage() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Amount:</span>
                   <span className="text-2xl font-bold text-[#1e40af]">
-                    {currency}{selectedPrice.price}
+                    {currency}{(() => {
+                      const priceValue = typeof selectedPrice.price === 'number' 
+                        ? selectedPrice.price 
+                        : parseFloat(String(selectedPrice.price || '0'))
+                      return priceValue.toLocaleString('en-US', { maximumFractionDigits: 0 })
+                    })()}
                   </span>
                 </div>
                 {plan.requires_activation && selectedPrice.activation_fee && (
@@ -423,7 +427,12 @@ export default function CheckoutPage() {
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Activation Fee:</span>
                       <span className="font-semibold">
-                        {currency}{selectedPrice.activation_fee}
+                        {currency}{(() => {
+                          const feeValue = typeof selectedPrice.activation_fee === 'number' 
+                            ? selectedPrice.activation_fee 
+                            : parseFloat(String(selectedPrice.activation_fee || '0'))
+                          return feeValue.toLocaleString('en-US', { maximumFractionDigits: 0 })
+                        })()}
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
@@ -499,8 +508,8 @@ export default function CheckoutPage() {
                       <RadioGroupItem value={method.id} id={method.id} />
                       <Label htmlFor={method.id} className="cursor-pointer flex-1">
                         {method.name}
-                      </Label>
-                    </div>
+                    </Label>
+                  </div>
                   ))}
                 </RadioGroup>
               </div>
@@ -648,18 +657,18 @@ export default function CheckoutPage() {
 
               {/* Submit Button */}
               {showPaymentConfirmation && selectedPaymentMethod && (
-                <Button
-                  className="w-full"
-                  size="lg"
-                  onClick={handleSubmit}
+              <Button
+                className="w-full"
+                size="lg"
+                onClick={handleSubmit}
                   disabled={!paymentProof || submitting || uploading}
-                >
-                  {submitting || uploading ? (
-                    'Processing...'
-                  ) : (
+              >
+                {submitting || uploading ? (
+                  'Processing...'
+                ) : (
                     'Submit Payment Proof'
-                  )}
-                </Button>
+                )}
+              </Button>
               )}
 
               <div className="rounded-lg bg-blue-50 p-4 text-blue-800 text-sm">

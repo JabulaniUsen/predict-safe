@@ -14,11 +14,18 @@ export default async function PredictionsPage() {
   // Get user profile
   const { data: userProfile } = await supabase
     .from('users')
-    .select('*, countries(*)')
+    .select('*')
     .eq('id', user.id)
     .single()
 
-  // Get user subscriptions (including pending so user can see what they've subscribed to)
+  // Get all active plans
+  const { data: allPlans } = await supabase
+    .from('plans')
+    .select('*')
+    .eq('is_active', true)
+    .order('created_at')
+
+  // Get user subscriptions
   const { data: subscriptions } = await supabase
     .from('user_subscriptions')
     .select(`
@@ -31,15 +38,15 @@ export default async function PredictionsPage() {
 
   return (
     <DashboardLayout user={user} userProfile={userProfile}>
-      <div className="space-y-6">
+      <div className="space-y-4 lg:space-y-6">
         <div>
-          <h1 className="text-3xl font-bold">My Predictions</h1>
-          <p className="text-muted-foreground">
-            View predictions for your active subscriptions
+          <h1 className="text-2xl lg:text-3xl font-bold">My Predictions</h1>
+          <p className="text-sm lg:text-base text-muted-foreground mt-1">
+            View predictions for all plans. Subscribe to unlock premium predictions.
           </p>
         </div>
 
-        <PredictionsList subscriptions={subscriptions || []} />
+        <PredictionsList allPlans={allPlans || []} subscriptions={subscriptions || []} />
       </div>
     </DashboardLayout>
   )

@@ -2,10 +2,10 @@ import { Navbar } from '@/components/layout/navbar'
 import { Footer } from '@/components/layout/footer'
 import { HeroSection } from '@/components/home/hero-section'
 import { FreePredictionsSection } from '@/components/home/free-predictions-section'
+import { WhatWeOfferSection } from '@/components/home/what-we-offer-section'
 import { VIPPackagesSection } from '@/components/home/vip-packages-section'
 import { VIPWinningsSection } from '@/components/home/vip-winnings-section'
-import { ProfitMultiplierSection } from '@/components/home/profit-multiplier-section'
-import { CorrectScorePreviewSection } from '@/components/home/correct-score-preview-section'
+import { PremiumPredictionsSection } from '@/components/home/premium-predictions-section'
 import { BlogSection } from '@/components/home/blog-section'
 import { LeagueTableSection } from '@/components/home/league-table-section'
 import { AboutSection } from '@/components/home/about-section'
@@ -19,15 +19,16 @@ export default function HomePage() {
       <main>
         <HeroSection />
         <FreePredictionsSection />
+        <WhatWeOfferSection />
         
         {/* CTA Buttons Section */}
-        <section className="py-16 bg-[#1e40af]">
+        <section className="py-8 lg:py-16 bg-[#1e40af]">
           <div className="container mx-auto px-4">
-            <div className="flex flex-col gap-4 sm:flex-row sm:justify-center">
+            <div className="flex flex-col gap-3 sm:gap-4 sm:flex-row sm:justify-center">
               <Button 
                 size="lg" 
                 asChild 
-                className="text-lg bg-gradient-to-r from-[#f97316] to-[#ea580c] hover:from-[#ea580c] hover:to-[#f97316] text-white px-8 py-6 rounded-lg font-bold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                className="text-sm sm:text-base lg:text-lg bg-gradient-to-r from-[#f97316] to-[#ea580c] hover:from-[#ea580c] hover:to-[#f97316] text-white px-6 py-4 sm:px-8 sm:py-6 rounded-lg font-bold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
               >
                 <Link href="/subscriptions">Subscribe to VIP</Link>
               </Button>
@@ -35,7 +36,7 @@ export default function HomePage() {
                 size="lg" 
                 variant="outline" 
                 asChild 
-                className="text-lg bg-white text-[#1e40af] border-2 border-white hover:bg-[#1e3a8a] hover:text-white hover:border-[#1e3a8a] px-8 py-6 rounded-lg font-bold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                className="text-sm sm:text-base lg:text-lg bg-white text-[#1e40af] border-2 border-white hover:bg-[#1e3a8a] hover:text-white hover:border-[#1e3a8a] px-6 py-4 sm:px-8 sm:py-6 rounded-lg font-bold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
               >
                 <a href="https://t.me/joinsurefixedwin" target="_blank" rel="noopener noreferrer">
                   Join Telegram
@@ -47,8 +48,7 @@ export default function HomePage() {
 
         <VIPWinningsSection />
         <VIPPackagesSection />
-        <ProfitMultiplierSection />
-        <CorrectScorePreviewSection />
+        <PremiumPredictionsSection />
         <BlogSection />
         <LeagueTableSection />
         <AboutSection />

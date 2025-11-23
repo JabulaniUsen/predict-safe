@@ -6,20 +6,52 @@ import { createClient } from '@/lib/supabase/client'
 import { PageLayout } from '@/components/layout/page-layout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Check } from 'lucide-react'
 import { PlanWithPrice } from '@/types'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-
-type CountryOption = 'Nigeria' | 'Ghana' | 'Kenya' | 'Other'
+import { Combobox } from '@/components/ui/combobox'
 
 export default function SubscriptionsPage() {
   const router = useRouter()
   const [plans, setPlans] = useState<PlanWithPrice[]>([])
   const [user, setUser] = useState<any>(null)
-  const [selectedCountry, setSelectedCountry] = useState<CountryOption>('Nigeria')
+  const [selectedCountry, setSelectedCountry] = useState<string>('Nigeria')
   const [loading, setLoading] = useState(true)
   const [billingPeriod, setBillingPeriod] = useState<'weekly' | 'monthly'>('monthly')
+
+  // List of countries for the dropdown
+  const countries = [
+    { value: 'Nigeria', label: 'Nigeria' },
+    { value: 'Ghana', label: 'Ghana' },
+    { value: 'Kenya', label: 'Kenya' },
+    { value: 'South Africa', label: 'South Africa' },
+    { value: 'Tanzania', label: 'Tanzania' },
+    { value: 'Uganda', label: 'Uganda' },
+    { value: 'Zambia', label: 'Zambia' },
+    { value: 'Zimbabwe', label: 'Zimbabwe' },
+    { value: 'Botswana', label: 'Botswana' },
+    { value: 'Namibia', label: 'Namibia' },
+    { value: 'Mozambique', label: 'Mozambique' },
+    { value: 'Angola', label: 'Angola' },
+    { value: 'Cameroon', label: 'Cameroon' },
+    { value: 'Ivory Coast', label: 'Ivory Coast' },
+    { value: 'Senegal', label: 'Senegal' },
+    { value: 'Morocco', label: 'Morocco' },
+    { value: 'Egypt', label: 'Egypt' },
+    { value: 'Tunisia', label: 'Tunisia' },
+    { value: 'Algeria', label: 'Algeria' },
+    { value: 'Ethiopia', label: 'Ethiopia' },
+    { value: 'Rwanda', label: 'Rwanda' },
+    { value: 'Malawi', label: 'Malawi' },
+    { value: 'Mali', label: 'Mali' },
+    { value: 'Burkina Faso', label: 'Burkina Faso' },
+    { value: 'Niger', label: 'Niger' },
+    { value: 'Chad', label: 'Chad' },
+    { value: 'Sudan', label: 'Sudan' },
+    { value: 'Madagascar', label: 'Madagascar' },
+    { value: 'Mauritius', label: 'Mauritius' },
+    { value: 'Seychelles', label: 'Seychelles' },
+    { value: 'Other', label: 'Other' },
+  ]
 
   useEffect(() => {
     const fetchData = async () => {
@@ -37,8 +69,8 @@ export default function SubscriptionsPage() {
           .eq('id', user.id)
           .maybeSingle() as { data: { country: string } | null }
 
-        if (userData?.country && ['Nigeria', 'Ghana', 'Kenya', 'Other'].includes(userData.country)) {
-          setSelectedCountry(userData.country as CountryOption)
+        if (userData?.country) {
+          setSelectedCountry(userData.country)
         }
       }
 
@@ -87,17 +119,26 @@ export default function SubscriptionsPage() {
   const getPriceForCountry = (plan: PlanWithPrice, durationDays: number) => {
     if (!plan.prices || plan.prices.length === 0) return null
 
-    // First, try to find country-specific price
-    const countryPrice = plan.prices.find(
-      (p: any) => p.duration_days === durationDays && p.country === selectedCountry
-    )
-    if (countryPrice) return countryPrice
+    // If Nigeria, look for Nigeria-specific price
+    if (selectedCountry === 'Nigeria') {
+      const nigeriaPrice = plan.prices.find(
+        (p: any) => p.duration_days === durationDays && p.country === 'Nigeria'
+      )
+      if (nigeriaPrice) return nigeriaPrice
+    } else {
+      // For all other countries, look for USD prices (country = 'Other' or currency = 'USD')
+      const usdPrice = plan.prices.find(
+        (p: any) => p.duration_days === durationDays && (p.currency === 'USD' || p.country === 'Other' || p.country !== 'Nigeria')
+      )
+      if (usdPrice) return usdPrice
+    }
 
-    // Fallback to Nigeria (default)
-    const nigeriaPrice = plan.prices.find(
-      (p: any) => p.duration_days === durationDays && p.country === 'Nigeria'
+    // Fallback: try to find any price for this duration with matching currency
+    const matchingCurrency = selectedCountry === 'Nigeria' ? 'NGN' : 'USD'
+    const currencyPrice = plan.prices.find(
+      (p: any) => p.duration_days === durationDays && p.currency === matchingCurrency
     )
-    if (nigeriaPrice) return nigeriaPrice
+    if (currencyPrice) return currencyPrice
 
     // Final fallback: any price for this duration
     return plan.prices.find(
@@ -107,14 +148,10 @@ export default function SubscriptionsPage() {
 
   // Determine currency symbol based on selected country
   const getCurrencySymbol = () => {
-    if (selectedCountry === 'Nigeria' || selectedCountry === 'Other') {
+    if (selectedCountry === 'Nigeria') {
       return '₦'
-    } else if (selectedCountry === 'Ghana') {
-      return '₵'
-    } else if (selectedCountry === 'Kenya') {
-      return 'KSh'
     }
-    return '₦' // Default to Naira
+    return '$' // USD for all other countries
   }
 
   const currency = getCurrencySymbol()
@@ -134,23 +171,23 @@ export default function SubscriptionsPage() {
     <PageLayout title="Subscriptions" subtitle="Choose the perfect plan for your betting success">
       <div className="container mx-auto px-4 py-12 max-w-7xl">
         {/* Country Selection */}
-        <div className="mb-8 flex items-center justify-center gap-4">
+        <div className="mb-8 flex flex-col sm:flex-row items-center justify-center gap-4">
           <label className="text-sm font-semibold text-gray-700">Select Country:</label>
           <div className="w-64">
-            <Select value={selectedCountry} onValueChange={(value) => setSelectedCountry(value as CountryOption)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select country" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Nigeria">Nigeria (₦)</SelectItem>
-                <SelectItem value="Ghana">Ghana (₵)</SelectItem>
-                <SelectItem value="Kenya">Kenya (KSh)</SelectItem>
-                <SelectItem value="Other">Other (₦)</SelectItem>
-              </SelectContent>
-            </Select>
+            <Combobox
+              options={countries}
+              value={selectedCountry}
+              onValueChange={(value) => setSelectedCountry(value)}
+              placeholder="Search or select country..."
+              searchPlaceholder="Search countries..."
+              emptyMessage="No country found."
+            />
           </div>
           <div className="text-sm text-gray-600">
             Currency: <span className="font-bold">{currency}</span>
+            {selectedCountry !== 'Nigeria' && (
+              <span className="ml-2 text-xs text-gray-500">(USD pricing)</span>
+            )}
           </div>
         </div>
 
@@ -180,102 +217,177 @@ export default function SubscriptionsPage() {
           </div>
         </div>
 
-        {/* Pricing Cards */}
-        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
-          {plans.map((plan, index) => {
-            const selectedPrice = billingPeriod === 'weekly' 
-              ? getPriceForCountry(plan, 7)
-              : getPriceForCountry(plan, 30)
-            const isPopular = plan.slug === popularPlanSlug
+        {/* Pricing Cards - Reference Style */}
+        <div className="bg-gray-50 py-12 px-4 rounded-lg">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 max-w-7xl mx-auto">
+            {plans.slice(0, 4).map((plan, index) => {
+              const selectedPrice = billingPeriod === 'weekly' 
+                ? getPriceForCountry(plan, 7)
+                : getPriceForCountry(plan, 30)
+              const isPopular = plan.slug === popularPlanSlug
 
-            return (
-              <div
-                key={plan.id}
-                className={`relative ${isPopular ? 'lg:-mt-4 lg:mb-4' : ''}`}
-              >
-                {isPopular && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
-                    <Badge className="bg-gradient-to-r from-[#f97316] to-[#ea580c] text-white px-4 py-1 text-sm font-bold shadow-lg">
-                      Most Popular
-                    </Badge>
-                  </div>
-                )}
-                <Card 
-                  className={`h-full flex flex-col border-2 transition-all duration-300 ${
-                    isPopular
-                      ? 'border-[#22c55e] shadow-2xl scale-105'
-                      : 'border-gray-200 hover:border-[#1e40af] hover:shadow-xl'
-                  }`}
+              return (
+                <div
+                  key={plan.id}
+                  className="relative"
                 >
-                  <CardHeader className={`pb-4 ${isPopular ? 'bg-gradient-to-r from-[#22c55e] to-[#16a34a]' : 'bg-white'}`}>
-                    <CardTitle className={`text-2xl font-bold mb-2 ${isPopular ? 'text-white' : 'text-[#1e40af]'}`}>
-                      {plan.name}
-                    </CardTitle>
-                    <CardDescription className={isPopular ? 'text-green-50' : 'text-gray-600'}>
-                      {plan.description}
-                    </CardDescription>
-                  </CardHeader>
-                  
-                  <CardContent className="flex-1 flex flex-col p-6 bg-white">
-                    {/* Pricing */}
-                    <div className="mb-6">
-                      {selectedPrice ? (
-                        <div>
-                          <div className="flex items-baseline gap-1 mb-2">
-                            <span className="text-3xl font-bold text-gray-900">{currency}</span>
-                            <span className="text-5xl font-bold text-[#1e40af]">{selectedPrice.price}</span>
+                  <Card 
+                    className={`h-full flex flex-col bg-white border border-gray-200 shadow-sm transition-all duration-300 ${
+                      isPopular ? 'border-[#1e40af] border-2' : ''
+                    }`}
+                  >
+                    <CardHeader className="pb-4 pt-6 px-6 bg-white">
+                      <div className="flex items-center justify-between mb-2">
+                        <CardTitle className="text-xl font-bold text-gray-900 uppercase">
+                          {plan.name}
+                        </CardTitle>
+                        {isPopular && (
+                          <div className="bg-green-500 w-8 h-8 rounded flex items-center justify-center">
+                            <span className="text-white text-xs font-bold">★</span>
                           </div>
-                          <p className="text-sm text-gray-500">
-                            per {billingPeriod === 'weekly' ? 'week' : 'month'}
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="text-gray-400">Price not available</div>
-                      )}
-                      {plan.requires_activation && (
-                        <Badge className="mt-2 bg-[#f97316] text-white text-xs">
-                          + Activation Fee
-                        </Badge>
-                      )}
-                    </div>
-
-                    {/* Features */}
-                    {plan.benefits && plan.benefits.length > 0 && (
-                      <ul className="flex-1 space-y-3 mb-6">
-                        {plan.benefits.map((benefit, idx) => (
-                          <li key={idx} className="flex items-start gap-3">
-                            <Check className="h-5 w-5 text-[#22c55e] flex-shrink-0 mt-0.5" />
-                            <span className="text-sm text-gray-700">{benefit}</span>
-                          </li>
-                        ))}
-                        {plan.max_predictions_per_day && (
-                          <li className="flex items-start gap-3">
-                            <Check className="h-5 w-5 text-[#22c55e] flex-shrink-0 mt-0.5" />
-                            <span className="text-sm text-gray-700">
-                              Up to {plan.max_predictions_per_day} predictions per day
-                            </span>
-                          </li>
                         )}
-                      </ul>
-                    )}
+                      </div>
+                    </CardHeader>
+                    
+                    <CardContent className="flex-1 flex flex-col px-6 pb-6 bg-white">
+                      {/* Pricing */}
+                      <div className="mb-4">
+                        {selectedPrice ? (
+                          <div>
+                            <div className="flex items-baseline gap-1 mb-1">
+                              <span className="text-4xl font-bold text-gray-900">{currency}</span>
+                              <span className="text-5xl font-bold text-gray-900">
+                                {(() => {
+                                  const priceValue = typeof selectedPrice.price === 'number' 
+                                    ? selectedPrice.price 
+                                    : parseFloat(String(selectedPrice.price || '0'))
+                                  return priceValue.toLocaleString('en-US', { maximumFractionDigits: 0 })
+                                })()}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-600 mb-1">
+                              /{billingPeriod === 'weekly' ? 'week' : 'mo'}
+                            </p>
+                            {plan.requires_activation && (
+                              <p className="text-xs text-gray-500">+ Activation Fee</p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-gray-400">Price not available</div>
+                        )}
+                      </div>
 
-                    {/* CTA Button */}
-                    <Button
-                      className={`w-full font-bold py-6 text-lg transition-all duration-300 ${
-                        isPopular
-                          ? 'bg-gradient-to-r from-[#f97316] to-[#ea580c] hover:from-[#ea580c] hover:to-[#f97316] text-white shadow-lg hover:shadow-xl'
-                          : 'bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] hover:from-[#1e3a8a] hover:to-[#1e40af] text-white'
-                      }`}
-                      onClick={() => handlePlanClick(plan.slug, billingPeriod === 'weekly' ? 7 : 30)}
-                    >
-                      Get Started
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
-            )
-          })}
+                      {/* Description */}
+                      <p className="text-sm text-gray-600 mb-6 leading-relaxed">
+                        {plan.description || 'Premium predictions for serious bettors.'}
+                      </p>
+
+                      {/* Features */}
+                      <div className="mb-6 flex-1">
+                        <h3 className="text-sm font-semibold text-gray-900 mb-3 uppercase">Features</h3>
+                        {plan.benefits && plan.benefits.length > 0 && (
+                          <ul className="space-y-2.5">
+                            {plan.benefits.map((benefit, idx) => (
+                              <li key={idx} className="flex items-start gap-2">
+                                <Check className="h-4 w-4 text-[#1e40af] flex-shrink-0 mt-0.5" />
+                                <span className="text-sm text-gray-900">{benefit}</span>
+                              </li>
+                            ))}
+                            {plan.max_predictions_per_day && (
+                              <li className="flex items-start gap-2">
+                                <Check className="h-4 w-4 text-[#1e40af] flex-shrink-0 mt-0.5" />
+                                <span className="text-sm text-gray-900">
+                                  Up to {plan.max_predictions_per_day} predictions per day
+                                </span>
+                              </li>
+                            )}
+                          </ul>
+                        )}
+                      </div>
+
+                      {/* CTA Button */}
+                      <Button
+                        className="w-full font-semibold py-3 bg-gray-800 hover:bg-gray-900 text-white rounded transition-all duration-300"
+                        onClick={() => handlePlanClick(plan.slug, billingPeriod === 'weekly' ? 7 : 30)}
+                      >
+                        ► {selectedPrice ? 'GET STARTED' : 'START FOR FREE'}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              )
+            })}
+          </div>
         </div>
+
+        {/* Additional Plans if more than 4 */}
+        {plans.length > 4 && (
+          <div className="mt-12">
+            <h3 className="text-2xl font-bold text-center mb-8 text-[#1e40af]">Additional Plans</h3>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+              {plans.slice(4).map((plan) => {
+                const selectedPrice = billingPeriod === 'weekly' 
+                  ? getPriceForCountry(plan, 7)
+                  : getPriceForCountry(plan, 30)
+
+                return (
+                  <Card key={plan.id} className="h-full flex flex-col bg-white border border-gray-200 shadow-sm">
+                    <CardHeader className="pb-4 pt-6 px-6 bg-white">
+                      <CardTitle className="text-xl font-bold text-gray-900 uppercase">
+                        {plan.name}
+                      </CardTitle>
+                    </CardHeader>
+                    
+                    <CardContent className="flex-1 flex flex-col px-6 pb-6 bg-white">
+                      <div className="mb-4">
+                        {selectedPrice ? (
+                          <div>
+                            <div className="flex items-baseline gap-1 mb-1">
+                              <span className="text-3xl font-bold text-gray-900">{currency}</span>
+                              <span className="text-4xl font-bold text-gray-900">
+                                {(() => {
+                                  const priceValue = typeof selectedPrice.price === 'number' 
+                                    ? selectedPrice.price 
+                                    : parseFloat(String(selectedPrice.price || '0'))
+                                  return priceValue.toLocaleString('en-US', { maximumFractionDigits: 0 })
+                                })()}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-600">
+                              /{billingPeriod === 'weekly' ? 'week' : 'mo'}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="text-gray-400">Price not available</div>
+                        )}
+                      </div>
+
+                      <p className="text-sm text-gray-600 mb-6">{plan.description}</p>
+
+                      {plan.benefits && plan.benefits.length > 0 && (
+                        <ul className="flex-1 space-y-2 mb-6">
+                          {plan.benefits.slice(0, 3).map((benefit, idx) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <Check className="h-4 w-4 text-[#1e40af] flex-shrink-0 mt-0.5" />
+                              <span className="text-sm text-gray-900">{benefit}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      <Button
+                        className="w-full font-semibold py-3 bg-gray-800 hover:bg-gray-900 text-white rounded"
+                        onClick={() => handlePlanClick(plan.slug, billingPeriod === 'weekly' ? 7 : 30)}
+                      >
+                        ► GET STARTED
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Footer Note */}
         <div className="mt-12 text-center">

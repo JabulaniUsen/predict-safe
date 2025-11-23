@@ -16,16 +16,17 @@ export function PageLayout({ children, title, subtitle }: PageLayoutProps) {
       <Navbar />
       
       {/* Hero Section with Background */}
-      <section className="relative min-h-[300px] flex items-center overflow-hidden">
-        {/* Background Image */}
-        <div className="absolute inset-0 z-0">
+      <section className="relative min-h-[200px] flex items-center overflow-hidden">
+        {/* Background Image with Fallback */}
+        <div className="absolute inset-0 z-0 bg-gradient-to-br from-[#1e40af] to-[#1e3a8a]">
           <Image
-            src="/hero-bg.jpg"
+            src="/hero-pics/hero.jpg"
             alt="Background"
             fill
             className="object-cover"
             priority
             quality={90}
+            sizes="100vw"
           />
           {/* Dark Overlay */}
           <div className="absolute inset-0 bg-black/60" />

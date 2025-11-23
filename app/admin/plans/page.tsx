@@ -44,7 +44,7 @@ export default async function AdminPlansPage() {
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <p className="text-muted-foreground">Create and manage subscription plans</p>
+          <p className="text-muted-foreground">Create and manage subscription plans</p>
 
         <PlansManager
           plans={plans || []}

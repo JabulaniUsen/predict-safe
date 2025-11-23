@@ -20,7 +20,7 @@ import { Plus, Edit, Trash2, X } from 'lucide-react'
 
 type PlanUpdate = Database['public']['Tables']['plans']['Update']
 
-const AVAILABLE_COUNTRIES = ['Nigeria', 'Ghana', 'Kenya', 'Other'] as const
+const AVAILABLE_COUNTRIES = ['Nigeria', 'Ghana', 'Other'] as const
 type CountryOption = typeof AVAILABLE_COUNTRIES[number]
 
 interface PlansManagerProps {
@@ -118,14 +118,14 @@ export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
       if (editingPlan) {
         // Update existing plan
         const updateData: PlanUpdate = {
-          name: planForm.name,
-          slug: planForm.slug,
-          description: planForm.description,
-          benefits: planForm.benefits,
-          requires_activation: planForm.requires_activation,
-          is_active: planForm.is_active,
-          max_predictions_per_day: planForm.max_predictions_per_day,
-          updated_at: new Date().toISOString(),
+            name: planForm.name,
+            slug: planForm.slug,
+            description: planForm.description,
+            benefits: planForm.benefits,
+            requires_activation: planForm.requires_activation,
+            is_active: planForm.is_active,
+            max_predictions_per_day: planForm.max_predictions_per_day,
+            updated_at: new Date().toISOString(),
         }
         
         const result: any = await supabase
@@ -140,13 +140,13 @@ export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
       } else {
         // Create new plan
         const insertData: Database['public']['Tables']['plans']['Insert'] = {
-          name: planForm.name,
-          slug: planForm.slug,
-          description: planForm.description,
-          benefits: planForm.benefits,
-          requires_activation: planForm.requires_activation,
-          is_active: planForm.is_active,
-          max_predictions_per_day: planForm.max_predictions_per_day,
+            name: planForm.name,
+            slug: planForm.slug,
+            description: planForm.description,
+            benefits: planForm.benefits,
+            requires_activation: planForm.requires_activation,
+            is_active: planForm.is_active,
+            max_predictions_per_day: planForm.max_predictions_per_day,
         }
         const result: any = await supabase
           .from('plans')
@@ -193,7 +193,7 @@ export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
       duration_days: price.duration_days,
       price: price.price.toString(),
       activation_fee: price.activation_fee?.toString() || '',
-      currency: price.currency || (country === 'Other' ? 'NGN' : country === 'Nigeria' ? 'NGN' : country === 'Ghana' ? 'GHS' : country === 'Kenya' ? 'KES' : 'USD'),
+      currency: price.currency || (country === 'Other' ? 'USD' : country === 'Nigeria' ? 'NGN' : country === 'Ghana' ? 'GHS' : 'USD'),
     })
     setShowPriceDialog(true)
   }
@@ -224,12 +224,12 @@ export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
       // Determine currency based on country
       let currency = priceForm.currency
       if (!currency || currency === '') {
-        if (priceForm.country === 'Nigeria' || priceForm.country === 'Other') {
+        if (priceForm.country === 'Nigeria') {
           currency = 'NGN'
         } else if (priceForm.country === 'Ghana') {
           currency = 'GHS'
-        } else if (priceForm.country === 'Kenya') {
-          currency = 'KES'
+        } else if (priceForm.country === 'Other') {
+          currency = 'USD'
         } else {
           currency = 'USD'
         }
@@ -328,7 +328,7 @@ export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
         const durationText = priceForm.duration_days === 7 ? '1 Week' : '1 Month'
         toast.error(`A price already exists for ${priceForm.country} with ${durationText} duration.`)
       } else {
-        toast.error(error.message || 'Failed to save price')
+      toast.error(error.message || 'Failed to save price')
       }
     } finally {
       setLoading(false)
@@ -669,13 +669,13 @@ export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
               <Select
                 value={priceForm.country}
                 onValueChange={(value) => {
-                  let currency = 'NGN' // Default for Nigeria/Other
+                  let currency = 'NGN' // Default for Nigeria
                   if (value === 'Ghana') {
                     currency = 'GHS'
-                  } else if (value === 'Kenya') {
-                    currency = 'KES'
-                  } else if (value === 'Nigeria' || value === 'Other') {
+                  } else if (value === 'Nigeria') {
                     currency = 'NGN'
+                  } else if (value === 'Other') {
+                    currency = 'USD'
                   }
                   
                   setPriceForm({
@@ -691,8 +691,7 @@ export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
                 <SelectContent>
                   <SelectItem value="Nigeria">Nigeria (₦)</SelectItem>
                   <SelectItem value="Ghana">Ghana (₵)</SelectItem>
-                  <SelectItem value="Kenya">Kenya (KSh)</SelectItem>
-                  <SelectItem value="Other">Other (₦)</SelectItem>
+                  <SelectItem value="Other">Other ($)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -725,15 +724,14 @@ export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
                   <SelectItem value={priceForm.currency}>
                     {priceForm.currency === 'NGN' && '₦'}
                     {priceForm.currency === 'GHS' && '₵'}
-                    {priceForm.currency === 'KES' && 'KSh'}
                     {priceForm.currency === 'USD' && '$'}
-                    {priceForm.currency} ({priceForm.currency === 'NGN' ? '₦' : priceForm.currency === 'GHS' ? '₵' : priceForm.currency === 'KES' ? 'KSh' : '$'})
-                  </SelectItem>
+                    {priceForm.currency} ({priceForm.currency === 'NGN' ? '₦' : priceForm.currency === 'GHS' ? '₵' : '$'})
+                        </SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-blue-600">
-                Currency automatically set based on selected country
-              </p>
+                <p className="text-xs text-blue-600">
+                  Currency automatically set based on selected country
+                </p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">

@@ -136,14 +136,14 @@ export function LeagueSelector({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-        <Command shouldFilter={false}>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 max-h-[400px] overflow-hidden" align="start">
+        <Command shouldFilter={false} className="max-h-[400px]">
           <CommandInput 
             placeholder="Search leagues..." 
             value={searchQuery}
             onValueChange={setSearchQuery}
           />
-          <CommandList>
+          <CommandList className="max-h-[350px] overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-6">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

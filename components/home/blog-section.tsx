@@ -64,13 +64,13 @@ export function BlogSection() {
   }
 
   return (
-    <section className="py-16 bg-gray-50">
+    <section className="py-8 lg:py-16 bg-gray-50">
       <div className="container mx-auto px-4">
-        <div className="mb-8">
-          <h2 className="text-4xl font-bold mb-2 text-[#1e40af] text-center">Latest Blog Posts</h2>
-          <p className="text-gray-600 text-center">Stay updated with our latest insights and tips</p>
+        <div className="mb-4 lg:mb-8">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1 lg:mb-2 text-[#1e40af] text-center">Latest Blog Posts</h2>
+          <p className="text-sm lg:text-base text-gray-600 text-center">Stay updated with our latest insights and tips</p>
         </div>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 lg:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {posts.map((post) => (
             <Card 
               key={post.id} 
@@ -86,16 +86,16 @@ export function BlogSection() {
                   />
                 </div>
               )}
-              <CardHeader className="bg-white">
-                <CardTitle className="line-clamp-2 text-xl font-bold text-[#1e40af]">{post.title}</CardTitle>
-                <CardDescription className="line-clamp-2 text-gray-600">
+              <CardHeader className="bg-white p-4 lg:p-6">
+                <CardTitle className="line-clamp-2 text-base lg:text-xl font-bold text-[#1e40af]">{post.title}</CardTitle>
+                <CardDescription className="line-clamp-2 text-xs lg:text-sm text-gray-600">
                   {post.excerpt || post.content.substring(0, 100) + '...'}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="bg-gray-50">
+              <CardContent className="bg-gray-50 p-4 lg:p-6">
                 <Button 
                   asChild 
-                  className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] hover:from-[#1e3a8a] hover:to-[#1e40af] text-white font-bold"
+                  className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] hover:from-[#1e3a8a] hover:to-[#1e40af] text-white font-bold text-xs lg:text-sm w-full"
                 >
                   <Link href={`/blog/${post.slug}`}>Read More</Link>
                 </Button>

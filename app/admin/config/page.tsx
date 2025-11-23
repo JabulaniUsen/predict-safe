@@ -2,6 +2,9 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { AdminLayout } from '@/components/admin/admin-layout'
 import { ConfigManager } from '@/components/admin/config-manager'
+import { Database } from '@/types/database'
+
+type UserProfile = Pick<Database['public']['Tables']['users']['Row'], 'is_admin'>
 
 export default async function AdminConfigPage() {
   const supabase = await createClient()
@@ -12,11 +15,13 @@ export default async function AdminConfigPage() {
   }
 
   // Check if user is admin
-  const { data: userProfile } = await supabase
+  const result = await supabase
     .from('users')
     .select('is_admin')
     .eq('id', user.id)
     .single()
+  
+  const userProfile = result.data as UserProfile | null
 
   if (!userProfile?.is_admin) {
     redirect('/dashboard')
@@ -30,11 +35,7 @@ export default async function AdminConfigPage() {
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        <p className="text-muted-foreground">Manage site settings and content</p>
-
-        <ConfigManager config={config || []} />
-      </div>
+      <ConfigManager config={config || []} />
     </AdminLayout>
   )
 }

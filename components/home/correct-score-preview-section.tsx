@@ -57,17 +57,17 @@ export function CorrectScorePreviewSection() {
   }
 
   return (
-    <section className="py-16 bg-white">
+    <section className="py-8 lg:py-16 bg-white">
       <div className="container mx-auto px-4">
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-4 lg:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 lg:gap-0">
           <div>
-            <h2 className="text-4xl font-bold text-[#1e40af] mb-2">Correct Score Predictions</h2>
-            <p className="text-gray-600">Premium scoreline predictions (Locked Preview)</p>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[#1e40af] mb-1 lg:mb-2">Correct Score Predictions</h2>
+            <p className="text-sm lg:text-base text-gray-600">Premium scoreline predictions (Locked Preview)</p>
           </div>
           <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
             <button
               onClick={() => setDateType('previous')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
                 dateType === 'previous'
                   ? 'bg-[#1e40af] text-white shadow-sm'
                   : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
@@ -77,7 +77,7 @@ export function CorrectScorePreviewSection() {
             </button>
             <button
               onClick={() => setDateType('today')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
                 dateType === 'today'
                   ? 'bg-[#1e40af] text-white shadow-sm'
                   : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
@@ -87,7 +87,7 @@ export function CorrectScorePreviewSection() {
             </button>
             <button
               onClick={() => setDateType('tomorrow')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
                 dateType === 'tomorrow'
                   ? 'bg-[#1e40af] text-white shadow-sm'
                   : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
@@ -99,7 +99,7 @@ export function CorrectScorePreviewSection() {
         </div>
 
         {loading ? (
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-3 lg:gap-4 grid-cols-1 md:grid-cols-3">
             {[1, 2, 3].map((i) => (
               <Card key={i} className="animate-pulse">
                 <CardHeader>
@@ -112,23 +112,59 @@ export function CorrectScorePreviewSection() {
             ))}
           </div>
         ) : predictions.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <p className="text-muted-foreground">No predictions available for this date.</p>
+          <Card className="relative border-2 border-gray-200">
+            <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-10 rounded-lg">
+              <div className="text-center p-8">
+                <Lock className="mx-auto mb-4 h-16 w-16 text-[#f97316]" />
+                <h3 className="text-xl font-bold text-white mb-2">Premium Content Locked</h3>
+                <p className="text-gray-200 mb-6">Subscribe to unlock Correct Score predictions</p>
+                <Button 
+                  onClick={handleSubscribe} 
+                  className="bg-gradient-to-r from-[#f97316] to-[#ea580c] hover:from-[#ea580c] hover:to-[#f97316] text-white font-bold px-8 py-3 rounded-lg text-lg"
+                >
+                  Subscribe to Premium
+                </Button>
+              </div>
+            </div>
+            <CardHeader className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white opacity-30">
+              <CardTitle className="text-lg font-bold">
+                Premium Predictions
+              </CardTitle>
+              <p className="text-sm text-blue-100">Unlock with subscription</p>
+            </CardHeader>
+            <CardContent className="bg-gray-50 py-12 opacity-30">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-2 bg-white rounded">
+                  <span className="text-sm font-semibold text-gray-700">Score Prediction:</span>
+                  <Badge className="bg-[#22c55e] text-white font-bold">
+                    Locked
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between p-2 bg-white rounded">
+                  <span className="text-sm font-semibold text-gray-700">Odds:</span>
+                  <span className="text-sm font-bold text-[#1e40af]">Premium</span>
+                </div>
+                <div className="flex items-center justify-between p-2 bg-white rounded">
+                  <span className="text-sm font-semibold text-gray-700">Kickoff:</span>
+                  <span className="text-sm font-medium text-gray-600">Locked</span>
+                </div>
+              </div>
             </CardContent>
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-3">
             {predictions.map((prediction) => (
               <Card key={prediction.id} className="relative border-2 border-gray-200 hover:border-[#f97316] hover:shadow-xl transition-all duration-300 transform hover:scale-105">
-                <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-10 rounded-lg">
-                  <div className="text-center">
-                    <Lock className="mx-auto mb-4 h-12 w-12 text-[#f97316]" />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-10 rounded-lg">
+                  <div className="text-center p-4">
+                    <Lock className="mx-auto mb-4 h-14 w-14 text-[#f97316] animate-pulse" />
+                    <h3 className="text-lg font-bold text-white mb-2">Premium Locked</h3>
+                    <p className="text-sm text-gray-200 mb-4">Subscribe to view this prediction</p>
                     <Button 
                       onClick={handleSubscribe} 
-                      className="mt-2 bg-gradient-to-r from-[#f97316] to-[#ea580c] hover:from-[#ea580c] hover:to-[#f97316] text-white font-bold px-6 py-3 rounded-lg"
+                      className="bg-gradient-to-r from-[#f97316] to-[#ea580c] hover:from-[#ea580c] hover:to-[#f97316] text-white font-bold px-8 py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
                     >
-                      Subscribe to Unlock
+                      Subscribe to Premium
                     </Button>
                   </div>
                 </div>

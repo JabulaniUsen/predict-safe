@@ -44,15 +44,15 @@ export function VIPWinningsSection() {
   }
 
   return (
-    <section className="py-16 bg-gray-50">
+    <section className="py-8 lg:py-16 bg-gray-50">
       <div className="container mx-auto px-4">
-        <div className="mb-8">
-          <h2 className="text-4xl font-bold mb-2 text-[#1e40af] text-center">VIP Previous Winnings</h2>
-          <p className="text-gray-600 text-center">Track our successful predictions</p>
+        <div className="mb-4 lg:mb-8">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1 lg:mb-2 text-[#1e40af] text-center">VIP Previous Winnings</h2>
+          <p className="text-sm lg:text-base text-gray-600 text-center">Track our successful predictions</p>
         </div>
         
         {loading ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 lg:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3].map((i) => (
               <Card key={i} className="animate-pulse border-2 border-gray-200">
                 <CardContent className="py-6">
@@ -70,27 +70,27 @@ export function VIPWinningsSection() {
           </Card>
         ) : (
           <>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
+            <div className="grid gap-3 lg:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mb-4 lg:mb-6">
               {winnings.map((winning) => (
                 <Card 
                   key={winning.id}
                   className="border-2 border-gray-200 hover:border-[#22c55e] hover:shadow-xl transition-all duration-300 transform hover:scale-105"
                 >
-                  <CardContent className="py-6">
-                    <div className="flex items-start justify-between mb-3">
+                  <CardContent className="py-4 lg:py-6 px-4 lg:px-6">
+                    <div className="flex items-start justify-between mb-2 lg:mb-3">
                       <Badge
-                        className={winning.result === 'win' ? 'bg-[#22c55e] text-white font-bold' : 'bg-red-500 text-white font-bold'}
+                        className={`text-xs ${winning.result === 'win' ? 'bg-[#22c55e] text-white font-bold' : 'bg-red-500 text-white font-bold'}`}
                       >
                         {winning.result === 'win' ? '✓ Win' : '✗ Loss'}
                       </Badge>
-                      <span className="text-sm font-semibold text-gray-600">
+                      <span className="text-xs lg:text-sm font-semibold text-gray-600">
                         {formatDate(winning.date)}
                       </span>
                     </div>
-                    <h3 className="font-bold text-lg mb-2 text-gray-900">
+                    <h3 className="font-bold text-base lg:text-lg mb-1 lg:mb-2 text-gray-900">
                       {winning.home_team} vs {winning.away_team}
                     </h3>
-                    <p className="text-sm font-semibold text-[#1e40af] mb-2">
+                    <p className="text-xs lg:text-sm font-semibold text-[#1e40af] mb-1 lg:mb-2">
                       {winning.prediction_type}
                     </p>
                     <p className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded inline-block">{winning.plan_name}</p>
@@ -103,7 +103,7 @@ export function VIPWinningsSection() {
                 variant="outline" 
                 onClick={handlePrevious} 
                 disabled={offset === 0}
-                className="bg-white border-2 border-[#1e40af] text-[#1e40af] hover:bg-[#1e40af] hover:text-white font-bold px-8 py-3 rounded-lg transition-all duration-300 disabled:opacity-50"
+                className="bg-white border-2 border-[#1e40af] text-[#1e40af] hover:bg-[#1e40af] hover:text-white font-bold px-4 py-2 lg:px-8 lg:py-3 rounded-lg transition-all duration-300 disabled:opacity-50 text-sm lg:text-base"
               >
                 Previous
               </Button>

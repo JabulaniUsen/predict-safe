@@ -1,20 +1,51 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { toast } from 'sonner'
+import { Search, Plus, Power, PowerOff } from 'lucide-react'
+import { Database } from '@/types/database'
 
 interface UsersManagerProps {
   users: any[]
+  plans: any[]
 }
 
-export function UsersManager({ users }: UsersManagerProps) {
+export function UsersManager({ users, plans }: UsersManagerProps) {
   const [selectedUser, setSelectedUser] = useState<any>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [addSubscriptionDialogOpen, setAddSubscriptionDialogOpen] = useState(false)
+  const [selectedUserForSubscription, setSelectedUserForSubscription] = useState<any>(null)
+  const [selectedPlan, setSelectedPlan] = useState<string>('')
+  const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false)
+  const [selectedUserForDeactivation, setSelectedUserForDeactivation] = useState<any>(null)
+  const [selectedSubscriptionToDeactivate, setSelectedSubscriptionToDeactivate] = useState<string>('')
+  const [selectedDuration, setSelectedDuration] = useState<number>(30)
+  const [isProcessing, setIsProcessing] = useState(false)
+
+  // Filter users based on search query
+  const filteredUsers = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return users
+    }
+
+    const query = searchQuery.toLowerCase().trim()
+    return users.filter((user) => {
+      const name = (user.full_name || '').toLowerCase()
+      const email = (user.email || '').toLowerCase()
+      const country = (user.country || '').toLowerCase()
+      
+      return name.includes(query) || email.includes(query) || country.includes(query)
+    })
+  }, [users, searchQuery])
 
   const handleActivateCorrectScore = async (userId: string, subscriptionId: string) => {
     try {
@@ -23,14 +54,17 @@ export function UsersManager({ users }: UsersManagerProps) {
       const expiryDate = new Date()
       expiryDate.setDate(expiryDate.getDate() + 7) // Default to 7 days
 
+      const updateData: Database['public']['Tables']['user_subscriptions']['Update'] = {
+        activation_fee_paid: true,
+        plan_status: 'active',
+        start_date: startDate.toISOString(),
+        expiry_date: expiryDate.toISOString(),
+      }
+
       const { error } = await supabase
         .from('user_subscriptions')
-        .update({
-          activation_fee_paid: true,
-          plan_status: 'active',
-          start_date: startDate.toISOString(),
-          expiry_date: expiryDate.toISOString(),
-        })
+        // @ts-expect-error - Supabase type inference issue
+        .update(updateData)
         .eq('id', subscriptionId)
 
       if (error) throw error
@@ -42,9 +76,145 @@ export function UsersManager({ users }: UsersManagerProps) {
     }
   }
 
+  const handleDeactivateSubscription = async () => {
+    if (!selectedSubscriptionToDeactivate) {
+      toast.error('Please select a subscription to deactivate')
+      return
+    }
+
+    if (!confirm('Are you sure you want to deactivate this subscription?')) {
+      return
+    }
+
+    try {
+      const supabase = createClient()
+      const updateData: Database['public']['Tables']['user_subscriptions']['Update'] = {
+        plan_status: 'inactive',
+      }
+
+      const { error } = await supabase
+        .from('user_subscriptions')
+        // @ts-expect-error - Supabase type inference issue
+        .update(updateData)
+        .eq('id', selectedSubscriptionToDeactivate)
+
+      if (error) throw error
+
+      toast.success('Subscription deactivated successfully!')
+      setDeactivateDialogOpen(false)
+      setSelectedUserForDeactivation(null)
+      setSelectedSubscriptionToDeactivate('')
+      window.location.reload()
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to deactivate subscription')
+    }
+  }
+
+  const handleReactivateSubscription = async (subscriptionId: string) => {
+    if (!confirm('Are you sure you want to reactivate this subscription?')) {
+      return
+    }
+
+    try {
+      const supabase = createClient()
+      const updateData: Database['public']['Tables']['user_subscriptions']['Update'] = {
+        plan_status: 'active',
+      }
+
+      const { error } = await supabase
+        .from('user_subscriptions')
+        // @ts-expect-error - Supabase type inference issue
+        .update(updateData)
+        .eq('id', subscriptionId)
+
+      if (error) throw error
+
+      toast.success('Subscription reactivated successfully!')
+      window.location.reload()
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to reactivate subscription')
+    }
+  }
+
+  const handleAddSubscription = async () => {
+    if (!selectedUserForSubscription || !selectedPlan) {
+      toast.error('Please select a plan')
+      return
+    }
+
+    setIsProcessing(true)
+    try {
+      const supabase = createClient()
+      const startDate = new Date()
+      const expiryDate = new Date()
+      expiryDate.setDate(expiryDate.getDate() + selectedDuration)
+
+      // Check if subscription already exists
+      const { data: existingSub } = await supabase
+        .from('user_subscriptions')
+        .select('id')
+        .eq('user_id', selectedUserForSubscription.id)
+        .eq('plan_id', selectedPlan)
+        .maybeSingle()
+
+      if (existingSub) {
+        toast.error('User already has a subscription for this plan')
+        setIsProcessing(false)
+        return
+      }
+
+      const insertData: Database['public']['Tables']['user_subscriptions']['Insert'] = {
+        user_id: selectedUserForSubscription.id,
+        plan_id: selectedPlan,
+        plan_status: 'active',
+        subscription_fee_paid: true,
+        activation_fee_paid: true,
+        start_date: startDate.toISOString(),
+        expiry_date: expiryDate.toISOString(),
+      }
+
+      const { error } = await supabase
+        .from('user_subscriptions')
+        // @ts-expect-error - Supabase type inference issue
+        .insert(insertData)
+
+      if (error) throw error
+
+      toast.success('Subscription added successfully!')
+      setAddSubscriptionDialogOpen(false)
+      setSelectedUserForSubscription(null)
+      setSelectedPlan('')
+      setSelectedDuration(30)
+      window.location.reload()
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to add subscription')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
   return (
     <Card>
-      <CardContent className="pt-6">
+      <CardHeader>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <CardTitle>All Users</CardTitle>
+            <CardDescription>
+              Total: {users.length} users | Showing: {filteredUsers.length} users
+            </CardDescription>
+          </div>
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Search by name, email, or country..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -57,7 +227,14 @@ export function UsersManager({ users }: UsersManagerProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((user) => {
+              {filteredUsers.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    No users found matching your search.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredUsers.map((user) => {
                 const subscriptions = user.user_subscriptions || []
                 const pendingActivation = subscriptions.find(
                   (s: any) => s.plan_status === 'pending_activation'
@@ -68,7 +245,7 @@ export function UsersManager({ users }: UsersManagerProps) {
                     <TableCell>{user.full_name || 'N/A'}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
-                      {(user.countries as any)?.name || 'N/A'}
+                      {user.country || 'N/A'}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
@@ -80,17 +257,119 @@ export function UsersManager({ users }: UsersManagerProps) {
                                 ? 'default'
                                 : sub.plan_status === 'pending_activation'
                                 ? 'outline'
+                                : sub.plan_status === 'inactive'
+                                ? 'secondary'
                                 : 'secondary'
                             }
                           >
                             {sub.plan?.name} ({sub.plan_status})
                           </Badge>
                         ))}
+                        {subscriptions.length === 0 && (
+                          <span className="text-sm text-muted-foreground">No subscriptions</span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
-                      {pendingActivation && (
-                        <Dialog>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Dialog open={addSubscriptionDialogOpen} onOpenChange={setAddSubscriptionDialogOpen}>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedUserForSubscription(user)
+                                setSelectedPlan('')
+                                setSelectedDuration(30)
+                              }}
+                            >
+                              <Plus className="h-4 w-4 mr-1" />
+                              Add
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Add Subscription</DialogTitle>
+                              <DialogDescription>
+                                Add a new subscription for {user.full_name || user.email}
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="plan">Select Plan *</Label>
+                                <Select value={selectedPlan} onValueChange={setSelectedPlan}>
+                                  <SelectTrigger id="plan">
+                                    <SelectValue placeholder="Choose a plan" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {plans.map((plan) => (
+                                      <SelectItem key={plan.id} value={plan.id}>
+                                        {plan.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="duration">Duration *</Label>
+                                <Select 
+                                  value={selectedDuration.toString()} 
+                                  onValueChange={(value) => setSelectedDuration(parseInt(value))}
+                                >
+                                  <SelectTrigger id="duration">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="7">1 Week (7 days)</SelectItem>
+                                    <SelectItem value="30">1 Month (30 days)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <Button
+                                onClick={handleAddSubscription}
+                                className="w-full"
+                                disabled={isProcessing || !selectedPlan}
+                              >
+                                {isProcessing ? 'Adding...' : 'Add Subscription'}
+                              </Button>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                        {subscriptions.length > 0 && (
+                          <>
+                            {subscriptions.some((sub: any) => sub.plan_status === 'active') && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedUserForDeactivation(user)
+                                  setSelectedSubscriptionToDeactivate('')
+                                  setDeactivateDialogOpen(true)
+                                }}
+                                className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                              >
+                                <PowerOff className="h-4 w-4 mr-1" />
+                                Deactivate
+                              </Button>
+                            )}
+                            {subscriptions.map((sub: any) => (
+                              sub.plan_status === 'inactive' && (
+                                <Button
+                                  key={`reactivate-${sub.id}`}
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleReactivateSubscription(sub.id)}
+                                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                >
+                                  <Power className="h-4 w-4 mr-1" />
+                                  Reactivate {sub.plan?.name}
+                                </Button>
+                              )
+                            ))}
+                          </>
+                        )}
+                        {pendingActivation && (
+                          <Dialog>
                           <DialogTrigger asChild>
                             <Button
                               variant="outline"
@@ -123,14 +402,56 @@ export function UsersManager({ users }: UsersManagerProps) {
                           </DialogContent>
                         </Dialog>
                       )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 )
-              })}
+              }))}
             </TableBody>
           </Table>
         </div>
       </CardContent>
+      
+      {/* Deactivate Subscription Dialog */}
+      <Dialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Deactivate Subscription</DialogTitle>
+            <DialogDescription>
+              Select an active subscription to deactivate for {selectedUserForDeactivation?.full_name || selectedUserForDeactivation?.email || 'this user'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="subscription-deactivate">Select Subscription to Deactivate *</Label>
+              <Select value={selectedSubscriptionToDeactivate} onValueChange={setSelectedSubscriptionToDeactivate}>
+                <SelectTrigger id="subscription-deactivate">
+                  <SelectValue placeholder="Choose an active subscription" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(selectedUserForDeactivation?.user_subscriptions || [])
+                    .filter((sub: any) => sub.plan_status === 'active')
+                    .map((sub: any) => (
+                      <SelectItem key={sub.id} value={sub.id}>
+                        {sub.plan?.name} ({sub.plan_status})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              onClick={handleDeactivateSubscription}
+              variant="outline"
+              className="w-full text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+              disabled={!selectedSubscriptionToDeactivate}
+            >
+              <PowerOff className="h-4 w-4 mr-2" />
+              Deactivate Subscription
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </Card>
   )
 }

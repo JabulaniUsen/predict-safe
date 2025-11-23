@@ -53,25 +53,27 @@ export function LeagueTableSection() {
   const currentStandings = standings[activeLeague] || []
 
   return (
-    <section className="py-16 bg-gray-50">
+    <section className="py-8 lg:py-16 bg-gray-50">
       <div className="container mx-auto px-4">
-        <div className="mb-8">
-          <h2 className="text-4xl font-bold mb-2 text-[#1e40af]">League Tables</h2>
-          <p className="text-gray-600">Current standings for top European leagues</p>
+        <div className="mb-4 lg:mb-8">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1 lg:mb-2 text-[#1e40af]">League Tables</h2>
+          <p className="text-sm lg:text-base text-gray-600">Current standings for top European leagues</p>
         </div>
         <Card className="border-2 border-gray-200 shadow-xl">
-          <CardHeader className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white">
-            <CardTitle className="text-2xl">Top 5 Leagues</CardTitle>
+          <CardHeader className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white p-4 lg:p-6">
+            <CardTitle className="text-lg lg:text-2xl">Top 5 Leagues</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <Tabs value={activeLeague} onValueChange={setActiveLeague}>
-              <TabsList className="grid w-full grid-cols-5 bg-gray-100 p-1 m-4 rounded-lg">
-                <TabsTrigger value={TOP_LEAGUES.PREMIER_LEAGUE} className="data-[state=active]:bg-[#1e40af] data-[state=active]:text-white font-semibold">Premier League</TabsTrigger>
-                <TabsTrigger value={TOP_LEAGUES.LA_LIGA} className="data-[state=active]:bg-[#1e40af] data-[state=active]:text-white font-semibold">La Liga</TabsTrigger>
-                <TabsTrigger value={TOP_LEAGUES.SERIE_A} className="data-[state=active]:bg-[#1e40af] data-[state=active]:text-white font-semibold">Serie A</TabsTrigger>
-                <TabsTrigger value={TOP_LEAGUES.BUNDESLIGA} className="data-[state=active]:bg-[#1e40af] data-[state=active]:text-white font-semibold">Bundesliga</TabsTrigger>
-                <TabsTrigger value={TOP_LEAGUES.LIGUE_1} className="data-[state=active]:bg-[#1e40af] data-[state=active]:text-white font-semibold">Ligue 1</TabsTrigger>
-              </TabsList>
+              <div className="overflow-x-auto px-2 lg:px-4 pt-4">
+                <TabsList className="grid w-full grid-cols-5 bg-gray-100 p-1 rounded-lg min-w-[500px] lg:min-w-0">
+                  <TabsTrigger value={TOP_LEAGUES.PREMIER_LEAGUE} className="data-[state=active]:bg-[#1e40af] data-[state=active]:text-white font-semibold text-xs lg:text-sm px-1 lg:px-2">Premier League</TabsTrigger>
+                  <TabsTrigger value={TOP_LEAGUES.LA_LIGA} className="data-[state=active]:bg-[#1e40af] data-[state=active]:text-white font-semibold text-xs lg:text-sm px-1 lg:px-2">La Liga</TabsTrigger>
+                  <TabsTrigger value={TOP_LEAGUES.SERIE_A} className="data-[state=active]:bg-[#1e40af] data-[state=active]:text-white font-semibold text-xs lg:text-sm px-1 lg:px-2">Serie A</TabsTrigger>
+                  <TabsTrigger value={TOP_LEAGUES.BUNDESLIGA} className="data-[state=active]:bg-[#1e40af] data-[state=active]:text-white font-semibold text-xs lg:text-sm px-1 lg:px-2">Bundesliga</TabsTrigger>
+                  <TabsTrigger value={TOP_LEAGUES.LIGUE_1} className="data-[state=active]:bg-[#1e40af] data-[state=active]:text-white font-semibold text-xs lg:text-sm px-1 lg:px-2">Ligue 1</TabsTrigger>
+                </TabsList>
+              </div>
               {Object.values(TOP_LEAGUES).map((leagueId) => (
                 <TabsContent key={leagueId} value={leagueId} className="m-0">
                   {loading ? (
@@ -85,14 +87,14 @@ export function LeagueTableSection() {
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-[#1e40af] text-white hover:bg-[#1e3a8a]">
-                            <TableHead className="w-12 font-bold text-white">Pos</TableHead>
-                            <TableHead className="font-bold text-white">Team</TableHead>
-                            <TableHead className="text-center font-bold text-white">MP</TableHead>
-                            <TableHead className="text-center font-bold text-white">W</TableHead>
-                            <TableHead className="text-center font-bold text-white">D</TableHead>
-                            <TableHead className="text-center font-bold text-white">L</TableHead>
-                            <TableHead className="text-center font-bold text-white">GD</TableHead>
-                            <TableHead className="text-center font-bold text-white">Pts</TableHead>
+                            <TableHead className="w-8 lg:w-12 font-bold text-white text-xs lg:text-sm">Pos</TableHead>
+                            <TableHead className="font-bold text-white text-xs lg:text-sm">Team</TableHead>
+                            <TableHead className="text-center font-bold text-white text-xs lg:text-sm">MP</TableHead>
+                            <TableHead className="text-center font-bold text-white text-xs lg:text-sm">W</TableHead>
+                            <TableHead className="text-center font-bold text-white text-xs lg:text-sm">D</TableHead>
+                            <TableHead className="text-center font-bold text-white text-xs lg:text-sm">L</TableHead>
+                            <TableHead className="text-center font-bold text-white text-xs lg:text-sm hidden sm:table-cell">GD</TableHead>
+                            <TableHead className="text-center font-bold text-white text-xs lg:text-sm">Pts</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -106,19 +108,19 @@ export function LeagueTableSection() {
                                     index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                                   }`}
                                 >
-                                  <TableCell className="font-bold text-[#1e40af]">{team.overall_league_position}</TableCell>
-                                  <TableCell className="flex items-center gap-2 font-semibold">
+                                  <TableCell className="font-bold text-[#1e40af] text-xs lg:text-sm">{team.overall_league_position}</TableCell>
+                                  <TableCell className="flex items-center gap-1 lg:gap-2 font-semibold text-xs lg:text-sm">
                                     {team.team_badge && (
-                                      <img src={team.team_badge} alt={team.team_name} className="w-6 h-6" />
+                                      <img src={team.team_badge} alt={team.team_name} className="w-4 h-4 lg:w-6 lg:h-6" />
                                     )}
-                                    {team.team_name}
+                                    <span className="truncate">{team.team_name}</span>
                                   </TableCell>
-                                  <TableCell className="text-center font-medium">{team.overall_league_payed}</TableCell>
-                                  <TableCell className="text-center font-medium text-[#22c55e]">{team.overall_league_W}</TableCell>
-                                  <TableCell className="text-center font-medium">{team.overall_league_D}</TableCell>
-                                  <TableCell className="text-center font-medium text-red-500">{team.overall_league_L}</TableCell>
-                                  <TableCell className="text-center font-semibold">{goalsDiff > 0 ? '+' : ''}{goalsDiff}</TableCell>
-                                  <TableCell className="text-center font-bold text-lg text-[#1e40af]">{team.overall_league_PTS}</TableCell>
+                                  <TableCell className="text-center font-medium text-xs lg:text-sm">{team.overall_league_payed}</TableCell>
+                                  <TableCell className="text-center font-medium text-[#22c55e] text-xs lg:text-sm">{team.overall_league_W}</TableCell>
+                                  <TableCell className="text-center font-medium text-xs lg:text-sm">{team.overall_league_D}</TableCell>
+                                  <TableCell className="text-center font-medium text-red-500 text-xs lg:text-sm">{team.overall_league_L}</TableCell>
+                                  <TableCell className="text-center font-semibold text-xs lg:text-sm hidden sm:table-cell">{goalsDiff > 0 ? '+' : ''}{goalsDiff}</TableCell>
+                                  <TableCell className="text-center font-bold text-base lg:text-lg text-[#1e40af]">{team.overall_league_PTS}</TableCell>
                                 </TableRow>
                               )
                             })
