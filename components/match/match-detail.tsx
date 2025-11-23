@@ -57,7 +57,8 @@ export function MatchDetail({ matchId, predictionType }: MatchDetailProps) {
           try {
             const oddsData = await getOdds(matchId)
             if (Array.isArray(oddsData) && oddsData.length > 0) {
-              setOdds(oddsData[0])
+              const matchOdds = oddsData[0] as any // API returns flat odds object
+              setOdds(matchOdds)
               
               // Set selected prediction based on predictionType
               if (predictionType) {
@@ -65,21 +66,21 @@ export function MatchDetail({ matchId, predictionType }: MatchDetailProps) {
                 let odd = 0
                 let prob = 0
 
-                if (predictionType === 'Home Win' && oddsData[0].odd_1) {
+                if (predictionType === 'Home Win' && matchOdds.odd_1) {
                   tip = 'Home Win'
-                  odd = parseFloat(oddsData[0].odd_1)
-                } else if (predictionType === 'Away Win' && oddsData[0].odd_2) {
+                  odd = parseFloat(matchOdds.odd_1)
+                } else if (predictionType === 'Away Win' && matchOdds.odd_2) {
                   tip = 'Away Win'
-                  odd = parseFloat(oddsData[0].odd_2)
-                } else if (predictionType === 'Over 1.5' && oddsData[0]['o+1.5']) {
+                  odd = parseFloat(matchOdds.odd_2)
+                } else if (predictionType === 'Over 1.5' && matchOdds['o+1.5']) {
                   tip = 'Ov 1.5'
-                  odd = parseFloat(oddsData[0]['o+1.5'])
-                } else if (predictionType === 'Over 2.5' && oddsData[0]['o+2.5']) {
+                  odd = parseFloat(matchOdds['o+1.5'])
+                } else if (predictionType === 'Over 2.5' && matchOdds['o+2.5']) {
                   tip = 'Ov 2.5'
-                  odd = parseFloat(oddsData[0]['o+2.5'])
-                } else if (predictionType === 'BTTS' && oddsData[0].bts_yes) {
+                  odd = parseFloat(matchOdds['o+2.5'])
+                } else if (predictionType === 'BTTS' && matchOdds.bts_yes) {
                   tip = 'BTTS'
-                  odd = parseFloat(oddsData[0].bts_yes)
+                  odd = parseFloat(matchOdds.bts_yes)
                 }
 
                 prob = Math.min(95, Math.max(60, 100 - (odd - 1) * 20))
@@ -153,13 +154,15 @@ export function MatchDetail({ matchId, predictionType }: MatchDetailProps) {
   if (!fixture) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <Button onClick={() => router.back()} variant="outline">
+        <Button onClick={() => router.back()} variant="outline" className="mb-6">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <div className="mt-8 text-center">
-          <p className="text-muted-foreground">Match not found</p>
-        </div>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">Match not found</p>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -198,65 +201,80 @@ export function MatchDetail({ matchId, predictionType }: MatchDetailProps) {
   const awayLast5 = getLast5Results(awayTeamMatches, awayTeamId)
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8">
-        <Button onClick={() => router.back()} variant="outline" className="mb-6">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
+    <div className="container mx-auto px-4 py-8">
+      <Button onClick={() => router.back()} variant="outline" className="mb-6">
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Back
+      </Button>
 
-        {/* Match Header */}
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>{league}</CardTitle>
-              <div className="text-sm text-muted-foreground">
-                {formatDate(new Date(`${matchDate} ${matchTime || '00:00'}`))} • {matchTime || '00:00'}
-              </div>
+      {/* Match Header */}
+      <Card className="mb-6 shadow-lg border-2 border-gray-200">
+        <CardHeader className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white rounded-t-lg">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <CardTitle className="text-xl sm:text-2xl">{league}</CardTitle>
+            <div className="text-sm sm:text-base text-white/90">
+              {formatDate(new Date(`${matchDate} ${matchTime || '00:00'}`))} • {matchTime || '00:00'}
             </div>
-          </CardHeader>
-          <CardContent>
-            {/* Prediction Banner */}
-            {selectedPrediction && (
-              <div className="mb-6 bg-red-500 text-white px-4 py-3 rounded-lg flex items-center justify-between">
-                <div className="flex items-center gap-6">
-                  <span className="font-semibold">Tip: {selectedPrediction.tip}</span>
-                  <span className="font-semibold">Odd: {selectedPrediction.odd.toFixed(2)}</span>
-                  <span className="font-semibold">Prob.: {selectedPrediction.prob}%</span>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-6">
+          {/* Prediction Banner */}
+          {selectedPrediction && (
+            <div className="mb-6 bg-gradient-to-r from-[#f97316] to-[#ea580c] text-white px-4 py-4 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
+              <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm sm:text-base">Tip:</span>
+                  <Badge className="bg-white text-[#f97316] font-bold text-sm sm:text-base px-3 py-1">
+                    {selectedPrediction.tip}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm sm:text-base">Odd:</span>
+                  <span className="font-bold text-lg sm:text-xl">{selectedPrediction.odd.toFixed(2)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm sm:text-base">Probability:</span>
+                  <div className="flex items-center gap-2">
+                    <CircularProgress value={selectedPrediction.prob} size={40} strokeWidth={4} />
+                    <span className="font-bold text-lg sm:text-xl">{selectedPrediction.prob}%</span>
+                  </div>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
             {/* Teams */}
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex-1 text-center">
-                <div className="flex justify-center mb-2">
+            <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-6 sm:gap-4">
+              <div className="flex-1 text-center w-full sm:w-auto">
+                <div className="flex justify-center mb-3">
                   {homeLogo ? (
-                    <Image
-                      src={homeLogo}
-                      alt={homeTeam}
-                      width={64}
-                      height={64}
-                      className="object-contain"
-                      unoptimized
-                    />
+                    <div className="relative w-20 h-20 sm:w-24 sm:h-24">
+                      <Image
+                        src={homeLogo}
+                        alt={homeTeam}
+                        width={96}
+                        height={96}
+                        className="object-contain"
+                        unoptimized
+                      />
+                    </div>
                   ) : (
-                    <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-2xl font-bold">
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-3xl sm:text-4xl font-bold shadow-md">
                       {homeTeam.charAt(0)}
                     </div>
                   )}
                 </div>
-                <div className="font-semibold text-lg mb-2">{homeTeam}</div>
-                <div className="flex justify-center gap-1">
+                <div className="font-bold text-lg sm:text-xl mb-3 text-gray-900">{homeTeam}</div>
+                <div className="flex justify-center gap-1.5">
                   {homeLast5.map((result, idx) => (
                     <div
                       key={idx}
-                      className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold ${
+                      className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-sm ${
                         result === 'W'
-                          ? 'bg-green-500 text-white'
+                          ? 'bg-gradient-to-br from-green-500 to-green-600 text-white'
                           : result === 'L'
-                          ? 'bg-red-500 text-white'
-                          : 'bg-gray-400 text-white'
+                          ? 'bg-gradient-to-br from-red-500 to-red-600 text-white'
+                          : 'bg-gradient-to-br from-gray-400 to-gray-500 text-white'
                       }`}
                     >
                       {result}
@@ -265,36 +283,38 @@ export function MatchDetail({ matchId, predictionType }: MatchDetailProps) {
                 </div>
               </div>
 
-              <div className="mx-8 text-2xl font-bold text-gray-400">VS</div>
+              <div className="mx-4 sm:mx-8 text-2xl sm:text-3xl font-bold text-gray-400">VS</div>
 
-              <div className="flex-1 text-center">
-                <div className="flex justify-center mb-2">
+              <div className="flex-1 text-center w-full sm:w-auto">
+                <div className="flex justify-center mb-3">
                   {awayLogo ? (
-                    <Image
-                      src={awayLogo}
-                      alt={awayTeam}
-                      width={64}
-                      height={64}
-                      className="object-contain"
-                      unoptimized
-                    />
+                    <div className="relative w-20 h-20 sm:w-24 sm:h-24">
+                      <Image
+                        src={awayLogo}
+                        alt={awayTeam}
+                        width={96}
+                        height={96}
+                        className="object-contain"
+                        unoptimized
+                      />
+                    </div>
                   ) : (
-                    <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-2xl font-bold">
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-3xl sm:text-4xl font-bold shadow-md">
                       {awayTeam.charAt(0)}
                     </div>
                   )}
                 </div>
-                <div className="font-semibold text-lg mb-2">{awayTeam}</div>
-                <div className="flex justify-center gap-1">
+                <div className="font-bold text-lg sm:text-xl mb-3 text-gray-900">{awayTeam}</div>
+                <div className="flex justify-center gap-1.5">
                   {awayLast5.map((result, idx) => (
                     <div
                       key={idx}
-                      className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold ${
+                      className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-sm ${
                         result === 'W'
-                          ? 'bg-green-500 text-white'
+                          ? 'bg-gradient-to-br from-green-500 to-green-600 text-white'
                           : result === 'L'
-                          ? 'bg-red-500 text-white'
-                          : 'bg-gray-400 text-white'
+                          ? 'bg-gradient-to-br from-red-500 to-red-600 text-white'
+                          : 'bg-gradient-to-br from-gray-400 to-gray-500 text-white'
                       }`}
                     >
                       {result}
@@ -304,27 +324,27 @@ export function MatchDetail({ matchId, predictionType }: MatchDetailProps) {
               </div>
             </div>
 
-            <div className="text-center text-xs text-muted-foreground mb-6">LAST 5 MATCHES</div>
+            <div className="text-center text-xs sm:text-sm text-muted-foreground mb-6 font-semibold uppercase tracking-wide">Last 5 Matches</div>
 
             {/* Betting Odds */}
             {odds && (
               <div className="grid grid-cols-3 gap-4 mt-6">
-                <Card>
-                  <CardContent className="pt-6 text-center">
-                    <div className="text-sm text-muted-foreground mb-1">Home Win</div>
-                    <div className="text-2xl font-bold">{odds.odd_1 || 'N/A'}</div>
+                <Card className="border-2 border-gray-200 shadow-md hover:shadow-lg transition-shadow">
+                  <CardContent className="pt-6 pb-6 text-center">
+                    <div className="text-xs sm:text-sm text-muted-foreground mb-2 font-medium">Home Win</div>
+                    <div className="text-2xl sm:text-3xl font-bold text-[#1e40af]">{odds.odd_1 || 'N/A'}</div>
                   </CardContent>
                 </Card>
-                <Card>
-                  <CardContent className="pt-6 text-center">
-                    <div className="text-sm text-muted-foreground mb-1">Draw</div>
-                    <div className="text-2xl font-bold">{odds.odd_x || 'N/A'}</div>
+                <Card className="border-2 border-gray-200 shadow-md hover:shadow-lg transition-shadow">
+                  <CardContent className="pt-6 pb-6 text-center">
+                    <div className="text-xs sm:text-sm text-muted-foreground mb-2 font-medium">Draw</div>
+                    <div className="text-2xl sm:text-3xl font-bold text-gray-700">{odds.odd_x || 'N/A'}</div>
                   </CardContent>
                 </Card>
-                <Card>
-                  <CardContent className="pt-6 text-center">
-                    <div className="text-sm text-muted-foreground mb-1">Away Win</div>
-                    <div className="text-2xl font-bold">{odds.odd_2 || 'N/A'}</div>
+                <Card className="border-2 border-gray-200 shadow-md hover:shadow-lg transition-shadow">
+                  <CardContent className="pt-6 pb-6 text-center">
+                    <div className="text-xs sm:text-sm text-muted-foreground mb-2 font-medium">Away Win</div>
+                    <div className="text-2xl sm:text-3xl font-bold text-[#1e40af]">{odds.odd_2 || 'N/A'}</div>
                   </CardContent>
                 </Card>
               </div>
@@ -334,13 +354,13 @@ export function MatchDetail({ matchId, predictionType }: MatchDetailProps) {
 
         {/* Head to Head History */}
         {h2hMatches.length > 0 && (
-          <Card className="mb-6">
-            <CardHeader className="bg-blue-600 text-white">
-              <CardTitle>HEAD TO HEAD HISTORY</CardTitle>
+          <Card className="mb-6 shadow-lg border-2 border-gray-200">
+            <CardHeader className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white rounded-t-lg">
+              <CardTitle className="text-lg sm:text-xl">Head to Head History</CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
-              <div className="space-y-3">
-                {h2hMatches.map((match: any) => {
+              <div className="space-y-2">
+                {h2hMatches.map((match: any, index: number) => {
                   const homeScore = parseInt(match.match_hometeam_score || '0')
                   const awayScore = parseInt(match.match_awayteam_score || '0')
                   const isHomeWin = homeScore > awayScore
@@ -349,45 +369,51 @@ export function MatchDetail({ matchId, predictionType }: MatchDetailProps) {
                   return (
                     <div
                       key={match.match_id}
-                      className="flex items-center justify-between py-2 border-b last:border-0"
+                      className={`flex flex-col sm:flex-row items-start sm:items-center justify-between py-3 px-3 rounded-lg border border-gray-100 ${
+                        index % 2 === 0 ? 'bg-gray-50' : 'bg-white'
+                      } hover:bg-blue-50 transition-colors`}
                     >
-                      <div className="text-sm text-muted-foreground">
+                      <div className="text-xs sm:text-sm text-muted-foreground mb-2 sm:mb-0">
                         {formatDate(new Date(match.match_date))}
                       </div>
-                      <div className="flex items-center gap-3 flex-1 justify-center">
+                      <div className="flex items-center gap-2 sm:gap-3 flex-1 justify-center w-full sm:w-auto">
                         <div className="flex items-center gap-2">
                           {match.team_home_badge ? (
-                            <Image
-                              src={match.team_home_badge}
-                              alt={match.match_hometeam_name}
-                              width={24}
-                              height={24}
-                              className="object-contain"
-                              unoptimized
-                            />
+                            <div className="relative w-6 h-6 sm:w-7 sm:h-7">
+                              <Image
+                                src={match.team_home_badge}
+                                alt={match.match_hometeam_name}
+                                width={28}
+                                height={28}
+                                className="object-contain"
+                                unoptimized
+                              />
+                            </div>
                           ) : (
-                            <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs">
+                            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">
                               {match.match_hometeam_name.charAt(0)}
                             </div>
                           )}
-                          <span className="text-sm">{match.match_hometeam_name}</span>
+                          <span className="text-xs sm:text-sm font-medium text-gray-900">{match.match_hometeam_name}</span>
                         </div>
-                        <span className="font-semibold">
+                        <span className="font-bold text-sm sm:text-base text-gray-900 px-2">
                           {match.match_hometeam_score} - {match.match_awayteam_score}
                         </span>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm">{match.match_awayteam_name}</span>
+                          <span className="text-xs sm:text-sm font-medium text-gray-900">{match.match_awayteam_name}</span>
                           {match.team_away_badge ? (
-                            <Image
-                              src={match.team_away_badge}
-                              alt={match.match_awayteam_name}
-                              width={24}
-                              height={24}
-                              className="object-contain"
-                              unoptimized
-                            />
+                            <div className="relative w-6 h-6 sm:w-7 sm:h-7">
+                              <Image
+                                src={match.team_away_badge}
+                                alt={match.match_awayteam_name}
+                                width={28}
+                                height={28}
+                                className="object-contain"
+                                unoptimized
+                              />
+                            </div>
                           ) : (
-                            <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs">
+                            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">
                               {match.match_awayteam_name.charAt(0)}
                             </div>
                           )}
@@ -404,13 +430,13 @@ export function MatchDetail({ matchId, predictionType }: MatchDetailProps) {
         {/* Team Recent Matches */}
         <div className="grid md:grid-cols-2 gap-6 mb-6">
           {homeTeamMatches.length > 0 && (
-            <Card>
-              <CardHeader className="bg-blue-600 text-white">
-                <CardTitle>{homeTeam} - Last 5 Matches</CardTitle>
+            <Card className="shadow-lg border-2 border-gray-200">
+              <CardHeader className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white rounded-t-lg">
+                <CardTitle className="text-base sm:text-lg">{homeTeam} - Last 5 Matches</CardTitle>
               </CardHeader>
               <CardContent className="pt-6">
-                <div className="space-y-3">
-                  {homeTeamMatches.slice(0, 5).map((match: any) => {
+                <div className="space-y-2">
+                  {homeTeamMatches.slice(0, 5).map((match: any, index: number) => {
                     const isHomeTeam = match.match_hometeam_id === homeTeamId
                     const homeScore = parseInt(match.match_hometeam_score || '0')
                     const awayScore = parseInt(match.match_awayteam_score || '0')
@@ -424,57 +450,63 @@ export function MatchDetail({ matchId, predictionType }: MatchDetailProps) {
                     return (
                       <div
                         key={match.match_id}
-                        className="flex items-center justify-between py-2 border-b last:border-0"
+                        className={`flex flex-col sm:flex-row items-start sm:items-center justify-between py-3 px-3 rounded-lg border border-gray-100 ${
+                          index % 2 === 0 ? 'bg-gray-50' : 'bg-white'
+                        } hover:bg-blue-50 transition-colors`}
                       >
-                        <div className="text-sm text-muted-foreground">
+                        <div className="text-xs sm:text-sm text-muted-foreground mb-2 sm:mb-0">
                           {formatDate(new Date(match.match_date))}
                         </div>
-                        <div className="flex items-center gap-3 flex-1 justify-center">
+                        <div className="flex items-center gap-2 sm:gap-3 flex-1 justify-center w-full sm:w-auto">
                           <div className="flex items-center gap-2">
                             {match.team_home_badge ? (
-                              <Image
-                                src={match.team_home_badge}
-                                alt={match.match_hometeam_name}
-                                width={24}
-                                height={24}
-                                className="object-contain"
-                                unoptimized
-                              />
+                              <div className="relative w-6 h-6 sm:w-7 sm:h-7">
+                                <Image
+                                  src={match.team_home_badge}
+                                  alt={match.match_hometeam_name}
+                                  width={28}
+                                  height={28}
+                                  className="object-contain"
+                                  unoptimized
+                                />
+                              </div>
                             ) : (
-                              <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs">
+                              <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">
                                 {match.match_hometeam_name.charAt(0)}
                               </div>
                             )}
-                            <span className="text-sm">{match.match_hometeam_name}</span>
+                            <span className="text-xs sm:text-sm font-medium text-gray-900">{match.match_hometeam_name}</span>
                           </div>
-                          <span className="font-semibold">
+                          <span className="font-bold text-sm sm:text-base text-gray-900 px-2">
                             {match.match_hometeam_score} - {match.match_awayteam_score}
                           </span>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm">{match.match_awayteam_name}</span>
+                            <span className="text-xs sm:text-sm font-medium text-gray-900">{match.match_awayteam_name}</span>
                             {match.team_away_badge ? (
-                              <Image
-                                src={match.team_away_badge}
-                                alt={match.match_awayteam_name}
-                                width={24}
-                                height={24}
-                                className="object-contain"
-                                unoptimized
-                              />
+                              <div className="relative w-6 h-6 sm:w-7 sm:h-7">
+                                <Image
+                                  src={match.team_away_badge}
+                                  alt={match.match_awayteam_name}
+                                  width={28}
+                                  height={28}
+                                  className="object-contain"
+                                  unoptimized
+                                />
+                              </div>
                             ) : (
-                              <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs">
+                              <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">
                                 {match.match_awayteam_name.charAt(0)}
                               </div>
                             )}
                           </div>
                         </div>
                         <div
-                          className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-sm ${
                             result === 'W'
-                              ? 'bg-green-500 text-white'
+                              ? 'bg-gradient-to-br from-green-500 to-green-600 text-white'
                               : result === 'L'
-                              ? 'bg-red-500 text-white'
-                              : 'bg-gray-400 text-white'
+                              ? 'bg-gradient-to-br from-red-500 to-red-600 text-white'
+                              : 'bg-gradient-to-br from-gray-400 to-gray-500 text-white'
                           }`}
                         >
                           {result}
@@ -488,13 +520,13 @@ export function MatchDetail({ matchId, predictionType }: MatchDetailProps) {
           )}
 
           {awayTeamMatches.length > 0 && (
-            <Card>
-              <CardHeader className="bg-blue-600 text-white">
-                <CardTitle>{awayTeam} - Last 5 Matches</CardTitle>
+            <Card className="shadow-lg border-2 border-gray-200">
+              <CardHeader className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white rounded-t-lg">
+                <CardTitle className="text-base sm:text-lg">{awayTeam} - Last 5 Matches</CardTitle>
               </CardHeader>
               <CardContent className="pt-6">
-                <div className="space-y-3">
-                  {awayTeamMatches.slice(0, 5).map((match: any) => {
+                <div className="space-y-2">
+                  {awayTeamMatches.slice(0, 5).map((match: any, index: number) => {
                     const isHomeTeam = match.match_hometeam_id === awayTeamId
                     const homeScore = parseInt(match.match_hometeam_score || '0')
                     const awayScore = parseInt(match.match_awayteam_score || '0')
@@ -508,57 +540,63 @@ export function MatchDetail({ matchId, predictionType }: MatchDetailProps) {
                     return (
                       <div
                         key={match.match_id}
-                        className="flex items-center justify-between py-2 border-b last:border-0"
+                        className={`flex flex-col sm:flex-row items-start sm:items-center justify-between py-3 px-3 rounded-lg border border-gray-100 ${
+                          index % 2 === 0 ? 'bg-gray-50' : 'bg-white'
+                        } hover:bg-blue-50 transition-colors`}
                       >
-                        <div className="text-sm text-muted-foreground">
+                        <div className="text-xs sm:text-sm text-muted-foreground mb-2 sm:mb-0">
                           {formatDate(new Date(match.match_date))}
                         </div>
-                        <div className="flex items-center gap-3 flex-1 justify-center">
+                        <div className="flex items-center gap-2 sm:gap-3 flex-1 justify-center w-full sm:w-auto">
                           <div className="flex items-center gap-2">
                             {match.team_home_badge ? (
-                              <Image
-                                src={match.team_home_badge}
-                                alt={match.match_hometeam_name}
-                                width={24}
-                                height={24}
-                                className="object-contain"
-                                unoptimized
-                              />
+                              <div className="relative w-6 h-6 sm:w-7 sm:h-7">
+                                <Image
+                                  src={match.team_home_badge}
+                                  alt={match.match_hometeam_name}
+                                  width={28}
+                                  height={28}
+                                  className="object-contain"
+                                  unoptimized
+                                />
+                              </div>
                             ) : (
-                              <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs">
+                              <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">
                                 {match.match_hometeam_name.charAt(0)}
                               </div>
                             )}
-                            <span className="text-sm">{match.match_hometeam_name}</span>
+                            <span className="text-xs sm:text-sm font-medium text-gray-900">{match.match_hometeam_name}</span>
                           </div>
-                          <span className="font-semibold">
+                          <span className="font-bold text-sm sm:text-base text-gray-900 px-2">
                             {match.match_hometeam_score} - {match.match_awayteam_score}
                           </span>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm">{match.match_awayteam_name}</span>
+                            <span className="text-xs sm:text-sm font-medium text-gray-900">{match.match_awayteam_name}</span>
                             {match.team_away_badge ? (
-                              <Image
-                                src={match.team_away_badge}
-                                alt={match.match_awayteam_name}
-                                width={24}
-                                height={24}
-                                className="object-contain"
-                                unoptimized
-                              />
+                              <div className="relative w-6 h-6 sm:w-7 sm:h-7">
+                                <Image
+                                  src={match.team_away_badge}
+                                  alt={match.match_awayteam_name}
+                                  width={28}
+                                  height={28}
+                                  className="object-contain"
+                                  unoptimized
+                                />
+                              </div>
                             ) : (
-                              <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs">
+                              <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">
                                 {match.match_awayteam_name.charAt(0)}
                               </div>
                             )}
                           </div>
                         </div>
                         <div
-                          className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-sm ${
                             result === 'W'
-                              ? 'bg-green-500 text-white'
+                              ? 'bg-gradient-to-br from-green-500 to-green-600 text-white'
                               : result === 'L'
-                              ? 'bg-red-500 text-white'
-                              : 'bg-gray-400 text-white'
+                              ? 'bg-gradient-to-br from-red-500 to-red-600 text-white'
+                              : 'bg-gradient-to-br from-gray-400 to-gray-500 text-white'
                           }`}
                         >
                           {result}
@@ -574,21 +612,21 @@ export function MatchDetail({ matchId, predictionType }: MatchDetailProps) {
 
         {/* League Standings */}
         {standings.length > 0 && (
-          <Card>
-            <CardHeader className="bg-blue-600 text-white">
-              <CardTitle>{league} Standings</CardTitle>
+          <Card className="shadow-lg border-2 border-gray-200">
+            <CardHeader className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white rounded-t-lg">
+              <CardTitle className="text-lg sm:text-xl">{league} Standings</CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-2 px-4">P</th>
-                      <th className="text-left py-2 px-4">Team</th>
-                      <th className="text-center py-2 px-4">M</th>
-                      <th className="text-center py-2 px-4">W</th>
-                      <th className="text-center py-2 px-4">GD</th>
-                      <th className="text-center py-2 px-4">P</th>
+                    <tr className="border-b-2 border-gray-200">
+                      <th className="text-left py-3 px-4 text-sm font-bold text-gray-700">P</th>
+                      <th className="text-left py-3 px-4 text-sm font-bold text-gray-700">Team</th>
+                      <th className="text-center py-3 px-4 text-sm font-bold text-gray-700">M</th>
+                      <th className="text-center py-3 px-4 text-sm font-bold text-gray-700">W</th>
+                      <th className="text-center py-3 px-4 text-sm font-bold text-gray-700">GD</th>
+                      <th className="text-center py-3 px-4 text-sm font-bold text-gray-700">P</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -603,14 +641,16 @@ export function MatchDetail({ matchId, predictionType }: MatchDetailProps) {
                       return (
                         <tr
                           key={team.team_id}
-                          className={isHighlighted ? 'bg-orange-100' : ''}
+                          className={`border-b border-gray-100 hover:bg-blue-50 transition-colors ${
+                            isHighlighted ? 'bg-gradient-to-r from-orange-50 to-orange-100 font-semibold' : ''
+                          } ${idx % 2 === 0 && !isHighlighted ? 'bg-gray-50' : ''}`}
                         >
-                          <td className="py-2 px-4 font-medium">{team.overall_league_position}</td>
-                          <td className="py-2 px-4">{team.team_name}</td>
-                          <td className="py-2 px-4 text-center">{team.overall_league_payed}</td>
-                          <td className="py-2 px-4 text-center">{team.overall_league_W}</td>
-                          <td className="py-2 px-4 text-center">{goalsDiff > 0 ? '+' : ''}{goalsDiff}</td>
-                          <td className="py-2 px-4 text-center font-bold">{team.overall_league_PTS}</td>
+                          <td className="py-3 px-4 font-medium">{team.overall_league_position}</td>
+                          <td className="py-3 px-4">{team.team_name}</td>
+                          <td className="py-3 px-4 text-center">{team.overall_league_payed}</td>
+                          <td className="py-3 px-4 text-center">{team.overall_league_W}</td>
+                          <td className="py-3 px-4 text-center">{goalsDiff > 0 ? '+' : ''}{goalsDiff}</td>
+                          <td className="py-3 px-4 text-center font-bold text-[#1e40af]">{team.overall_league_PTS}</td>
                         </tr>
                       )
                     })}
@@ -620,7 +660,6 @@ export function MatchDetail({ matchId, predictionType }: MatchDetailProps) {
             </CardContent>
           </Card>
         )}
-      </div>
     </div>
   )
 }

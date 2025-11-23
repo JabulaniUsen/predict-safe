@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -13,7 +13,7 @@ import { Database } from '@/types/database'
 
 type UserProfile = Pick<Database['public']['Tables']['users']['Row'], 'is_admin'>
 
-export default function AddPredictionWithAPIPage() {
+function AddPredictionWithAPIContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const planSlug = searchParams.get('plan') || 'profit-multiplier'
@@ -196,6 +196,20 @@ export default function AddPredictionWithAPIPage() {
         </Card>
       </div>
     </AdminLayout>
+  )
+}
+
+export default function AddPredictionWithAPIPage() {
+  return (
+    <Suspense fallback={
+      <AdminLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-muted-foreground">Loading...</div>
+        </div>
+      </AdminLayout>
+    }>
+      <AddPredictionWithAPIContent />
+    </Suspense>
   )
 }
 

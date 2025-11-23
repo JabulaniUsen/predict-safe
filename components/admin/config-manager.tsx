@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
+import { Database } from '@/types/database'
 
 interface ConfigManagerProps {
   config: any[]
@@ -50,9 +51,15 @@ export function ConfigManager({ config }: ConfigManagerProps) {
       // For strings, we pass them directly
       const jsonValue = typeof value === 'string' ? value : value
       
+      const upsertData: Database['public']['Tables']['site_config']['Insert'] = {
+        key,
+        value: jsonValue,
+      }
+      
       const { error } = await supabase
         .from('site_config')
-        .upsert({ key, value: jsonValue }, { onConflict: 'key' })
+        // @ts-expect-error - Supabase type inference issue
+        .upsert(upsertData, { onConflict: 'key' })
 
       if (error) throw error
 
@@ -69,9 +76,15 @@ export function ConfigManager({ config }: ConfigManagerProps) {
     try {
       const supabase = createClient()
       // For JSONB fields, pass the object directly - Supabase will handle JSON conversion
+      const upsertData: Database['public']['Tables']['site_config']['Insert'] = {
+        key: 'social_links',
+        value: socialLinksState,
+      }
+      
       const { error } = await supabase
         .from('site_config')
-        .upsert({ key: 'social_links', value: socialLinksState }, { onConflict: 'key' })
+        // @ts-expect-error - Supabase type inference issue
+        .upsert(upsertData, { onConflict: 'key' })
 
       if (error) throw error
 

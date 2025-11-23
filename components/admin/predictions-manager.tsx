@@ -210,7 +210,7 @@ export function PredictionsManager({ plans, predictions, correctScorePredictions
 
       {/* Regular Plan Tabs */}
       {regularPlans.map((plan) => {
-        const planPredictions = getPredictionsForPlan(plan.slug)
+        const planPredictions = getPredictionsForPlan(plan.slug) as Prediction[]
         const isProfitMultiplier = plan.slug === 'profit-multiplier'
         const isDaily2Odds = plan.slug === 'daily-2-odds'
         const showAddWithAPI = isProfitMultiplier || isDaily2Odds

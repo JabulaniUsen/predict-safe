@@ -12,6 +12,10 @@ import { toast } from 'sonner'
 import { TeamSelector } from '@/components/admin/team-selector'
 import { LeagueSelector } from '@/components/admin/league-selector'
 import { AdminLayout } from '@/components/admin/admin-layout'
+import { Database } from '@/types/database'
+
+type UserProfile = Pick<Database['public']['Tables']['users']['Row'], 'is_admin'>
+type CorrectScorePrediction = Database['public']['Tables']['correct_score_predictions']['Row']
 
 export default function AddCorrectScorePage() {
   const router = useRouter()
@@ -49,7 +53,9 @@ export default function AddCorrectScorePage() {
         .eq('id', user.id)
         .single()
 
-      if (!userProfile?.is_admin) {
+      const typedUserProfile = userProfile as UserProfile | null
+
+      if (!typedUserProfile?.is_admin) {
         router.push('/dashboard')
         return
       }
@@ -80,18 +86,20 @@ export default function AddCorrectScorePage() {
           return
         }
 
+        const prediction = data as CorrectScorePrediction
+
         // Set form data
         setFormData({
-          score_prediction: data.score_prediction || '',
-          odds: data.odds?.toString() || '',
-          kickoff_time: data.kickoff_time ? new Date(data.kickoff_time).toISOString().slice(0, 16) : '',
-          admin_notes: data.admin_notes || '',
+          score_prediction: prediction.score_prediction || '',
+          odds: prediction.odds?.toString() || '',
+          kickoff_time: prediction.kickoff_time ? new Date(prediction.kickoff_time).toISOString().slice(0, 16) : '',
+          admin_notes: prediction.admin_notes || '',
         })
 
         // Set league and teams
-        setLeagueName(data.league || '')
-        setHomeTeam(data.home_team || '')
-        setAwayTeam(data.away_team || '')
+        setLeagueName(prediction.league || '')
+        setHomeTeam(prediction.home_team || '')
+        setAwayTeam(prediction.away_team || '')
 
         setLoadingPrediction(false)
       } catch (error: any) {
@@ -108,29 +116,35 @@ export default function AddCorrectScorePage() {
     setLoading(true)
 
     const formDataObj = new FormData(e.currentTarget)
-    const data = {
-      home_team: homeTeam || formDataObj.get('home_team'),
-      away_team: awayTeam || formDataObj.get('away_team'),
-      league: leagueName || formDataObj.get('league'),
-      score_prediction: formDataObj.get('score_prediction'),
+    const baseData = {
+      home_team: (homeTeam || formDataObj.get('home_team')) as string,
+      away_team: (awayTeam || formDataObj.get('away_team')) as string,
+      league: (leagueName || formDataObj.get('league')) as string,
+      score_prediction: formDataObj.get('score_prediction') as string,
       odds: formDataObj.get('odds') ? parseFloat(formDataObj.get('odds') as string) : null,
-      kickoff_time: formDataObj.get('kickoff_time'),
-      admin_notes: formDataObj.get('admin_notes') || null,
+      kickoff_time: formDataObj.get('kickoff_time') as string,
+      admin_notes: (formDataObj.get('admin_notes') as string) || null,
     }
 
     try {
       const supabase = createClient()
       
       if (isEditMode) {
+        const updateData: Database['public']['Tables']['correct_score_predictions']['Update'] = baseData
         const { error } = await supabase
           .from('correct_score_predictions')
-          .update(data)
+          // @ts-expect-error - Supabase type inference issue
+          .update(updateData)
           .eq('id', editId)
 
         if (error) throw error
         toast.success('Correct score prediction updated successfully!')
       } else {
-        const { error } = await supabase.from('correct_score_predictions').insert(data)
+        const insertData: Database['public']['Tables']['correct_score_predictions']['Insert'] = baseData
+        const { error } = await supabase
+          .from('correct_score_predictions')
+          // @ts-expect-error - Supabase type inference issue
+          .insert(insertData)
         if (error) throw error
         toast.success('Correct score prediction added successfully!')
       }

@@ -3,6 +3,7 @@
 import { ReactNode } from 'react'
 import Image from 'next/image'
 import { Navbar } from './navbar'
+import { Footer } from './footer'
 
 interface PageLayoutProps {
   children: ReactNode
@@ -53,6 +54,8 @@ export function PageLayout({ children, title, subtitle }: PageLayoutProps) {
       <main className="flex-1 bg-gray-50">
         {children}
       </main>
+      
+      <Footer />
     </div>
   )
 }

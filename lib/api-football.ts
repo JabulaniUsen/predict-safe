@@ -37,15 +37,39 @@ export interface Fixture {
 
 export interface Odds {
   match_id: string
-  bookmaker: string
-  bets: Array<{
-    label_id: number
-    label_name: string
-    values: Array<{
-      value: string
-      odd: string
-    }>
-  }>
+  odd_bookmakers?: string
+  odd_date?: string
+  odd_1?: string
+  odd_x?: string
+  odd_2?: string
+  odd_1x?: string
+  odd_12?: string
+  odd_x2?: string
+  'o+0.5'?: string
+  'u+0.5'?: string
+  'o+1'?: string
+  'u+1'?: string
+  'o+1.5'?: string
+  'u+1.5'?: string
+  'o+2'?: string
+  'u+2'?: string
+  'o+2.5'?: string
+  'u+2.5'?: string
+  'o+3'?: string
+  'u+3'?: string
+  'o+3.5'?: string
+  'u+3.5'?: string
+  'o+4'?: string
+  'u+4'?: string
+  'o+4.5'?: string
+  'u+4.5'?: string
+  'o+5'?: string
+  'u+5'?: string
+  'o+5.5'?: string
+  'u+5.5'?: string
+  bts_yes?: string
+  bts_no?: string
+  [key: string]: any // Allow additional dynamic properties like ah-* odds
 }
 
 export interface Standing {
