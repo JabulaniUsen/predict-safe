@@ -8,6 +8,11 @@ const nextConfig: NextConfig = {
         hostname: 'apiv3.apifootball.com',
         pathname: '/badges/**',
       },
+      {
+        protocol: 'https',
+        hostname: '*.supabase.co',
+        pathname: '/storage/v1/object/public/**',
+      },
     ],
   },
 };

@@ -95,7 +95,10 @@ export function Navbar() {
               </DropdownMenuTrigger>
               <DropdownMenuContent className="bg-white border-gray-200">
                 <DropdownMenuItem asChild>
-                  <Link href="/subscriptions" className="text-gray-900 hover:bg-gray-100">VIP Packages</Link>
+                  <Link href="/dashboard/predictions?plan=standard" className="text-gray-900 hover:bg-gray-100">Standard Package</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/predictions?plan=daily-2-odds" className="text-gray-900 hover:bg-gray-100">Daily 2 Odds</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/dashboard/predictions?plan=profit-multiplier" className="text-gray-900 hover:bg-gray-100">Profit Multiplier</Link>
@@ -113,10 +116,31 @@ export function Navbar() {
               </DropdownMenuTrigger>
               <DropdownMenuContent className="bg-white border-gray-200">
                 <DropdownMenuItem asChild>
-                  <Link href="/" className="text-gray-900 hover:bg-gray-100">Free Predictions</Link>
+                  <Link href="/" className="text-gray-900 hover:bg-gray-100">Free Tips</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/dashboard/predictions?plan=free" className="text-gray-900 hover:bg-gray-100">View All Free</Link>
+                  <Link href="/dashboard/predictions?plan=free" className="text-gray-900 hover:bg-gray-100">All Tips</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/predictions?plan=free&type=super-single" className="text-gray-900 hover:bg-gray-100">Super Single</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/predictions?plan=free&type=double-chance" className="text-gray-900 hover:bg-gray-100">Double Chance</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/predictions?plan=free&type=home-win" className="text-gray-900 hover:bg-gray-100">Home Win</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/predictions?plan=free&type=away-win" className="text-gray-900 hover:bg-gray-100">Away Win</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/predictions?plan=free&type=1.5-goals" className="text-gray-900 hover:bg-gray-100">1.5 Goals</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/predictions?plan=free&type=2.5-goals" className="text-gray-900 hover:bg-gray-100">2.5 Goals</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/predictions?plan=free&type=btts" className="text-gray-900 hover:bg-gray-100">BTTS/GG</Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -301,6 +325,20 @@ export function Navbar() {
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   VIP Packages
+                </Link>
+                <Link 
+                  href="/dashboard/predictions?plan=standard" 
+                  className="px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-[#1e40af] transition-colors"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Standard Package
+                </Link>
+                <Link 
+                  href="/dashboard/predictions?plan=daily-2-odds" 
+                  className="px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-[#1e40af] transition-colors"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Daily 2 Odds
                 </Link>
                 <Link 
                   href="/dashboard/predictions?plan=profit-multiplier" 

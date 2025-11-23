@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { BlogPost } from '@/types'
 import Image from 'next/image'
+import { getPlainTextExcerpt, stripHtmlTags } from '@/lib/utils/html'
+import { format } from 'date-fns'
 
 export function BlogSection() {
   const [posts, setPosts] = useState<BlogPost[]>([])
@@ -88,9 +90,14 @@ export function BlogSection() {
               )}
               <CardHeader className="bg-white p-4 lg:p-6">
                 <CardTitle className="line-clamp-2 text-base lg:text-xl font-bold text-[#1e40af]">{post.title}</CardTitle>
-                <CardDescription className="line-clamp-2 text-xs lg:text-sm text-gray-600">
-                  {post.excerpt || post.content.substring(0, 100) + '...'}
+                <CardDescription className="line-clamp-3 text-xs lg:text-sm text-gray-600">
+                  {post.excerpt ? stripHtmlTags(post.excerpt) : getPlainTextExcerpt(post.content, 120)}
                 </CardDescription>
+                {post.published_at && (
+                  <p className="text-xs text-gray-400 mt-2">
+                    {format(new Date(post.published_at), 'MMM dd, yyyy')}
+                  </p>
+                )}
               </CardHeader>
               <CardContent className="bg-gray-50 p-4 lg:p-6">
                 <Button 

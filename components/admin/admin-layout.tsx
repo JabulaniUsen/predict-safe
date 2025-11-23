@@ -17,7 +17,8 @@ import {
   CreditCard,
   Receipt,
   Menu,
-  X
+  X,
+  BookOpen
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -62,6 +63,11 @@ const navItems: NavItem[] = [
     href: '/admin/users',
     label: 'Users',
     icon: <Users className="h-5 w-5 lg:h-6 lg:w-6" />
+  },
+  {
+    href: '/admin/blog',
+    label: 'Blog',
+    icon: <BookOpen className="h-5 w-5 lg:h-6 lg:w-6" />
   },
   {
     href: '/admin/config',

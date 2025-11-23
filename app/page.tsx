@@ -3,7 +3,6 @@ import { Footer } from '@/components/layout/footer'
 import { HeroSection } from '@/components/home/hero-section'
 import { FreePredictionsSection } from '@/components/home/free-predictions-section'
 import { WhatWeOfferSection } from '@/components/home/what-we-offer-section'
-import { VIPPackagesSection } from '@/components/home/vip-packages-section'
 import { VIPWinningsSection } from '@/components/home/vip-winnings-section'
 import { PremiumPredictionsSection } from '@/components/home/premium-predictions-section'
 import { BlogSection } from '@/components/home/blog-section'
@@ -19,6 +18,7 @@ export default function HomePage() {
       <main>
         <HeroSection />
         <FreePredictionsSection />
+        <VIPWinningsSection />
         <WhatWeOfferSection />
         
         {/* CTA Buttons Section */}
@@ -46,8 +46,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        <VIPWinningsSection />
-        <VIPPackagesSection />
         <PremiumPredictionsSection />
         <BlogSection />
         <LeagueTableSection />

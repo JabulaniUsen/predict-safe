@@ -68,6 +68,10 @@ export function FreePredictionsSection() {
         // Convert fixtures to predictions
         const allPredictions: FreePrediction[] = []
         
+        // Track which prediction types we've used to ensure variety
+        const typeRotation = ['Home Win', 'Away Win', 'Over 2.5', 'Over 1.5', 'BTTS', 'Double Chance']
+        let typeIndex = 0
+        
         // Process fixtures until we have 5 predictions
         for (const fixture of fixtures) {
           // Stop if we have enough predictions
@@ -94,35 +98,58 @@ export function FreePredictionsSection() {
             }
 
             // Determine prediction types based on filter
-            const predictionTypes: string[] = []
+            const availableTypes: string[] = []
+            let predictionType: string
             
             if (selectedFilter === 'free' || selectedFilter === 'all') {
-              // Add multiple prediction types for free/all
+              // Add multiple prediction types for free/all - get all available types
               if (oddsData) {
-                if (oddsData.odd_1) predictionTypes.push('Home Win')
-                if (oddsData.odd_2) predictionTypes.push('Away Win')
-                if (oddsData['o+2.5']) predictionTypes.push('Over 2.5')
-                if (oddsData['o+1.5']) predictionTypes.push('Over 1.5')
-                if (oddsData.bts_yes) predictionTypes.push('BTTS')
-                if (oddsData.odd_1x) predictionTypes.push('Double Chance')
+                if (oddsData.odd_1) availableTypes.push('Home Win')
+                if (oddsData.odd_2) availableTypes.push('Away Win')
+                if (oddsData['o+2.5']) availableTypes.push('Over 2.5')
+                if (oddsData['o+1.5']) availableTypes.push('Over 1.5')
+                if (oddsData.bts_yes) availableTypes.push('BTTS')
+                if (oddsData.odd_1x) availableTypes.push('Double Chance')
               } else {
                 // Default predictions if no odds
-                predictionTypes.push('Over 2.5', 'Home Win', 'BTTS')
+                availableTypes.push('Over 2.5', 'Home Win', 'BTTS', 'Over 1.5', 'Away Win', 'Double Chance')
               }
+              
+              // Select prediction type from rotation to ensure variety
+              let selectedType: string | null = null
+              
+              // Try to find a type from rotation that's available
+              for (let i = 0; i < typeRotation.length; i++) {
+                const rotatedType = typeRotation[(typeIndex + i) % typeRotation.length]
+                if (availableTypes.includes(rotatedType)) {
+                  selectedType = rotatedType
+                  typeIndex = (typeIndex + i + 1) % typeRotation.length
+                  break
+                }
+              }
+              
+              // If no match from rotation, use first available
+              if (!selectedType && availableTypes.length > 0) {
+                selectedType = availableTypes[0]
+              } else if (!selectedType) {
+                selectedType = 'Over 2.5'
+              }
+              
+              predictionType = selectedType
             } else {
               // Filter-specific predictions
               if (selectedFilter === 'home_win' && oddsData?.odd_1) {
-                predictionTypes.push('Home Win')
+                availableTypes.push('Home Win')
               } else if (selectedFilter === 'away_win' && oddsData?.odd_2) {
-                predictionTypes.push('Away Win')
+                availableTypes.push('Away Win')
               } else if (selectedFilter === 'over_2_5' && oddsData?.['o+2.5']) {
-                predictionTypes.push('Over 2.5')
+                availableTypes.push('Over 2.5')
               } else if (selectedFilter === 'over_1_5' && oddsData?.['o+1.5']) {
-                predictionTypes.push('Over 1.5')
+                availableTypes.push('Over 1.5')
               } else if (selectedFilter === 'btts' && oddsData?.bts_yes) {
-                predictionTypes.push('BTTS')
+                availableTypes.push('BTTS')
               } else if (selectedFilter === 'double_chance' && oddsData?.odd_1x) {
-                predictionTypes.push('Double Chance')
+                availableTypes.push('Double Chance')
               } else if (selectedFilter === 'super_single') {
                 // Super single - pick the best odds prediction
                 if (oddsData) {
@@ -132,20 +159,19 @@ export function FreePredictionsSection() {
                     parseFloat(oddsData['o+2.5'] || '0')
                   )
                   if (bestOdds === parseFloat(oddsData.odd_1 || '0')) {
-                    predictionTypes.push('Home Win')
+                    availableTypes.push('Home Win')
                   } else if (bestOdds === parseFloat(oddsData.odd_2 || '0')) {
-                    predictionTypes.push('Away Win')
+                    availableTypes.push('Away Win')
                   } else {
-                    predictionTypes.push('Over 2.5')
+                    availableTypes.push('Over 2.5')
                   }
                 } else {
-                  predictionTypes.push('Over 2.5')
+                  availableTypes.push('Over 2.5')
                 }
               }
+              
+              predictionType = availableTypes[0] || 'Over 2.5'
             }
-
-            // Create predictions for each type (limit to 1 per fixture to get exactly 5)
-            const predictionType = predictionTypes[0] || 'Over 2.5'
             
             // Stop if we already have 5
             if (allPredictions.length >= 5) {
@@ -248,27 +274,43 @@ export function FreePredictionsSection() {
       <div className="container mx-auto px-4">
         {/* Mobile Header */}
         <div className="mb-4 lg:hidden">
-          <h2 className="text-xl font-bold mb-2 text-gray-900">Top Free Picks</h2>
-          <p className="text-sm text-gray-600 mb-4">{getDateLabel()}</p>
-          
-          {/* Mobile Filters */}
+          {/* Mobile Filters - Moved before title */}
           <div className="mb-4">
-            <Tabs value={selectedFilter} onValueChange={setSelectedFilter}>
-              <div className="overflow-x-auto">
-                <TabsList className="grid w-full grid-cols-5 bg-gray-100 p-1 rounded-lg min-w-[500px]">
-                  {FILTERS.map((filter) => (
-                    <TabsTrigger 
-                      key={filter.id} 
-                      value={filter.id} 
-                      className="text-xs font-semibold data-[state=active]:bg-[#1e40af] data-[state=active]:text-white rounded-md transition-all px-2"
-                    >
-                      {filter.label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </div>
-            </Tabs>
+            <div className="grid grid-cols-3 gap-1.5 bg-gray-100 p-1.5 rounded-lg">
+              {FILTERS.map((filter, index) => {
+                const isActive = selectedFilter === filter.id
+                // Row 1: Free Tips, All Tips, Super Single (indices 0-2) - each 1 column
+                // Row 2: Double Chance (index 3) - spans 2 columns, Home Win (index 4) - 1 column
+                // Row 3: Away Win, 1.5 Goals, 2.5 Goals (indices 5-7) - each 1 column
+                // Row 4: BTTS/GG (index 8) - spans all 3 columns
+                let colSpan = ''
+                if (index === 3) {
+                  colSpan = 'col-span-2' // Double Chance spans 2 columns
+                } else if (index === 8) {
+                  colSpan = 'col-span-3' // BTTS/GG spans all 3 columns
+                }
+                
+                return (
+                  <button
+                    key={filter.id}
+                    onClick={() => setSelectedFilter(filter.id)}
+                    className={`text-xs font-semibold rounded-md transition-all px-2 py-2.5 ${
+                      colSpan
+                    } ${
+                      isActive
+                        ? 'bg-[#1e40af] text-white'
+                        : 'bg-white text-gray-600 hover:text-[#1e40af]'
+                    }`}
+                  >
+                    {filter.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
+          
+          <h2 className="text-xl font-bold mb-2 text-gray-900">Safe free picks</h2>
+          <p className="text-sm text-gray-600 mb-4">{getDateLabel()}</p>
           
           {/* Mobile Navigation */}
           <div className="flex items-center justify-center gap-1 bg-gray-100 p-1 rounded-lg mb-4">
@@ -307,32 +349,32 @@ export function FreePredictionsSection() {
 
         {/* Desktop Header */}
         <div className="mb-4 lg:mb-8 hidden lg:block">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1 lg:mb-2 text-[#1e40af]">Free Predictions</h2>
-          <p className="text-sm lg:text-base text-gray-600">Get expert predictions for today's matches</p>
-        </div>
-
-        <div className="mb-4 lg:mb-8 hidden lg:block">
-          <Tabs value={selectedFilter} onValueChange={setSelectedFilter}>
-            <div className="overflow-x-auto">
-              <TabsList className="grid w-full grid-cols-5 lg:grid-cols-9 bg-gray-100 p-1 rounded-lg min-w-[500px] lg:min-w-0">
-                {FILTERS.map((filter) => (
-                  <TabsTrigger 
-                    key={filter.id} 
-                    value={filter.id} 
-                    className="text-xs sm:text-sm font-semibold data-[state=active]:bg-[#1e40af] data-[state=active]:text-white rounded-md transition-all px-2 lg:px-4"
-                  >
-                    {filter.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </div>
-          </Tabs>
+          {/* Desktop Filters - Moved before title */}
+          <div className="mb-4">
+            <Tabs value={selectedFilter} onValueChange={setSelectedFilter}>
+              <div className="overflow-x-auto">
+                <TabsList className="grid w-full grid-cols-5 lg:grid-cols-9 bg-gray-100 p-1 rounded-lg min-w-[500px] lg:min-w-0">
+                  {FILTERS.map((filter) => (
+                    <TabsTrigger 
+                      key={filter.id} 
+                      value={filter.id} 
+                      className="text-xs sm:text-sm font-semibold data-[state=active]:bg-[#1e40af] data-[state=active]:text-white rounded-md transition-all px-2 lg:px-4"
+                    >
+                      {filter.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </div>
+            </Tabs>
+          </div>
+          
+          
         </div>
 
         <div className="mb-4 lg:mb-8 hidden lg:flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
-            <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-[#1e40af]">{getFilterLabel()}</h3>
-            <p className="text-xs sm:text-sm lg:text-base text-gray-600 mt-0.5 lg:mt-1">{getDateLabel()}</p>
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1 lg:mb-2 text-[#1e40af]">Safe free picks</h2>
+          <p className="text-sm lg:text-base text-gray-600">Get expert predictions for today's matches</p>
           </div>
           <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
             <button
@@ -536,11 +578,11 @@ export function FreePredictionsSection() {
                        prediction.prediction_type === 'Double Chance' ? '12' :
                        prediction.prediction_type}
                     </div>
-                    <div className="text-sm font-semibold text-gray-900 text-center">
+                    <div className="lg:text-sm text-xs font-semibold text-gray-900 text-center">
                       {prediction.odds.toFixed(2)}
                     </div>
                     <div className="flex items-center justify-center">
-                      <CircularProgress value={prediction.confidence} size={32} strokeWidth={4} />
+                      <CircularProgress value={prediction.confidence} size={44} strokeWidth={4} />
                     </div>
                   </div>
                 </div>

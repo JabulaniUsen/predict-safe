@@ -266,7 +266,7 @@ export function PredictionsList({ allPlans, subscriptions }: PredictionsListProp
   const isCorrectScorePlan = selectedPlan?.slug === 'correct-score'
 
   const handleSubscribe = () => {
-    router.push(`/subscribe?plan=${selectedPlanSlug}`)
+    router.push(`/checkout?plan=${selectedPlanSlug}`)
   }
 
   if (allPlans.length === 0) {
@@ -825,9 +825,8 @@ export function PredictionsList({ allPlans, subscriptions }: PredictionsListProp
         ) : (
           <Card>
             <CardContent className="py-12 text-center">
-              <p className="text-muted-foreground">
-                No correct score predictions available for {dateType === 'previous' ? 'yesterday' : dateType === 'today' ? 'today' : 'tomorrow'}.
-                Try selecting a different date.
+              <p className="text-muted-foreground text-base">
+                Correct scores are yet to be uploaded. Check back shortly. We upload it 4 times a week.
               </p>
             </CardContent>
           </Card>

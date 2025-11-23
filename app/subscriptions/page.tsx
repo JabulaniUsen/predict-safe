@@ -10,48 +10,57 @@ import { Check } from 'lucide-react'
 import { PlanWithPrice } from '@/types'
 import { Combobox } from '@/components/ui/combobox'
 
+interface Country {
+  name: string
+  code: string
+  cca3: string
+}
+
 export default function SubscriptionsPage() {
   const router = useRouter()
   const [plans, setPlans] = useState<PlanWithPrice[]>([])
   const [user, setUser] = useState<any>(null)
-  const [selectedCountry, setSelectedCountry] = useState<string>('Nigeria')
+  const [selectedCountry, setSelectedCountry] = useState<string>('')
+  const [countries, setCountries] = useState<{ value: string; label: string }[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingCountries, setLoadingCountries] = useState(true)
   const [billingPeriod, setBillingPeriod] = useState<'weekly' | 'monthly'>('monthly')
 
-  // List of countries for the dropdown
-  const countries = [
-    { value: 'Nigeria', label: 'Nigeria' },
-    { value: 'Ghana', label: 'Ghana' },
-    { value: 'Kenya', label: 'Kenya' },
-    { value: 'South Africa', label: 'South Africa' },
-    { value: 'Tanzania', label: 'Tanzania' },
-    { value: 'Uganda', label: 'Uganda' },
-    { value: 'Zambia', label: 'Zambia' },
-    { value: 'Zimbabwe', label: 'Zimbabwe' },
-    { value: 'Botswana', label: 'Botswana' },
-    { value: 'Namibia', label: 'Namibia' },
-    { value: 'Mozambique', label: 'Mozambique' },
-    { value: 'Angola', label: 'Angola' },
-    { value: 'Cameroon', label: 'Cameroon' },
-    { value: 'Ivory Coast', label: 'Ivory Coast' },
-    { value: 'Senegal', label: 'Senegal' },
-    { value: 'Morocco', label: 'Morocco' },
-    { value: 'Egypt', label: 'Egypt' },
-    { value: 'Tunisia', label: 'Tunisia' },
-    { value: 'Algeria', label: 'Algeria' },
-    { value: 'Ethiopia', label: 'Ethiopia' },
-    { value: 'Rwanda', label: 'Rwanda' },
-    { value: 'Malawi', label: 'Malawi' },
-    { value: 'Mali', label: 'Mali' },
-    { value: 'Burkina Faso', label: 'Burkina Faso' },
-    { value: 'Niger', label: 'Niger' },
-    { value: 'Chad', label: 'Chad' },
-    { value: 'Sudan', label: 'Sudan' },
-    { value: 'Madagascar', label: 'Madagascar' },
-    { value: 'Mauritius', label: 'Mauritius' },
-    { value: 'Seychelles', label: 'Seychelles' },
-    { value: 'Other', label: 'Other' },
-  ]
+  // Fetch countries from API
+  useEffect(() => {
+    const fetchCountries = async () => {
+      try {
+        const response = await fetch('/api/countries')
+        if (!response.ok) throw new Error('Failed to fetch countries')
+        
+        const data: Country[] = await response.json()
+        
+        // Map to combobox format and add "Other" option
+        const countryOptions = data.map((country) => ({
+          value: country.name,
+          label: country.name
+        }))
+        
+        // Add "Other" option at the end
+        countryOptions.push({ value: 'Other', label: 'Other' })
+        
+        setCountries(countryOptions)
+        setLoadingCountries(false)
+      } catch (error) {
+        console.error('Error fetching countries:', error)
+        // Fallback to basic list if API fails
+        setCountries([
+          { value: 'Nigeria', label: 'Nigeria' },
+          { value: 'Ghana', label: 'Ghana' },
+          { value: 'Kenya', label: 'Kenya' },
+          { value: 'Other', label: 'Other' },
+        ])
+        setLoadingCountries(false)
+      }
+    }
+
+    fetchCountries()
+  }, [])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -60,19 +69,6 @@ export default function SubscriptionsPage() {
       // Check user
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
-
-      if (user) {
-        // Get user country - use maybeSingle to handle case where user doesn't exist in users table yet
-        const { data: userData } = await supabase
-          .from('users')
-          .select('country')
-          .eq('id', user.id)
-          .maybeSingle() as { data: { country: string } | null }
-
-        if (userData?.country) {
-          setSelectedCountry(userData.country)
-        }
-      }
 
       // Fetch ALL active plans with ALL their prices from admin
       const { data: plansData } = await supabase
@@ -117,7 +113,13 @@ export default function SubscriptionsPage() {
   }
 
   const getPriceForCountry = (plan: PlanWithPrice, durationDays: number) => {
-    if (!plan.prices || plan.prices.length === 0) return null
+    if (!plan.prices || plan.prices.length === 0 || !selectedCountry) return null
+
+    // First, try to find exact country match
+    const exactMatch = plan.prices.find(
+      (p: any) => p.duration_days === durationDays && p.country === selectedCountry
+    )
+    if (exactMatch) return exactMatch
 
     // If Nigeria, look for Nigeria-specific price
     if (selectedCountry === 'Nigeria') {
@@ -125,13 +127,13 @@ export default function SubscriptionsPage() {
         (p: any) => p.duration_days === durationDays && p.country === 'Nigeria'
       )
       if (nigeriaPrice) return nigeriaPrice
-    } else {
-      // For all other countries, look for USD prices (country = 'Other' or currency = 'USD')
-      const usdPrice = plan.prices.find(
-        (p: any) => p.duration_days === durationDays && (p.currency === 'USD' || p.country === 'Other' || p.country !== 'Nigeria')
-      )
-      if (usdPrice) return usdPrice
     }
+
+    // For all other countries, look for USD prices (country = 'Other' or currency = 'USD')
+    const usdPrice = plan.prices.find(
+      (p: any) => p.duration_days === durationDays && (p.currency === 'USD' || p.country === 'Other')
+    )
+    if (usdPrice) return usdPrice
 
     // Fallback: try to find any price for this duration with matching currency
     const matchingCurrency = selectedCountry === 'Nigeria' ? 'NGN' : 'USD'
@@ -157,7 +159,7 @@ export default function SubscriptionsPage() {
   const currency = getCurrencySymbol()
   const popularPlanSlug = 'daily-2-odds'
 
-  if (loading) {
+  if (loading || loadingCountries) {
     return (
       <PageLayout title="Subscriptions" subtitle="Choose your plan">
         <div className="container mx-auto px-4 py-12">
@@ -170,57 +172,82 @@ export default function SubscriptionsPage() {
   return (
     <PageLayout title="Subscriptions" subtitle="Choose the perfect plan for your betting success">
       <div className="container mx-auto px-4 py-12 max-w-7xl">
-        {/* Country Selection */}
-        <div className="mb-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-          <label className="text-sm font-semibold text-gray-700">Select Country:</label>
-          <div className="w-64">
-            <Combobox
-              options={countries}
-              value={selectedCountry}
-              onValueChange={(value) => setSelectedCountry(value)}
-              placeholder="Search or select country..."
-              searchPlaceholder="Search countries..."
-              emptyMessage="No country found."
-            />
-          </div>
-          <div className="text-sm text-gray-600">
-            Currency: <span className="font-bold">{currency}</span>
-            {selectedCountry !== 'Nigeria' && (
-              <span className="ml-2 text-xs text-gray-500">(USD pricing)</span>
-            )}
-          </div>
+        {/* Country Selection - Required First Step */}
+        <div className="mb-8">
+          <Card className="border-2 border-blue-200 bg-blue-50">
+            <CardHeader>
+              <CardTitle className="text-xl font-bold text-center">Select Your Country</CardTitle>
+              <CardDescription className="text-center">
+                Please select your country to view pricing and available plans
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                <label className="text-sm font-semibold text-gray-700">Country:</label>
+                <div className="w-full sm:w-96">
+                  <Combobox
+                    options={countries}
+                    value={selectedCountry}
+                    onValueChange={(value) => setSelectedCountry(value)}
+                    placeholder="Search or select country..."
+                    searchPlaceholder="Search countries..."
+                    emptyMessage="No country found."
+                  />
+                </div>
+                {selectedCountry && (
+                  <div className="text-sm text-gray-600">
+                    Currency: <span className="font-bold">{currency}</span>
+                    {selectedCountry !== 'Nigeria' && (
+                      <span className="ml-2 text-xs text-gray-500">(USD pricing)</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Billing Toggle */}
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-3 bg-white p-1 rounded-lg border-2 border-gray-200 shadow-sm">
-            <button
-              onClick={() => setBillingPeriod('weekly')}
-              className={`px-6 py-2 rounded-md font-semibold transition-all ${
-                billingPeriod === 'weekly'
-                  ? 'bg-[#1e40af] text-white shadow-md'
-                  : 'text-gray-600 hover:text-[#1e40af]'
-              }`}
-            >
-              Weekly
-            </button>
-            <button
-              onClick={() => setBillingPeriod('monthly')}
-              className={`px-6 py-2 rounded-md font-semibold transition-all ${
-                billingPeriod === 'monthly'
-                  ? 'bg-[#1e40af] text-white shadow-md'
-                  : 'text-gray-600 hover:text-[#1e40af]'
-              }`}
-            >
-              Monthly
-            </button>
-          </div>
-        </div>
+        {/* Show plans only if country is selected */}
+        {!selectedCountry ? (
+          <Card className="border-2 border-gray-200">
+            <CardContent className="py-12 text-center">
+              <p className="text-lg text-gray-600">
+                Please select a country above to view available plans and pricing.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Billing Toggle */}
+            <div className="text-center mb-12">
+              <div className="inline-flex items-center gap-3 bg-white p-1 rounded-lg border-2 border-gray-200 shadow-sm">
+                <button
+                  onClick={() => setBillingPeriod('weekly')}
+                  className={`px-6 py-2 rounded-md font-semibold transition-all ${
+                    billingPeriod === 'weekly'
+                      ? 'bg-[#1e40af] text-white shadow-md'
+                      : 'text-gray-600 hover:text-[#1e40af]'
+                  }`}
+                >
+                  Weekly
+                </button>
+                <button
+                  onClick={() => setBillingPeriod('monthly')}
+                  className={`px-6 py-2 rounded-md font-semibold transition-all ${
+                    billingPeriod === 'monthly'
+                      ? 'bg-[#1e40af] text-white shadow-md'
+                      : 'text-gray-600 hover:text-[#1e40af]'
+                  }`}
+                >
+                  Monthly
+                </button>
+              </div>
+            </div>
 
-        {/* Pricing Cards - Reference Style */}
-        <div className="bg-gray-50 py-12 px-4 rounded-lg">
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 max-w-7xl mx-auto">
-            {plans.slice(0, 4).map((plan, index) => {
+            {/* Pricing Cards - Reference Style */}
+            <div className="bg-gray-50 py-12 px-4 rounded-lg">
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 max-w-7xl mx-auto">
+                {plans.slice(0, 4).map((plan, index) => {
               const selectedPrice = billingPeriod === 'weekly' 
                 ? getPriceForCountry(plan, 7)
                 : getPriceForCountry(plan, 30)
@@ -316,12 +343,12 @@ export default function SubscriptionsPage() {
                   </Card>
                 </div>
               )
-            })}
-          </div>
-        </div>
+                })}
+              </div>
+            </div>
 
-        {/* Additional Plans if more than 4 */}
-        {plans.length > 4 && (
+            {/* Additional Plans if more than 4 */}
+            {plans.length > 4 && (
           <div className="mt-12">
             <h3 className="text-2xl font-bold text-center mb-8 text-[#1e40af]">Additional Plans</h3>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -385,16 +412,18 @@ export default function SubscriptionsPage() {
                   </Card>
                 )
               })}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Footer Note */}
-        <div className="mt-12 text-center">
-          <p className="text-sm text-gray-500">
-            All plans include 24/7 support and regular updates. Cancel anytime.
-          </p>
-        </div>
+          {/* Footer Note */}
+          <div className="mt-12 text-center">
+            <p className="text-sm text-gray-500">
+              All plans include 24/7 support and regular updates.
+            </p>
+          </div>
+        </>
+        )}
       </div>
     </PageLayout>
   )
