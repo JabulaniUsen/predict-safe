@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { Database } from '@/types/database'
+
+type BlogPostUpdate = Database['public']['Tables']['blog_posts']['Update']
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,8 +28,8 @@ export async function POST(request: NextRequest) {
     const now = new Date().toISOString()
 
     // Find all scheduled posts that should be published now
-    const { data: scheduledPosts, error: fetchError } = await supabase
-      .from('blog_posts')
+    const { data: scheduledPosts, error: fetchError } = await (supabase
+      .from('blog_posts') as any)
       .select('*')
       .not('scheduled_at', 'is', null)
       .eq('published', false)
@@ -44,17 +47,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Publish all scheduled posts
-    const { error: updateError } = await supabase
-      .from('blog_posts')
-      .update({
-        published: true,
-        published_at: now,
-        scheduled_at: null,
-      })
-      .in('id', scheduledPosts.map(p => p.id))
+    const updateData: BlogPostUpdate = {
+      published: true,
+      published_at: now,
+      scheduled_at: null,
+    }
+    
+    // Update each post individually to avoid TypeScript inference issues with .in()
+    for (const post of scheduledPosts) {
+      const { error: updateError } = await (supabase
+        .from('blog_posts') as any)
+        .update(updateData)
+        .eq('id', post.id)
 
-    if (updateError) {
-      throw updateError
+      if (updateError) {
+        throw updateError
+      }
     }
 
     return NextResponse.json({ 
@@ -76,8 +84,8 @@ export async function GET() {
     const now = new Date().toISOString()
 
     // Find all scheduled posts that should be published now
-    const { data: scheduledPosts, error: fetchError } = await supabase
-      .from('blog_posts')
+    const { data: scheduledPosts, error: fetchError } = await (supabase
+      .from('blog_posts') as any)
       .select('*')
       .not('scheduled_at', 'is', null)
       .eq('published', false)
@@ -95,17 +103,22 @@ export async function GET() {
     }
 
     // Publish all scheduled posts
-    const { error: updateError } = await supabase
-      .from('blog_posts')
-      .update({
-        published: true,
-        published_at: now,
-        scheduled_at: null,
-      })
-      .in('id', scheduledPosts.map(p => p.id))
+    const updateData: BlogPostUpdate = {
+      published: true,
+      published_at: now,
+      scheduled_at: null,
+    }
+    
+    // Update each post individually to avoid TypeScript inference issues with .in()
+    for (const post of scheduledPosts) {
+      const { error: updateError } = await (supabase
+        .from('blog_posts') as any)
+        .update(updateData)
+        .eq('id', post.id)
 
-    if (updateError) {
-      throw updateError
+      if (updateError) {
+        throw updateError
+      }
     }
 
     return NextResponse.json({ 
