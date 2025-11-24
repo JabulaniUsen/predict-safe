@@ -159,7 +159,7 @@ export interface Database {
           home_team: string
           away_team: string
           league: string
-          prediction_type: string
+          prediction_type: string | null
           odds: number
           confidence: number
           kickoff_time: string
@@ -175,7 +175,7 @@ export interface Database {
           home_team: string
           away_team: string
           league: string
-          prediction_type: string
+          prediction_type: string | null
           odds: number
           confidence: number
           kickoff_time: string
@@ -254,7 +254,7 @@ export interface Database {
           league: string | null
           home_team: string
           away_team: string
-          prediction_type: string
+          prediction_type: string | null
           result: 'win' | 'loss'
           date: string
           created_at: string
@@ -266,7 +266,7 @@ export interface Database {
           league?: string | null
           home_team: string
           away_team: string
-          prediction_type: string
+          prediction_type: string | null
           result: 'win' | 'loss'
           date: string
           created_at?: string
@@ -278,7 +278,7 @@ export interface Database {
           league?: string | null
           home_team?: string
           away_team?: string
-          prediction_type?: string
+          prediction_type?: string | null
           result?: 'win' | 'loss'
           date?: string
           created_at?: string
@@ -295,6 +295,9 @@ export interface Database {
           author_id: string
           published: boolean
           published_at: string | null
+          scheduled_at: string | null
+          meta_keywords: string | null
+          tags: string[] | null
           created_at: string
           updated_at: string
         }
@@ -308,6 +311,9 @@ export interface Database {
           author_id: string
           published?: boolean
           published_at?: string | null
+          scheduled_at?: string | null
+          meta_keywords?: string | null
+          tags?: string[] | null
           created_at?: string
           updated_at?: string
         }
@@ -321,6 +327,9 @@ export interface Database {
           author_id?: string
           published?: boolean
           published_at?: string | null
+          scheduled_at?: string | null
+          meta_keywords?: string | null
+          tags?: string[] | null
           created_at?: string
           updated_at?: string
         }

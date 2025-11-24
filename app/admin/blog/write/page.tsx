@@ -9,11 +9,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
+import { Calendar } from 'lucide-react'
 import { toast } from 'sonner'
 import { AdminLayout } from '@/components/admin/admin-layout'
 import { RichTextEditor } from '@/components/admin/rich-text-editor'
 import { Database } from '@/types/database'
 import { BlogPost } from '@/types'
+import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Upload, X, Loader2, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -47,7 +49,11 @@ function WriteBlogContent() {
     content: '',
     featured_image: '',
     published: false,
+    scheduled_at: '',
+    meta_keywords: '',
+    tags: [] as string[],
   })
+  const [tagInput, setTagInput] = useState('')
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -107,6 +113,9 @@ function WriteBlogContent() {
           content: post.content || '',
           featured_image: post.featured_image || '',
           published: post.published || false,
+          scheduled_at: post.scheduled_at ? new Date(post.scheduled_at).toISOString().slice(0, 16) : '',
+          meta_keywords: post.meta_keywords || '',
+          tags: post.tags || [],
         })
 
         // In edit mode, slug is already set, so mark it as manually edited to preserve it
@@ -217,10 +226,33 @@ function WriteBlogContent() {
       featured_image: formData.featured_image || null,
       published: formData.published,
       author_id: user.id,
+      meta_keywords: formData.meta_keywords.trim() || null,
+      tags: formData.tags.length > 0 ? formData.tags : null,
     }
 
-    if (formData.published && !isEditMode) {
-      submitData.published_at = new Date().toISOString()
+    // Handle scheduling
+    if (formData.scheduled_at) {
+      const scheduledDate = new Date(formData.scheduled_at)
+      const now = new Date()
+      
+      if (scheduledDate > now) {
+        // Scheduled for future - don't publish yet
+        submitData.scheduled_at = scheduledDate.toISOString()
+        submitData.published = false
+        submitData.published_at = null
+      } else {
+        // Scheduled time has passed - publish immediately
+        submitData.scheduled_at = null
+        submitData.published = true
+        if (!isEditMode) {
+          submitData.published_at = new Date().toISOString()
+        }
+      }
+    } else {
+      submitData.scheduled_at = null
+      if (formData.published && !isEditMode) {
+        submitData.published_at = new Date().toISOString()
+      }
     }
 
     try {
@@ -423,22 +455,149 @@ function WriteBlogContent() {
 
           <Card className="border-2 border-gray-200">
             <CardHeader>
-              <CardTitle>Publishing</CardTitle>
-              <CardDescription>Control when your blog post is published</CardDescription>
+              <CardTitle>Publishing & SEO</CardTitle>
+              <CardDescription>Control when your blog post is published and add SEO metadata</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label htmlFor="published">Publish immediately</Label>
                   <p className="text-sm text-gray-500">
-                    Make this post visible to the public
+                    Make this post visible to the public right away
                   </p>
                 </div>
                 <Switch
                   id="published"
-                  checked={formData.published}
-                  onCheckedChange={(checked) => setFormData({ ...formData, published: checked })}
+                  checked={formData.published && !formData.scheduled_at}
+                  onCheckedChange={(checked) => {
+                    setFormData({ 
+                      ...formData, 
+                      published: checked,
+                      scheduled_at: checked ? '' : formData.scheduled_at
+                    })
+                  }}
+                  disabled={!!formData.scheduled_at}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="scheduled_at">Schedule Publication</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="scheduled_at"
+                    type="datetime-local"
+                    value={formData.scheduled_at}
+                    onChange={(e) => {
+                      const scheduled = e.target.value
+                      setFormData({ 
+                        ...formData, 
+                        scheduled_at: scheduled,
+                        published: scheduled ? false : formData.published
+                      })
+                    }}
+                    className="flex-1"
+                  />
+                  {formData.scheduled_at && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setFormData({ ...formData, scheduled_at: '', published: false })}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500">
+                  Schedule this post to be published automatically at a specific date and time
+                </p>
+                {formData.scheduled_at && (
+                  <div className="rounded-lg bg-blue-50 p-3 text-sm text-blue-800">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      <span>
+                        Will be published on {new Date(formData.scheduled_at).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="meta_keywords">Meta Keywords</Label>
+                <Input
+                  id="meta_keywords"
+                  value={formData.meta_keywords}
+                  onChange={(e) => setFormData({ ...formData, meta_keywords: e.target.value })}
+                  placeholder="keyword1, keyword2, keyword3"
+                />
+                <p className="text-xs text-gray-500">
+                  Comma-separated keywords for SEO (e.g., football, predictions, betting tips)
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="tags">Tags</Label>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <Input
+                      id="tags"
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && tagInput.trim()) {
+                          e.preventDefault()
+                          const newTag = tagInput.trim()
+                          if (!formData.tags.includes(newTag)) {
+                            setFormData({ ...formData, tags: [...formData.tags, newTag] })
+                          }
+                          setTagInput('')
+                        }
+                      }}
+                      placeholder="Type a tag and press Enter"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
+                          setFormData({ ...formData, tags: [...formData.tags, tagInput.trim()] })
+                          setTagInput('')
+                        }
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  {formData.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {formData.tags.map((tag, index) => (
+                        <Badge
+                          key={index}
+                          variant="secondary"
+                          className="flex items-center gap-1"
+                        >
+                          #{tag}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData({
+                                ...formData,
+                                tags: formData.tags.filter((_, i) => i !== index)
+                              })
+                            }}
+                            className="ml-1 hover:text-destructive"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500">
+                  Add tags to categorize your blog post. Press Enter or click Add to add a tag.
+                </p>
               </div>
             </CardContent>
           </Card>

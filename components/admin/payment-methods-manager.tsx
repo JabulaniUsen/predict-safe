@@ -40,6 +40,7 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
   const [countries, setCountries] = useState<Country[]>([])
   const [loadingCountries, setLoadingCountries] = useState(false)
   const [selectedCountries, setSelectedCountries] = useState<string[]>([])
+  const [availableForAllCountries, setAvailableForAllCountries] = useState(false)
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [uploadingLogo, setUploadingLogo] = useState(false)
@@ -129,6 +130,7 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
       logo_url: null,
     })
     setSelectedCountries([])
+    setAvailableForAllCountries(false)
     setLogoFile(null)
     setLogoPreview(null)
     setBankDetails({
@@ -175,7 +177,11 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
       ? (Array.isArray(methodData.countries) ? methodData.countries : JSON.parse(JSON.stringify(methodData.countries)))
       : (methodData.country ? [methodData.country] : [])
     
+    // Check if available for all countries (empty array or null means all countries)
+    const isAllCountries = methodCountries.length === 0 && !methodData.country
+    
     setSelectedCountries(methodCountries)
+    setAvailableForAllCountries(isAllCountries)
     setMethodForm({
       name: method.name,
       type: method.type as PaymentMethodType,
@@ -442,8 +448,8 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
         }
       }
 
-      // Crypto and Skrill are available for all countries
-      const countriesArray = (methodForm.type === 'crypto' || methodForm.type === 'skrill') 
+      // Determine countries array - empty means all countries
+      const countriesArray = (methodForm.type === 'crypto' || methodForm.type === 'skrill' || availableForAllCountries)
         ? [] 
         : selectedCountries
 
@@ -833,49 +839,75 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
             {/* Country Selection - Multiple tags */}
             {(methodForm.type !== 'crypto' && methodForm.type !== 'skrill') && (
             <div className="space-y-2">
-                <Label>Supported Countries</Label>
-                <div className="border rounded-lg p-3 min-h-[100px]">
-                  {selectedCountries.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {selectedCountries.map((country) => (
-                        <Badge key={country} variant="secondary" className="flex items-center gap-1">
-                          {country}
-                          <button
-                            type="button"
-                            onClick={() => setSelectedCountries(selectedCountries.filter(c => c !== country))}
-                            className="ml-1 hover:text-destructive"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-              <Select
-                    value=""
-                    onValueChange={(value) => {
-                      if (value && !selectedCountries.includes(value)) {
-                        setSelectedCountries([...selectedCountries, value])
-                      }
-                    }}
-              >
-                <SelectTrigger>
-                      <SelectValue placeholder={loadingCountries ? "Loading countries..." : "Add country"} />
-                </SelectTrigger>
-                <SelectContent>
-                      {countries
-                        .filter(c => !selectedCountries.includes(c.name))
-                        .map((country) => (
-                          <SelectItem key={country.code} value={country.name}>
-                            {country.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <div className="flex items-center justify-between">
+                  <Label>Supported Countries</Label>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      checked={availableForAllCountries}
+                      onCheckedChange={(checked) => {
+                        setAvailableForAllCountries(checked)
+                        if (checked) {
+                          setSelectedCountries([])
+                        }
+                      }}
+                    />
+                    <Label htmlFor="all-countries" className="text-sm font-normal cursor-pointer">
+                      Available for all countries
+                    </Label>
+                  </div>
                 </div>
-              <p className="text-xs text-muted-foreground">
-                  Select countries where this payment method is available. Leave empty for all countries. Crypto and Skrill are available for all countries.
-              </p>
+                {!availableForAllCountries && (
+                  <>
+                    <div className="border rounded-lg p-3 min-h-[100px]">
+                      {selectedCountries.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {selectedCountries.map((country) => (
+                            <Badge key={country} variant="secondary" className="flex items-center gap-1">
+                              {country}
+                              <button
+                                type="button"
+                                onClick={() => setSelectedCountries(selectedCountries.filter(c => c !== country))}
+                                className="ml-1 hover:text-destructive"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                      <Select
+                        value=""
+                        onValueChange={(value) => {
+                          if (value && !selectedCountries.includes(value)) {
+                            setSelectedCountries([...selectedCountries, value])
+                          }
+                        }}
+                        disabled={availableForAllCountries}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={loadingCountries ? "Loading countries..." : "Add country"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {countries
+                            .filter(c => !selectedCountries.includes(c.name))
+                            .map((country) => (
+                              <SelectItem key={country.code} value={country.name}>
+                                {country.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Select countries where this payment method is available. Or enable "Available for all countries" above.
+                    </p>
+                  </>
+                )}
+                {availableForAllCountries && (
+                  <div className="rounded-lg bg-blue-50 p-3 text-sm text-blue-800">
+                    <p>This payment method will be available for all countries.</p>
+                  </div>
+                )}
             </div>
             )}
             {(methodForm.type === 'crypto' || methodForm.type === 'skrill') && (

@@ -133,6 +133,10 @@ export async function POST(request: NextRequest) {
                 kickoff_time: `${fixture.match_date} ${fixture.match_time || '00:00'}:00`,
                 status: fixture.match_status === 'Finished' ? 'finished' : 
                         fixture.match_live === '1' ? 'live' : 'not_started',
+                match_id: fixture.match_id,
+                league_id: fixture.league_id,
+                home_team_id: fixture.match_hometeam_id,
+                away_team_id: fixture.match_awayteam_id,
               })
             } else {
               filteredCount++
@@ -156,6 +160,10 @@ export async function POST(request: NextRequest) {
               kickoff_time: `${fixture.match_date} ${fixture.match_time || '00:00'}:00`,
               status: fixture.match_status === 'Finished' ? 'finished' : 
                       fixture.match_live === '1' ? 'live' : 'not_started',
+              match_id: fixture.match_id,
+              league_id: fixture.league_id,
+              home_team_id: fixture.match_hometeam_id,
+              away_team_id: fixture.match_awayteam_id,
             })
           } else {
             filteredCount++

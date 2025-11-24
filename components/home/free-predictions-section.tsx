@@ -51,15 +51,11 @@ export function FreePredictionsSection() {
       setLoading(true)
       try {
         const { from, to } = getDateRange(dateType)
-        console.log('Date range:', { from, to, dateType })
         
         // Fetch fixtures from API Football
         const fixtures = await getFixtures(from, undefined, to)
-        console.log('Fixtures response:', fixtures)
-        console.log('Fixtures count:', Array.isArray(fixtures) ? fixtures.length : 'Not an array')
         
         if (!Array.isArray(fixtures) || fixtures.length === 0) {
-          console.log('No fixtures found or fixtures is not an array')
           setPredictions([])
           setLoading(false)
           return
@@ -78,19 +74,28 @@ export function FreePredictionsSection() {
         
         // For "all" filter, we need to collect all predictions from all filters
         if (selectedFilter === 'all') {
-          // Process all fixtures and create predictions for all available types
-          for (const fixture of fixtures) {
+          // Limit fixtures to process (max 20 to avoid too many API calls)
+          const fixturesToProcess = fixtures.slice(0, 20)
+          
+          // Fetch all odds in parallel
+          const oddsPromises = fixturesToProcess.map(async (fixture) => {
             try {
-              // Fetch odds for this fixture
-              let oddsData: any = null
-              try {
-                const odds = await getOdds(fixture.match_id)
-                if (Array.isArray(odds) && odds.length > 0) {
-                  oddsData = odds[0]
-                }
-              } catch (oddsError) {
-                console.error('Error fetching odds:', oddsError)
-              }
+              const odds = await getOdds(fixture.match_id)
+              return { matchId: fixture.match_id, odds: Array.isArray(odds) && odds.length > 0 ? odds[0] : null }
+            } catch (error) {
+              console.error(`Error fetching odds for ${fixture.match_id}:`, error)
+              return { matchId: fixture.match_id, odds: null }
+            }
+          })
+          
+          const oddsResults = await Promise.all(oddsPromises)
+          const oddsMap = new Map(oddsResults.map(r => [r.matchId, r.odds]))
+          
+          // Process all fixtures and create predictions for all available types
+          for (const fixture of fixturesToProcess) {
+            try {
+              // Get odds from the map
+              const oddsData = oddsMap.get(fixture.match_id) || null
 
               // Create predictions for all available types
               const predictionTypes: Array<{type: string, odds: number}> = []
@@ -142,29 +147,33 @@ export function FreePredictionsSection() {
           }
         } else {
           // For other filters, process fixtures until we have enough predictions
-        for (const fixture of fixtures) {
-          // Stop if we have enough predictions
+          // Limit fixtures based on filter: free needs only 5, others need more buffer
+          const buffer = selectedFilter === 'free' ? 3 : 5
+          const fixturesToProcess = fixtures.slice(0, maxPredictions + buffer)
+          
+          // Fetch all odds in parallel for the fixtures we need
+          const oddsPromises = fixturesToProcess.map(async (fixture) => {
+            try {
+              const odds = await getOdds(fixture.match_id)
+              return { matchId: fixture.match_id, odds: Array.isArray(odds) && odds.length > 0 ? odds[0] : null }
+            } catch (error) {
+              console.error(`Error fetching odds for ${fixture.match_id}:`, error)
+              return { matchId: fixture.match_id, odds: null }
+            }
+          })
+          
+          const oddsResults = await Promise.all(oddsPromises)
+          const oddsMap = new Map(oddsResults.map(r => [r.matchId, r.odds]))
+          
+          for (const fixture of fixturesToProcess) {
+            // Stop if we have enough predictions
             if (allPredictions.length >= maxPredictions) {
-            break
-          }
+              break
+            }
           
           try {
-            // Fetch odds for this fixture
-            let oddsData: any = null
-            try {
-              console.log(`Fetching odds for match_id: ${fixture.match_id}`)
-              const odds = await getOdds(fixture.match_id)
-              console.log(`Odds response for ${fixture.match_id}:`, odds)
-              if (Array.isArray(odds) && odds.length > 0) {
-                oddsData = odds[0]
-                console.log(`Odds data for ${fixture.match_id}:`, oddsData)
-              } else {
-                console.log(`No odds data found for ${fixture.match_id}`)
-              }
-            } catch (oddsError) {
-              // If odds fetch fails, continue without odds data
-              console.error('Error fetching odds:', oddsError)
-            }
+            // Get odds from the map
+            const oddsData = oddsMap.get(fixture.match_id) || null
 
             // Determine prediction types based on filter
             const availableTypes: string[] = []
@@ -295,8 +304,6 @@ export function FreePredictionsSection() {
         const finalPredictions = selectedFilter === 'free' 
           ? allPredictions.slice(0, 5)
           : allPredictions
-        console.log('Final predictions:', finalPredictions)
-        console.log('Total predictions created:', allPredictions.length)
         setPredictions(finalPredictions)
       } catch (error) {
         console.error('Error fetching predictions:', error)

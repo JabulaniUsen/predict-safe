@@ -219,7 +219,7 @@ export default function SignupPage() {
           }, 1000)
         }
 
-        toast.success('Account created successfully! Please check your email to verify your account.')
+        toast.success('Account created successfully! Please login to see your dashboard.')
         router.push('/login')
       }
     } catch (error: any) {

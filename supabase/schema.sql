@@ -100,7 +100,7 @@ CREATE TABLE IF NOT EXISTS vip_winnings (
   plan_name VARCHAR(100) NOT NULL,
   home_team VARCHAR(255) NOT NULL,
   away_team VARCHAR(255) NOT NULL,
-  prediction_type VARCHAR(100) NOT NULL,
+  prediction_type VARCHAR(100),
   result VARCHAR(10) NOT NULL CHECK (result IN ('win', 'loss')),
   date DATE NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -117,6 +117,9 @@ CREATE TABLE IF NOT EXISTS blog_posts (
   author_id UUID REFERENCES users(id) ON DELETE SET NULL,
   published BOOLEAN DEFAULT false,
   published_at TIMESTAMP WITH TIME ZONE,
+  scheduled_at TIMESTAMP WITH TIME ZONE,
+  meta_keywords TEXT,
+  tags TEXT[],
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -217,26 +220,12 @@ CREATE TRIGGER update_transactions_updated_at BEFORE UPDATE ON transactions
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Row Level Security (RLS) Policies
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE plan_prices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_subscriptions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE predictions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE correct_score_predictions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vip_winnings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE blog_posts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE site_config ENABLE ROW LEVEL SECURITY;
-ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
-
--- Users policies
-DROP POLICY IF EXISTS "Users can view their own profile" ON users;
-CREATE POLICY "Users can view their own profile" ON users
-  FOR SELECT USING (auth.uid() = id);
-
-DROP POLICY IF EXISTS "Users can update their own profile" ON users;
-CREATE POLICY "Users can update their own profile" ON users
-  FOR UPDATE USING (auth.uid() = id);
 
 -- Plans policies
 DROP POLICY IF EXISTS "Active plans are viewable by everyone" ON plans;
@@ -352,38 +341,6 @@ CREATE POLICY "Admins can insert subscriptions" ON user_subscriptions
     )
   );
 
--- Predictions policies
-DROP POLICY IF EXISTS "Free predictions are viewable by everyone" ON predictions;
-CREATE POLICY "Free predictions are viewable by everyone" ON predictions
-  FOR SELECT USING (plan_type = 'free');
-
-DROP POLICY IF EXISTS "Users can view predictions for their active plans" ON predictions;
-CREATE POLICY "Users can view predictions for their active plans" ON predictions
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM user_subscriptions
-      WHERE user_subscriptions.user_id = auth.uid()
-        AND user_subscriptions.plan_status = 'active'
-        AND (
-          (plan_type = 'profit_multiplier' AND user_subscriptions.plan_id IN (SELECT id FROM plans WHERE slug = 'profit-multiplier'))
-          OR (plan_type = 'daily_2_odds' AND user_subscriptions.plan_id IN (SELECT id FROM plans WHERE slug = 'daily-2-odds'))
-          OR (plan_type = 'standard' AND user_subscriptions.plan_id IN (SELECT id FROM plans WHERE slug = 'standard'))
-        )
-    )
-  );
-
--- Correct score predictions policies
-DROP POLICY IF EXISTS "Users can view correct score if they have active subscription" ON correct_score_predictions;
-CREATE POLICY "Users can view correct score if they have active subscription" ON correct_score_predictions
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM user_subscriptions
-      WHERE user_subscriptions.user_id = auth.uid()
-        AND user_subscriptions.plan_status = 'active'
-        AND user_subscriptions.plan_id IN (SELECT id FROM plans WHERE slug = 'correct-score')
-    )
-  );
-
 -- VIP winnings policies (public read)
 DROP POLICY IF EXISTS "VIP winnings are viewable by everyone" ON vip_winnings;
 CREATE POLICY "VIP winnings are viewable by everyone" ON vip_winnings
@@ -393,16 +350,6 @@ CREATE POLICY "VIP winnings are viewable by everyone" ON vip_winnings
 DROP POLICY IF EXISTS "Published blog posts are viewable by everyone" ON blog_posts;
 CREATE POLICY "Published blog posts are viewable by everyone" ON blog_posts
   FOR SELECT USING (published = true AND published_at IS NOT NULL AND published_at <= NOW());
-
--- Site config policies (public read)
-DROP POLICY IF EXISTS "Site config is viewable by everyone" ON site_config;
-CREATE POLICY "Site config is viewable by everyone" ON site_config
-  FOR SELECT USING (true);
-
--- Transactions policies
-DROP POLICY IF EXISTS "Users can view their own transactions" ON transactions;
-CREATE POLICY "Users can view their own transactions" ON transactions
-  FOR SELECT USING (auth.uid() = user_id);
 
 -- Notifications policies
 DROP POLICY IF EXISTS "Users can view their own notifications" ON notifications;

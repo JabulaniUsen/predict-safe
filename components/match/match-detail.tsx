@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import Image from 'next/image'
 import { ArrowLeft } from 'lucide-react'
-import { formatDate, formatTime } from '@/lib/utils/date'
+import { formatDate, formatTime, getDateRange } from '@/lib/utils/date'
 import { getFixtures, getOdds, getStandings, getH2H, TOP_LEAGUES } from '@/lib/api-football'
 import { Fixture, H2HData } from '@/lib/api-football'
 
@@ -44,11 +44,29 @@ export function MatchDetail({ matchId, predictionType }: MatchDetailProps) {
     const fetchMatchData = async () => {
       setLoading(true)
       try {
-        // Fetch fixture details
-        const fixtures = await getFixtures(undefined, undefined, undefined)
-        const match = Array.isArray(fixtures)
-          ? fixtures.find((f: any) => f.match_id === matchId)
-          : null
+        // Fetch fixture details - search across yesterday, today, and tomorrow
+        let match: Fixture | null = null
+        
+        // Try fetching for previous, today, and tomorrow
+        const dateTypes: Array<'previous' | 'today' | 'tomorrow'> = ['previous', 'today', 'tomorrow']
+        
+        for (const dateType of dateTypes) {
+          try {
+            const { from, to } = getDateRange(dateType)
+            const fixtures = await getFixtures(from, undefined, to)
+            
+            if (Array.isArray(fixtures)) {
+              const foundMatch = fixtures.find((f: any) => String(f.match_id) === String(matchId))
+              if (foundMatch) {
+                match = foundMatch as Fixture
+                break
+              }
+            }
+          } catch (error) {
+            console.error(`Error fetching fixtures for ${dateType}:`, error)
+            // Continue to next date range
+          }
+        }
 
         if (match) {
           setFixture(match as Fixture)

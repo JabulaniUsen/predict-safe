@@ -12,10 +12,11 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { Database } from '@/types/database'
-import { Plus, Edit, Trash2, X } from 'lucide-react'
+import { Plus, Edit, Trash2 } from 'lucide-react'
 import { formatDate } from '@/lib/utils/date'
 import { LeagueSelector } from '@/components/admin/league-selector'
 import { TeamSelector } from '@/components/admin/team-selector'
+import Link from 'next/link'
 
 type VIPWinningInsert = Database['public']['Tables']['vip_winnings']['Insert']
 type VIPWinningUpdate = Database['public']['Tables']['vip_winnings']['Update']
@@ -45,22 +46,6 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
   useEffect(() => {
     setWinnings(initialWinnings)
   }, [initialWinnings])
-
-  const handleCreate = () => {
-    setEditingWinning(null)
-    setForm({
-      plan_id: '',
-      plan_name: '',
-      league_id: '',
-      league_name: '',
-      home_team: '',
-      away_team: '',
-      prediction_type: '',
-      result: 'win',
-      date: new Date().toISOString().split('T')[0],
-    })
-    setShowDialog(true)
-  }
 
   const handleEdit = (winning: any) => {
     setEditingWinning(winning)
@@ -99,7 +84,7 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
   }
 
   const handleSave = async () => {
-    if (!form.plan_name || !form.home_team || !form.away_team || !form.prediction_type || !form.date) {
+    if (!form.plan_name || !form.home_team || !form.away_team || !form.date) {
       toast.error('Please fill in all required fields')
       return
     }
@@ -116,7 +101,7 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
           league: form.league_name || null,
           home_team: form.home_team,
           away_team: form.away_team,
-          prediction_type: form.prediction_type,
+          prediction_type: form.prediction_type || null,
           result: form.result,
           date: form.date,
         }
@@ -202,9 +187,11 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
                 Manage VIP winning records for each plan type
               </CardDescription>
             </div>
-            <Button onClick={handleCreate} className="bg-red-600 hover:bg-red-700 text-white">
-              <Plus className="h-4 w-4 mr-2" />
-              Add VIP Win
+            <Button asChild className="bg-red-600 hover:bg-red-700 text-white">
+              <Link href="/admin/vip-wins/add">
+                <Plus className="h-4 w-4 mr-2" />
+                Add VIP Win
+              </Link>
             </Button>
           </div>
         </CardHeader>
@@ -212,8 +199,10 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
           {winnings.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-muted-foreground">No VIP winnings records yet.</p>
-              <Button onClick={handleCreate} className="mt-4 bg-red-600 hover:bg-red-700 text-white">
-                Add First VIP Win
+              <Button asChild className="mt-4 bg-red-600 hover:bg-red-700 text-white">
+                <Link href="/admin/vip-wins/add">
+                  Add First VIP Win
+                </Link>
               </Button>
             </div>
           ) : (
@@ -289,13 +278,9 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>
-              {editingWinning ? 'Edit VIP Winning' : 'Add VIP Winning'}
-            </DialogTitle>
+            <DialogTitle>Edit VIP Winning</DialogTitle>
             <DialogDescription>
-              {editingWinning
-                ? 'Update the VIP winning record'
-                : 'Add a new VIP winning record for a specific plan'}
+              Update the VIP winning record
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -358,7 +343,7 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="prediction_type">Prediction Type *</Label>
+                <Label htmlFor="prediction_type">Prediction Type</Label>
                 <Input
                   id="prediction_type"
                   value={form.prediction_type}
@@ -396,7 +381,7 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
               disabled={loading}
               className="bg-red-600 hover:bg-red-700 text-white"
             >
-              {loading ? 'Saving...' : editingWinning ? 'Update' : 'Add'}
+              {loading ? 'Saving...' : 'Update'}
             </Button>
           </DialogFooter>
         </DialogContent>

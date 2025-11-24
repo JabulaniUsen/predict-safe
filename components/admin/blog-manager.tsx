@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { BlogPost } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { Edit, Trash2, Eye, Plus } from 'lucide-react'
+import { Edit, Trash2, Eye, Plus, Calendar } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import {
   Dialog,
@@ -150,18 +150,43 @@ export function BlogManager({ initialPosts }: BlogManagerProps) {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge 
-                          variant={post.published ? "default" : "secondary"}
-                          className={post.published ? "bg-green-600 hover:bg-green-700" : ""}
-                        >
-                          {post.published ? 'Published' : 'Draft'}
-                        </Badge>
+                        {(() => {
+                          const postData = post as any
+                          if (postData.scheduled_at && new Date(postData.scheduled_at) > new Date()) {
+                            return (
+                              <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                                <Calendar className="h-3 w-3 mr-1" />
+                                Scheduled
+                              </Badge>
+                            )
+                          }
+                          return (
+                            <Badge 
+                              variant={post.published ? "default" : "secondary"}
+                              className={post.published ? "bg-green-600 hover:bg-green-700" : ""}
+                            >
+                              {post.published ? 'Published' : 'Draft'}
+                            </Badge>
+                          )
+                        })()}
                       </TableCell>
                       <TableCell className="text-sm text-gray-600">
-                        {post.published_at 
-                          ? formatDistanceToNow(new Date(post.published_at), { addSuffix: true })
-                          : 'Not published'
-                        }
+                        {(() => {
+                          const postData = post as any
+                          if (postData.scheduled_at && new Date(postData.scheduled_at) > new Date()) {
+                            return (
+                              <div>
+                                <div className="flex items-center gap-1 text-yellow-700">
+                                  <Calendar className="h-3 w-3" />
+                                  <span>Scheduled: {new Date(postData.scheduled_at).toLocaleString()}</span>
+                                </div>
+                              </div>
+                            )
+                          }
+                          return post.published_at 
+                            ? formatDistanceToNow(new Date(post.published_at), { addSuffix: true })
+                            : 'Not published'
+                        })()}
                       </TableCell>
                       <TableCell className="text-sm text-gray-600">
                         {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}

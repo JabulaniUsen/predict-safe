@@ -32,6 +32,7 @@ interface NavItem {
   href: string
   label: string
   icon: React.ReactNode
+  badgeCount?: number
 }
 
 const navItems: NavItem[] = [
@@ -90,6 +91,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const [loading, setLoading] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [pendingTransactionsCount, setPendingTransactionsCount] = useState(0)
+  const [pendingActivationsCount, setPendingActivationsCount] = useState(0)
 
   useEffect(() => {
     const loadUser = async () => {
@@ -112,6 +115,20 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           .eq('user_id', authUser.id)
           .eq('read', false)
         setUnreadCount(count || 0)
+
+        // Fetch pending transactions count
+        const { count: pendingTxCount } = await supabase
+          .from('transactions')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'pending')
+        setPendingTransactionsCount(pendingTxCount || 0)
+
+        // Fetch pending activations count
+        const { count: pendingActivationCount } = await supabase
+          .from('user_subscriptions')
+          .select('*', { count: 'exact', head: true })
+          .eq('plan_status', 'pending_activation')
+        setPendingActivationsCount(pendingActivationCount || 0)
       }
 
       setLoading(false)
@@ -119,17 +136,32 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
     loadUser()
     
-    // Refresh notification count every 30 seconds
+    // Refresh counts every 30 seconds
     const interval = setInterval(async () => {
       const supabase = createClient()
       const { data: { user: authUser } } = await supabase.auth.getUser()
       if (authUser) {
+        // Refresh notification count
         const { count } = await supabase
           .from('notifications')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', authUser.id)
           .eq('read', false)
         setUnreadCount(count || 0)
+
+        // Refresh pending transactions count
+        const { count: pendingTxCount } = await supabase
+          .from('transactions')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'pending')
+        setPendingTransactionsCount(pendingTxCount || 0)
+
+        // Refresh pending activations count
+        const { count: pendingActivationCount } = await supabase
+          .from('user_subscriptions')
+          .select('*', { count: 'exact', head: true })
+          .eq('plan_status', 'pending_activation')
+        setPendingActivationsCount(pendingActivationCount || 0)
       }
     }, 30000)
 
@@ -194,19 +226,37 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             <p className="px-3 lg:px-4 text-xs lg:text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2 lg:mb-3">Menu</p>
           {navItems.map((item) => {
             const isActive = pathname === item.href
+            // Get badge count for specific items
+            let badgeCount = 0
+            if (item.href === '/admin/transactions') {
+              // Show combined count of pending transactions and pending activations
+              badgeCount = pendingTransactionsCount + pendingActivationsCount
+            }
+            
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 onClick={handleNavClick}
-                  className={`flex items-center gap-3 lg:gap-4 px-3 lg:px-4 py-2.5 lg:py-3.5 rounded-lg text-sm lg:text-base font-medium transition-colors ${
+                  className={`flex items-center justify-between gap-3 lg:gap-4 px-3 lg:px-4 py-2.5 lg:py-3.5 rounded-lg text-sm lg:text-base font-medium transition-colors ${
                   isActive
                       ? 'bg-red-600 text-white shadow-sm'
                     : 'text-gray-700 hover:bg-gray-100'
                 }`}
               >
-                {item.icon}
-                <span>{item.label}</span>
+                <div className="flex items-center gap-3 lg:gap-4">
+                  {item.icon}
+                  <span>{item.label}</span>
+                </div>
+                {badgeCount > 0 && (
+                  <span className={`flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-semibold ${
+                    isActive
+                      ? 'bg-white text-red-600'
+                      : 'bg-red-600 text-white'
+                  }`}>
+                    {badgeCount > 99 ? '99+' : badgeCount}
+                  </span>
+                )}
               </Link>
             )
           })}
@@ -251,9 +301,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           <div className="flex items-center gap-3">
             {!loading && user && (
               <div className="flex items-center gap-2 pl-3">
-                <div className="w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-r from-red-600 to-red-700 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                { userProfile?.avatar_url ? 
+                <Image src={userProfile?.avatar_url} alt="User Avatar" width={40} height={40} className="w-8 h-8 lg:w-10 lg:h-10 rounded-full object-cover" /> : 
+                <div className="w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-r from-red-600 to-red-700 rounded-full flex items-center justify-center text-white font-semibold text-sm"> 
                   {userInitial}
-                </div>
+                </div> }
                 <div className="hidden lg:block text-left">
                   <p className="text-sm font-semibold text-gray-900">{userName}</p>
                   <p className="text-xs text-gray-500">{user.email}</p>

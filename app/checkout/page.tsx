@@ -556,6 +556,16 @@ function CheckoutContent() {
     setProofPreview(null)
   }
 
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success(`${label} copied to clipboard!`)
+    } catch (error) {
+      console.error('Failed to copy:', error)
+      toast.error('Failed to copy to clipboard')
+    }
+  }
+
   if (loading) {
     return (
       <PageLayout title="Checkout" subtitle="Complete your subscription">
@@ -733,21 +743,51 @@ function CheckoutContent() {
                         {method.type === 'bank_transfer' && (
                           <>
                             {(method.details as any)?.account_name && (
-                              <div>
+                              <div className="flex items-center gap-2">
                                 <span className="text-sm">Account Name: </span>
                                 <span className="font-semibold text-blue-600">{(method.details as any).account_name}</span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => copyToClipboard((method.details as any).account_name, 'Account Name')}
+                                  title="Copy account name"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </Button>
                               </div>
                             )}
                             {(method.details as any)?.bank_name && (
-                              <div>
+                              <div className="flex items-center gap-2">
                                 <span className="text-sm">Bank Name: </span>
                                 <span className="font-semibold text-blue-600">{(method.details as any).bank_name}</span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => copyToClipboard((method.details as any).bank_name, 'Bank Name')}
+                                  title="Copy bank name"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </Button>
                               </div>
                             )}
                             {(method.details as any)?.account_number && (
-                          <div>
+                          <div className="flex items-center gap-2">
                                 <span className="text-sm">Account No: </span>
                                 <span className="font-semibold text-blue-600 font-mono">{(method.details as any).account_number}</span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => copyToClipboard((method.details as any).account_number, 'Account Number')}
+                                  title="Copy account number"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </Button>
                           </div>
                             )}
                           </>
@@ -756,9 +796,19 @@ function CheckoutContent() {
                         {(method.type as string) === 'mobile_money' && (
                           <>
                             {(method.details as any)?.phone_number && (
-                              <div>
+                              <div className="flex items-center gap-2">
                                 <span className="text-sm">Phone Number: </span>
                                 <span className="font-semibold text-blue-600 font-mono">{(method.details as any).phone_number}</span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => copyToClipboard((method.details as any).phone_number, 'Phone Number')}
+                                  title="Copy phone number"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </Button>
                           </div>
                         )}
                             {(method.details as any)?.network && (
@@ -768,9 +818,19 @@ function CheckoutContent() {
                           </div>
                         )}
                             {(method.details as any)?.account_name && (
-                          <div>
+                          <div className="flex items-center gap-2">
                                 <span className="text-sm">Account Name: </span>
                                 <span className="font-semibold text-blue-600">{(method.details as any).account_name}</span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => copyToClipboard((method.details as any).account_name, 'Account Name')}
+                                  title="Copy account name"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </Button>
                           </div>
                         )}
                       </>
@@ -779,11 +839,23 @@ function CheckoutContent() {
                         {method.type === 'crypto' && (
                           <>
                             {(method.details as any)?.wallet_address && (
-                              <div>
-                                <span className="text-sm">{method.currency}: </span>
-                                <span className="font-semibold text-blue-600 font-mono text-xs break-all">
-                                  {(method.details as any).wallet_address}
-                                </span>
+                              <div className="flex items-start gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-sm">{method.currency}: </span>
+                                  <span className="font-semibold text-blue-600 font-mono text-xs break-all">
+                                    {(method.details as any).wallet_address}
+                                  </span>
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 flex-shrink-0"
+                                  onClick={() => copyToClipboard((method.details as any).wallet_address, 'Wallet Address')}
+                                  title="Copy wallet address"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </Button>
                             </div>
                             )}
                             {(method.details as any)?.network && (
@@ -798,15 +870,35 @@ function CheckoutContent() {
                         {((method.type as string) === 'skrill' || (method.type as string) === 'paypal') && (
                           <>
                             {(method.details as any)?.email && (
-                              <div>
+                              <div className="flex items-center gap-2">
                                 <span className="text-sm">Email: </span>
                                 <span className="font-semibold text-blue-600">{(method.details as any).email}</span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => copyToClipboard((method.details as any).email, 'Email')}
+                                  title="Copy email"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </Button>
                               </div>
                             )}
                             {(method.details as any)?.account_name && (
-                          <div>
+                          <div className="flex items-center gap-2">
                                 <span className="text-sm">Account Name: </span>
                                 <span className="font-semibold text-blue-600">{(method.details as any).account_name}</span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => copyToClipboard((method.details as any).account_name, 'Account Name')}
+                                  title="Copy account name"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </Button>
                           </div>
                         )}
                       </>

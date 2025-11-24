@@ -29,8 +29,26 @@ export function Navbar() {
   useEffect(() => {
     const checkUser = async () => {
       const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      
+      if (authUser) {
+        // Fetch user profile from users table to get avatar_url and other profile data
+        const { data: profile } = await supabase
+          .from('users')
+          .select('avatar_url, full_name, email')
+          .eq('id', authUser.id)
+          .single()
+        
+        // Merge auth user with profile data
+        setUser({
+          ...authUser,
+          avatar_url: (profile as any)?.avatar_url || null,
+          full_name: (profile as any)?.full_name || null,
+        })
+      } else {
+        setUser(null)
+      }
+      
       setLoading(false)
     }
     checkUser()
@@ -220,8 +238,8 @@ export function Navbar() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={user.user_metadata?.avatar_url} alt={user.email} />
-                      <AvatarFallback className="bg-[#1e40af] text-white">{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
+                      { user?.avatar_url ? <AvatarImage src={user?.avatar_url} alt={user.email} /> : 
+                      <AvatarFallback className="bg-[#1e40af] text-white">{user.email?.charAt(0).toUpperCase()}</AvatarFallback> }
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
@@ -406,8 +424,11 @@ export function Navbar() {
                   <div className="px-4 mb-4">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={user.user_metadata?.avatar_url} alt={user.email} />
-                        <AvatarFallback className="bg-[#1e40af] text-white">{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
+                        {user?.avatar_url ? (
+                          <AvatarImage src={user.avatar_url} alt={user.email} />
+                        ) : (
+                          <AvatarFallback className="bg-[#1e40af] text-white">{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
+                        )}
                       </Avatar>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">{user.email}</p>

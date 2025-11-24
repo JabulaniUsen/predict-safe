@@ -206,9 +206,11 @@ export function DashboardLayout({ children, user, userProfile }: DashboardLayout
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 pl-3">
-              <div className="w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] rounded-full flex items-center justify-center text-white font-semibold text-sm">
+              { userProfile?.avatar_url ? 
+              <Image src={userProfile.avatar_url} alt="User Avatar" width={40} height={40} className="w-8 h-8 lg:w-10 lg:h-10 rounded-full object-cover" /> : 
+              <div className="w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] rounded-full flex items-center justify-center text-white font-semibold text-sm"> 
                 {userInitial}
-              </div>
+              </div> }
               <div className="hidden lg:block text-left">
                 <p className="text-sm font-semibold text-gray-900">{userName}</p>
                 <p className="text-xs text-gray-500">{user.email}</p>

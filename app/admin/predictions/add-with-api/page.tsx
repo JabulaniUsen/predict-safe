@@ -10,9 +10,13 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AdminLayout } from '@/components/admin/admin-layout'
 import { toast } from 'sonner'
 import { Database } from '@/types/database'
+import { Eye, Loader2 } from 'lucide-react'
+import { getFixtures, getOdds, getStandings, getH2H, Fixture, Odds, H2HData } from '@/lib/api-football'
+import Image from 'next/image'
 
 type UserProfile = Pick<Database['public']['Tables']['users']['Row'], 'is_admin'>
 
@@ -26,6 +30,10 @@ interface PreviewPrediction {
   confidence: number
   kickoff_time: string
   status: string
+  match_id?: string
+  league_id?: string
+  home_team_id?: string
+  away_team_id?: string
 }
 
 function AddPredictionWithAPIContent() {
@@ -43,6 +51,20 @@ function AddPredictionWithAPIContent() {
   const [minConfidence, setMinConfidence] = useState([70]) // Default minimum confidence: 70%
   const [previewPredictions, setPreviewPredictions] = useState<PreviewPrediction[]>([])
   const [selectedPredictions, setSelectedPredictions] = useState<Set<number>>(new Set())
+  const [selectedGameIndex, setSelectedGameIndex] = useState<number | null>(null)
+  const [gameDetails, setGameDetails] = useState<{
+    fixture: Fixture | null
+    odds: Odds | null
+    h2h: H2HData | null
+    standings: any[]
+    loading: boolean
+  }>({
+    fixture: null,
+    odds: null,
+    h2h: null,
+    standings: [],
+    loading: false,
+  })
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -186,6 +208,79 @@ function AddPredictionWithAPIContent() {
     }
   }
 
+  const handleViewGameDetails = async (index: number) => {
+    const prediction = previewPredictions[index]
+    if (!prediction.match_id) {
+      toast.error('Match ID not available for this game')
+      return
+    }
+
+    setSelectedGameIndex(index)
+    setGameDetails({
+      fixture: null,
+      odds: null,
+      h2h: null,
+      standings: [],
+      loading: true,
+    })
+
+    try {
+      // Fetch fixture details
+      const date = new Date(prediction.kickoff_time).toISOString().split('T')[0]
+      const fixtures = await getFixtures(date)
+      const fixture = Array.isArray(fixtures) 
+        ? fixtures.find((f: any) => f.match_id === prediction.match_id)
+        : null
+
+      if (!fixture) {
+        throw new Error('Fixture not found')
+      }
+
+      // Fetch odds
+      let oddsData: Odds | null = null
+      try {
+        const odds = await getOdds(prediction.match_id)
+        if (Array.isArray(odds) && odds.length > 0) {
+          oddsData = odds[0]
+        }
+      } catch (oddsError) {
+        console.error('Error fetching odds:', oddsError)
+      }
+
+      // Fetch H2H if team IDs are available
+      let h2hData: H2HData | null = null
+      if (prediction.home_team_id && prediction.away_team_id) {
+        try {
+          h2hData = await getH2H(prediction.home_team_id, prediction.away_team_id)
+        } catch (h2hError) {
+          console.error('Error fetching H2H:', h2hError)
+        }
+      }
+
+      // Fetch standings if league ID is available
+      let standingsData: any[] = []
+      if (prediction.league_id) {
+        try {
+          standingsData = await getStandings(prediction.league_id)
+        } catch (standingsError) {
+          console.error('Error fetching standings:', standingsError)
+        }
+      }
+
+      setGameDetails({
+        fixture: fixture as Fixture,
+        odds: oddsData,
+        h2h: h2hData,
+        standings: standingsData,
+        loading: false,
+      })
+    } catch (error: any) {
+      console.error('Error fetching game details:', error)
+      toast.error(error.message || 'Failed to fetch game details')
+      setGameDetails(prev => ({ ...prev, loading: false }))
+    }
+  }
+
   if (checkingAuth) {
     return (
       <AdminLayout>
@@ -324,6 +419,7 @@ function AddPredictionWithAPIContent() {
                       <TableHead>Odds</TableHead>
                       <TableHead>Confidence</TableHead>
                       <TableHead>Kickoff</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -356,6 +452,17 @@ function AddPredictionWithAPIContent() {
                             minute: '2-digit'
                           })}
                         </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleViewGameDetails(index)}
+                            disabled={!prediction.match_id}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            See
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -364,6 +471,184 @@ function AddPredictionWithAPIContent() {
             </CardContent>
           </Card>
         )}
+
+        {/* Game Details Dialog */}
+        <Dialog open={selectedGameIndex !== null} onOpenChange={(open) => !open && setSelectedGameIndex(null)}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Game Details</DialogTitle>
+              <DialogDescription>
+                Analyze the game before adding to predictions
+              </DialogDescription>
+            </DialogHeader>
+            
+            {gameDetails.loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-muted-foreground">Loading game details...</span>
+              </div>
+            ) : gameDetails.fixture ? (
+              <div className="space-y-6">
+                {/* Match Header */}
+                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
+                  <div className="flex items-center gap-4 flex-1">
+                    {gameDetails.fixture.team_home_badge && (
+                      <Image
+                        src={gameDetails.fixture.team_home_badge}
+                        alt={gameDetails.fixture.match_hometeam_name}
+                        width={60}
+                        height={60}
+                        className="object-contain"
+                        onError={(e) => { e.currentTarget.style.display = 'none' }}
+                      />
+                    )}
+                    <div className="flex-1 text-center">
+                      <div className="text-lg font-semibold">{gameDetails.fixture.match_hometeam_name}</div>
+                      <div className="text-sm text-muted-foreground">vs</div>
+                      <div className="text-lg font-semibold">{gameDetails.fixture.match_awayteam_name}</div>
+                    </div>
+                    {gameDetails.fixture.team_away_badge && (
+                      <Image
+                        src={gameDetails.fixture.team_away_badge}
+                        alt={gameDetails.fixture.match_awayteam_name}
+                        width={60}
+                        height={60}
+                        className="object-contain"
+                        onError={(e) => { e.currentTarget.style.display = 'none' }}
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {/* Match Info */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h3 className="font-semibold mb-2">Match Information</h3>
+                    <div className="space-y-1 text-sm">
+                      <div><span className="font-medium">League:</span> {gameDetails.fixture.league_name}</div>
+                      <div><span className="font-medium">Country:</span> {gameDetails.fixture.country_name}</div>
+                      <div><span className="font-medium">Date:</span> {gameDetails.fixture.match_date}</div>
+                      <div><span className="font-medium">Time:</span> {gameDetails.fixture.match_time}</div>
+                      {gameDetails.fixture.match_stadium && (
+                        <div><span className="font-medium">Stadium:</span> {gameDetails.fixture.match_stadium}</div>
+                      )}
+                      {gameDetails.fixture.match_referee && (
+                        <div><span className="font-medium">Referee:</span> {gameDetails.fixture.match_referee}</div>
+                      )}
+                      <div><span className="font-medium">Status:</span> {gameDetails.fixture.match_status}</div>
+                    </div>
+                  </div>
+
+                  {/* Odds */}
+                  {gameDetails.odds && (
+                    <div>
+                      <h3 className="font-semibold mb-2">Available Odds</h3>
+                      <div className="space-y-1 text-sm">
+                        {gameDetails.odds.odd_1 && (
+                          <div><span className="font-medium">Home Win:</span> {gameDetails.odds.odd_1}</div>
+                        )}
+                        {gameDetails.odds.odd_x && (
+                          <div><span className="font-medium">Draw:</span> {gameDetails.odds.odd_x}</div>
+                        )}
+                        {gameDetails.odds.odd_2 && (
+                          <div><span className="font-medium">Away Win:</span> {gameDetails.odds.odd_2}</div>
+                        )}
+                        {gameDetails.odds['o+1.5'] && (
+                          <div><span className="font-medium">Over 1.5:</span> {gameDetails.odds['o+1.5']}</div>
+                        )}
+                        {gameDetails.odds['o+2.5'] && (
+                          <div><span className="font-medium">Over 2.5:</span> {gameDetails.odds['o+2.5']}</div>
+                        )}
+                        {gameDetails.odds.bts_yes && (
+                          <div><span className="font-medium">BTTS Yes:</span> {gameDetails.odds.bts_yes}</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* H2H */}
+                {gameDetails.h2h && (
+                  <div>
+                    <h3 className="font-semibold mb-2">Head to Head</h3>
+                    {gameDetails.h2h.firstTeam_VS_secondTeam && gameDetails.h2h.firstTeam_VS_secondTeam.length > 0 ? (
+                      <div className="text-sm space-y-1">
+                        <p className="font-medium mb-2">Recent meetings:</p>
+                        {gameDetails.h2h.firstTeam_VS_secondTeam.slice(0, 5).map((match: any, idx: number) => (
+                          <div key={idx} className="border-b pb-1">
+                            {match.match_hometeam_name} {match.match_hometeam_score} - {match.match_awayteam_score} {match.match_awayteam_name}
+                            <span className="text-muted-foreground ml-2">({match.match_date})</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No H2H data available</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Standings */}
+                {gameDetails.standings.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-2">League Standings</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left p-2">Pos</th>
+                            <th className="text-left p-2">Team</th>
+                            <th className="text-center p-2">P</th>
+                            <th className="text-center p-2">W</th>
+                            <th className="text-center p-2">D</th>
+                            <th className="text-center p-2">L</th>
+                            <th className="text-center p-2">Pts</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {gameDetails.standings.slice(0, 10).map((team: any, idx: number) => (
+                            <tr 
+                              key={idx} 
+                              className={`border-b ${
+                                team.team_id === gameDetails.fixture?.match_hometeam_id || 
+                                team.team_id === gameDetails.fixture?.match_awayteam_id
+                                  ? 'bg-blue-50' 
+                                  : ''
+                              }`}
+                            >
+                              <td className="p-2">{team.overall_league_position}</td>
+                              <td className="p-2 font-medium">{team.team_name}</td>
+                              <td className="p-2 text-center">{team.overall_league_payed}</td>
+                              <td className="p-2 text-center">{team.overall_league_W}</td>
+                              <td className="p-2 text-center">{team.overall_league_D}</td>
+                              <td className="p-2 text-center">{team.overall_league_L}</td>
+                              <td className="p-2 text-center font-semibold">{team.overall_league_PTS}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Selected Prediction Info */}
+                {selectedGameIndex !== null && (
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <h3 className="font-semibold mb-2">Selected Prediction</h3>
+                    <div className="text-sm space-y-1">
+                      <div><span className="font-medium">Type:</span> {previewPredictions[selectedGameIndex].prediction_type}</div>
+                      <div><span className="font-medium">Odds:</span> {previewPredictions[selectedGameIndex].odds.toFixed(2)}</div>
+                      <div><span className="font-medium">Confidence:</span> {previewPredictions[selectedGameIndex].confidence}%</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                Failed to load game details
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </AdminLayout>
   )

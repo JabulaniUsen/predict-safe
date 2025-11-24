@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -19,6 +19,112 @@ import {
 import { formatDate } from '@/lib/utils/date'
 import { Badge } from '@/components/ui/badge'
 import { ActivationFeeModal } from '@/components/dashboard/activation-fee-modal'
+
+// Countdown component for subscription expiry
+function SubscriptionCountdown({ expiryDate }: { expiryDate: string }) {
+  const [timeRemaining, setTimeRemaining] = useState<{
+    days: number
+    hours: number
+    minutes: number
+    seconds: number
+  } | null>(null)
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null
+
+    const updateTimer = () => {
+      const now = new Date()
+      const expiry = new Date(expiryDate)
+      const diff = expiry.getTime() - now.getTime()
+
+      if (diff <= 0) {
+        setTimeRemaining(null)
+        // Clear interval when expired
+        if (interval) {
+          clearInterval(interval)
+          interval = null
+        }
+        return
+      }
+
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000)
+
+      // Check if all values are 0 and stop the countdown
+      if (days === 0 && hours === 0 && minutes === 0 && seconds === 0) {
+        setTimeRemaining(null)
+        // Clear interval when all values reach 0
+        if (interval) {
+          clearInterval(interval)
+          interval = null
+        }
+        return
+      }
+
+      setTimeRemaining({ days, hours, minutes, seconds })
+    }
+
+    // Initial update
+    updateTimer()
+    
+    // Set up interval only if not expired
+    const now = new Date()
+    const expiry = new Date(expiryDate)
+    if (expiry.getTime() > now.getTime()) {
+      interval = setInterval(updateTimer, 1000) // Update every second
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval)
+      }
+    }
+  }, [expiryDate])
+
+  if (!timeRemaining) {
+    return (
+      <div className="text-xs lg:text-sm text-gray-600">
+        <span className="font-medium">Expires:</span>{' '}
+        {formatDate(new Date(expiryDate))}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs lg:text-sm text-gray-600">
+        <span className="font-medium">Expires:</span>{' '}
+        {formatDate(new Date(expiryDate))}
+      </div>
+      <div className="flex items-center gap-2 p-2 lg:p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+        <Clock className="h-4 w-4 text-blue-600 flex-shrink-0" />
+        <div className="flex items-center gap-2 lg:gap-3 flex-wrap">
+          <div className="flex items-center gap-1">
+            <span className="text-lg lg:text-xl font-bold text-blue-700">{timeRemaining.days}</span>
+            <span className="text-xs text-gray-600">d</span>
+          </div>
+          <span className="text-gray-400">:</span>
+          <div className="flex items-center gap-1">
+            <span className="text-lg lg:text-xl font-bold text-blue-700">{String(timeRemaining.hours).padStart(2, '0')}</span>
+            <span className="text-xs text-gray-600">h</span>
+          </div>
+          <span className="text-gray-400">:</span>
+          <div className="flex items-center gap-1">
+            <span className="text-lg lg:text-xl font-bold text-blue-700">{String(timeRemaining.minutes).padStart(2, '0')}</span>
+            <span className="text-xs text-gray-600">m</span>
+          </div>
+          <span className="text-gray-400">:</span>
+          <div className="flex items-center gap-1">
+            <span className="text-lg lg:text-xl font-bold text-blue-700">{String(timeRemaining.seconds).padStart(2, '0')}</span>
+            <span className="text-xs text-gray-600">s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 interface DashboardContentProps {
   user: any
@@ -190,10 +296,7 @@ export function DashboardContent({
                         )}
                         
                         {isActive && subscription.expiry_date && (
-                          <div className="text-xs lg:text-sm text-gray-600">
-                            <span className="font-medium">Expires:</span>{' '}
-                            {formatDate(new Date(subscription.expiry_date))}
-                          </div>
+                          <SubscriptionCountdown expiryDate={subscription.expiry_date} />
                         )}
                         
                         <div className="flex flex-wrap gap-2 pt-2">
