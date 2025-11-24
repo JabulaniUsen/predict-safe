@@ -114,7 +114,7 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
                 <div className="col-span-2 text-center">Tip</div>
                 <div className="col-span-2 text-center">Plan</div>
               </div>
-              {[1, 2, 3].map((i) => (
+            {[1, 2, 3].map((i) => (
                 <div key={i} className="px-6 py-4 grid grid-cols-12 gap-4 items-center border-t animate-pulse">
                   <div className="col-span-2">
                     <div className="h-4 w-20 bg-gray-200 rounded" />
@@ -132,8 +132,8 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
                     <div className="h-4 w-20 bg-gray-200 rounded mx-auto" />
                   </div>
                 </div>
-              ))}
-            </div>
+            ))}
+          </div>
           </>
         ) : winnings.length === 0 ? (
           <Card className="border-2 border-gray-200">

@@ -190,6 +190,8 @@ function PaymentContent() {
               .eq('id', user!.id)
               .single()
             
+            const userProfile = userData as { email?: string; full_name?: string } | null
+            
             // Call API to create notification
             try {
               await fetch('/api/notifications/create', {
@@ -199,8 +201,8 @@ function PaymentContent() {
                   type: 'subscription_event',
                   userId: user!.id,
                   planName: plan.name,
-                  userEmail: userData?.email,
-                  userName: userData?.full_name,
+                  userEmail: userProfile?.email,
+                  userName: userProfile?.full_name,
                   event: 'confirmed',
                 }),
               })
@@ -233,6 +235,8 @@ function PaymentContent() {
             .eq('id', user!.id)
             .single()
 
+          const userProfile = userData as { email?: string; full_name?: string } | null
+
           // Notify subscription confirmed if active
           if (!plan.requires_activation) {
             // Call API to create notification
@@ -244,8 +248,8 @@ function PaymentContent() {
                   type: 'subscription_event',
                   userId: user!.id,
                   planName: plan.name,
-                  userEmail: userData?.email,
-                  userName: userData?.full_name,
+                  userEmail: userProfile?.email,
+                  userName: userProfile?.full_name,
                   event: 'confirmed',
                 }),
               })
@@ -263,18 +267,18 @@ function PaymentContent() {
                 type: 'admin_new_subscription',
                 userId: user!.id,
                 planName: plan.name,
-                userEmail: userData?.email || user!.email!,
-                userName: userData?.full_name,
+                userEmail: userProfile?.email || user!.email!,
+                userName: userProfile?.full_name,
               }),
             })
           } catch (err) {
             console.error('Failed to send admin notification:', err)
           }
 
-          // Check if activation fee is required and redirect to payment
+          // Check if activation fee is required and redirect to predictions page
           if (plan.requires_activation && price.activation_fee) {
             toast.success('Subscription payment successful! Please pay the activation fee to unlock predictions.')
-            router.push(`/subscribe?plan=${plan.slug}&step=activation`)
+            router.push(`/dashboard/predictions?plan=${plan.slug}`)
             return
           }
         }

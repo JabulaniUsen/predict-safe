@@ -218,44 +218,44 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
         toast.success('Activation fee approved! User can now access predictions.')
       } else {
         // For subscription payments, use existing logic
-        // Get duration from transaction metadata or default to 30 days
-        const metadata = selectedTransaction.metadata as any
-        const durationDays = metadata?.duration_days || 30
+      // Get duration from transaction metadata or default to 30 days
+      const metadata = selectedTransaction.metadata as any
+      const durationDays = metadata?.duration_days || 30
 
-        const startDate = new Date()
-        const expiryDate = new Date()
-        expiryDate.setDate(expiryDate.getDate() + durationDays)
+      const startDate = new Date()
+      const expiryDate = new Date()
+      expiryDate.setDate(expiryDate.getDate() + durationDays)
 
-        // Update subscription to active
-        const updateData: UserSubscriptionUpdate = {
-          subscription_fee_paid: true,
-          plan_status: 'active',
-          start_date: startDate.toISOString(),
-          expiry_date: expiryDate.toISOString(),
-          updated_at: new Date().toISOString(),
-        }
+      // Update subscription to active
+      const updateData: UserSubscriptionUpdate = {
+        subscription_fee_paid: true,
+        plan_status: 'active',
+        start_date: startDate.toISOString(),
+        expiry_date: expiryDate.toISOString(),
+        updated_at: new Date().toISOString(),
+      }
 
-        console.log('Update data:', updateData)
+      console.log('Update data:', updateData)
 
-        const result: any = await supabase
-          .from('user_subscriptions')
-          // @ts-expect-error - Supabase type inference issue
-          .update(updateData)
-          .eq('id', subscriptionId)
-          .select()
-        
-        const { data: updatedSub, error: subError } = result
+      const result: any = await supabase
+        .from('user_subscriptions')
+        // @ts-expect-error - Supabase type inference issue
+        .update(updateData)
+        .eq('id', subscriptionId)
+        .select()
+      
+      const { data: updatedSub, error: subError } = result
 
-        if (subError) {
-          console.error('Error updating subscription:', subError)
-          throw subError
-        }
+      if (subError) {
+        console.error('Error updating subscription:', subError)
+        throw subError
+      }
 
-        if (!updatedSub || updatedSub.length === 0) {
+      if (!updatedSub || updatedSub.length === 0) {
           throw new Error(`Subscription update failed - no rows updated. Subscription ID: ${subscriptionId}`)
-        }
+      }
 
-        toast.success('Subscription activated! User is now a premium member.')
+      toast.success('Subscription activated! User is now a premium member.')
       }
 
       setShowActivateDialog(false)
@@ -698,10 +698,10 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
                       </>
                     ) : (
                       <>
-                        <li>Mark the subscription as active</li>
-                        <li>Set subscription_fee_paid to true</li>
-                        <li>Set start and expiry dates</li>
-                        <li>Grant user access to premium predictions</li>
+                    <li>Mark the subscription as active</li>
+                    <li>Set subscription_fee_paid to true</li>
+                    <li>Set start and expiry dates</li>
+                    <li>Grant user access to premium predictions</li>
                       </>
                     )}
                   </ul>

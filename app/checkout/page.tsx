@@ -2,6 +2,7 @@
 
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { PageLayout } from '@/components/layout/page-layout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -65,15 +66,23 @@ function CheckoutContent() {
         setUserCountry(userProfile.country as CountryOption)
       }
 
-      // Get active payment methods
+      // Get active payment methods (filter by user country or methods without country restriction)
+      const userCountryName = userProfile?.country || 'Nigeria'
       const { data: methodsData } = await supabase
         .from('payment_methods')
         .select('*')
         .eq('is_active', true)
+        .or(`country.is.null,country.eq.${userCountryName}`)
         .order('display_order')
 
-      if (methodsData) {
-        setPaymentMethods(methodsData)
+      // Filter in memory as fallback (in case RLS doesn't handle it)
+      const filteredMethods = methodsData?.filter(method => {
+        const methodCountry = (method as any).country
+        return !methodCountry || methodCountry === userCountryName
+      })
+
+      if (filteredMethods) {
+        setPaymentMethods(filteredMethods)
       }
 
       // Get plan
@@ -504,7 +513,7 @@ function CheckoutContent() {
                   }}
                 >
                   {paymentMethods.map((method) => (
-                    <div key={method.id} className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                    <div key={method.id} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
                       <RadioGroupItem value={method.id} id={method.id} />
                       <Label htmlFor={method.id} className="cursor-pointer flex-1">
                         {method.name}

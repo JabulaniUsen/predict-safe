@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,6 +14,7 @@ import { formatTime, getDateRange } from '@/lib/utils/date'
 import { toast } from 'sonner'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import { cn } from '@/lib/utils'
+import { ActivationFeeModal } from './activation-fee-modal'
 
 interface PredictionsListProps {
   allPlans: Plan[]
@@ -24,36 +25,94 @@ interface TeamLogoCache {
   [key: string]: string | null // team_name -> logo_url
 }
 
-export function PredictionsList({ allPlans, subscriptions }: PredictionsListProps) {
+export function PredictionsList({ allPlans, subscriptions: initialSubscriptions }: PredictionsListProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [selectedPlanSlug, setSelectedPlanSlug] = useState<string>('')
   const [dateType, setDateType] = useState<'previous' | 'today' | 'tomorrow'>('today')
   const [predictions, setPredictions] = useState<Prediction[]>([])
   const [correctScorePredictions, setCorrectScorePredictions] = useState<CorrectScorePrediction[]>([])
   const [loading, setLoading] = useState(false)
   const [teamLogos, setTeamLogos] = useState<TeamLogoCache>({})
+  const [subscriptions, setSubscriptions] = useState<UserSubscriptionWithPlan[]>(initialSubscriptions)
 
-  // Initialize with first plan if available
+  // Refresh subscriptions on mount and periodically
   useEffect(() => {
-    if (allPlans.length > 0 && !selectedPlanSlug) {
+    const refreshSubscriptions = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: freshSubscriptions } = await supabase
+        .from('user_subscriptions')
+        .select(`
+          *,
+          plan:plans(*)
+        `)
+        .eq('user_id', user.id)
+        .in('plan_status', ['active', 'pending', 'pending_activation'])
+        .order('created_at', { ascending: false })
+
+      if (freshSubscriptions) {
+        setSubscriptions(freshSubscriptions as UserSubscriptionWithPlan[])
+      }
+    }
+
+    // Refresh immediately
+    refreshSubscriptions()
+
+    // Refresh every 30 seconds to catch admin approvals
+    const interval = setInterval(refreshSubscriptions, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Initialize with plan from URL or first plan if available
+  useEffect(() => {
+    const planFromUrl = searchParams.get('plan')
+    if (planFromUrl && allPlans.some(p => p.slug === planFromUrl)) {
+      setSelectedPlanSlug(planFromUrl)
+    } else if (allPlans.length > 0 && !selectedPlanSlug) {
       setSelectedPlanSlug(allPlans[0].slug)
     }
-  }, [allPlans, selectedPlanSlug])
+  }, [allPlans, selectedPlanSlug, searchParams])
 
   // Check if plan is unlocked (user has active subscription)
   const isPlanUnlocked = (planId: string): boolean => {
     const subscription = subscriptions.find((s) => s.plan_id === planId)
-    if (!subscription) return false
-    
-    // Must be active status
-    if (subscription.plan_status !== 'active') return false
-    
-    // For plans that require activation, also check if activation fee is paid
-    const plan = allPlans.find((p) => p.id === planId)
-    if (plan?.requires_activation && !subscription.activation_fee_paid) {
+    if (!subscription) {
+      console.log('🔒 Plan not unlocked: No subscription found for plan', planId)
       return false
     }
     
+    // Must be active status
+    if (subscription.plan_status !== 'active') {
+      console.log('🔒 Plan not unlocked: Subscription status is', subscription.plan_status, 'for plan', planId)
+      return false
+    }
+    
+    // For plans that require activation, also check if activation fee is paid
+    const plan = allPlans.find((p) => p.id === planId)
+    
+    // Check if this is Correct Score plan (by slug) - it always requires activation fee
+    const isCorrectScore = plan?.slug === 'correct-score'
+    
+    // If plan requires activation OR is Correct Score, check activation fee
+    if ((plan?.requires_activation || isCorrectScore) && !subscription.activation_fee_paid) {
+      console.log('🔒 Plan not unlocked: Activation fee not paid for plan', planId, {
+        requires_activation: plan?.requires_activation,
+        isCorrectScore,
+        activation_fee_paid: subscription.activation_fee_paid,
+        plan_status: subscription.plan_status
+      })
+      return false
+    }
+    
+    console.log('✅ Plan unlocked for plan', planId, {
+      plan_status: subscription.plan_status,
+      activation_fee_paid: subscription.activation_fee_paid,
+      requires_activation: plan?.requires_activation,
+      isCorrectScore
+    })
     return true
   }
 
@@ -275,6 +334,40 @@ export function PredictionsList({ allPlans, subscriptions }: PredictionsListProp
   const selectedSubscription = selectedPlan ? subscriptions.find((s) => s.plan_id === selectedPlan.id) : null
   const isUnlocked = selectedPlan ? isPlanUnlocked(selectedPlan.id) : false
   const isCorrectScorePlan = selectedPlan?.slug === 'correct-score'
+  
+  // Check if subscription exists but activation fee not paid (for correct score)
+  const isPendingActivation = isCorrectScorePlan && 
+    selectedSubscription && 
+    selectedSubscription.plan_status === 'pending_activation' &&
+    !selectedSubscription.activation_fee_paid
+
+  // Check if subscription is active but activation fee is not paid (needs activation fee payment)
+  const needsActivationFee = selectedPlan && selectedSubscription &&
+    selectedSubscription.plan_status === 'active' &&
+    !selectedSubscription.activation_fee_paid &&
+    (selectedPlan.requires_activation || isCorrectScorePlan)
+
+  const [activationModalOpen, setActivationModalOpen] = useState(false)
+  const [userCountry, setUserCountry] = useState<string>('Nigeria')
+
+  // Fetch user country
+  useEffect(() => {
+    const fetchUserCountry = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: profile } = await supabase
+          .from('users')
+          .select('country')
+          .eq('id', user.id)
+          .single() as { data: { country: string } | null }
+        if (profile?.country) {
+          setUserCountry(profile.country)
+        }
+      }
+    }
+    fetchUserCountry()
+  }, [])
 
   const handleSubscribe = () => {
     router.push(`/checkout?plan=${selectedPlanSlug}`)
@@ -324,7 +417,18 @@ export function PredictionsList({ allPlans, subscriptions }: PredictionsListProp
         <div>
           <h2 className="text-lg lg:text-xl font-semibold flex flex-wrap items-center gap-2">
             <span>{selectedPlan?.name}</span>
-            {!isUnlocked && (
+            {needsActivationFee && (
+              <Badge variant="outline" className="gap-1 text-xs bg-orange-50 text-orange-700 border-orange-300">
+                <Lock className="h-3 w-3" />
+                Activation Fee Required
+              </Badge>
+            )}
+            {isPendingActivation && (
+              <Badge variant="outline" className="gap-1 text-xs bg-yellow-50 text-yellow-700 border-yellow-300">
+                Pending Activation
+              </Badge>
+            )}
+            {!isUnlocked && !isPendingActivation && !needsActivationFee && (
               <Badge variant="outline" className="gap-1 text-xs">
                 <Lock className="h-3 w-3" />
                 Locked
@@ -385,8 +489,34 @@ export function PredictionsList({ allPlans, subscriptions }: PredictionsListProp
           ))}
         </div>
       ) : !isUnlocked ? (
-        // Locked Plan - Show Locked Predictions with CTA
-        <div className="space-y-4">
+        // Check if needs activation fee payment
+        needsActivationFee ? (
+          // Activation Fee Payment Interface
+          <Card className="border-2 border-orange-200 bg-orange-50">
+            <CardContent className="py-6 lg:py-8 text-center px-4">
+              <Lock className="mx-auto mb-4 lg:mb-5 h-10 w-10 lg:h-14 lg:w-14 text-orange-600" />
+              <h3 className="text-lg lg:text-xl font-semibold mb-2 text-orange-900">Activation Fee Required</h3>
+              <p className="text-sm lg:text-base text-orange-800 mb-1">
+                You have an active subscription for <strong>{selectedPlan?.name}</strong>, but you need to pay the activation fee to unlock predictions.
+              </p>
+              <p className="text-xs lg:text-sm text-orange-700 mb-4 lg:mb-6">
+                Complete your payment to access all premium predictions and features.
+              </p>
+              <Button 
+                onClick={() => {
+                  if (selectedSubscription) {
+                    setActivationModalOpen(true)
+                  }
+                }} 
+                size="lg" 
+                className="bg-orange-600 hover:bg-orange-700 text-white font-semibold text-sm lg:text-base px-6 lg:px-8"
+              >
+                Pay Activation Fee
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          // Regular Locked Plan - Show Locked Message with CTA
           <Card className="border-2 border-yellow-200 bg-yellow-50">
             <CardContent className="py-4 lg:py-6 text-center px-4">
               <Lock className="mx-auto mb-3 lg:mb-4 h-8 w-8 lg:h-12 lg:w-12 text-yellow-600" />
@@ -399,223 +529,7 @@ export function PredictionsList({ allPlans, subscriptions }: PredictionsListProp
               </Button>
             </CardContent>
           </Card>
-
-          {/* Locked Preview Cards */}
-          {isCorrectScorePlan ? (
-            correctScorePredictions.length > 0 ? (
-              <div className="grid gap-4 lg:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                {correctScorePredictions.map((prediction) => {
-                  const homeLogo = getTeamLogo(prediction.home_team)
-                  const awayLogo = getTeamLogo(prediction.away_team)
-                  
-                  return (
-                  <Card key={prediction.id} className="relative overflow-hidden border-2 border-gray-200">
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-10 rounded-lg">
-                      <div className="text-center p-4">
-                        <Lock className="mx-auto mb-3 h-10 w-10 text-[#f97316] animate-pulse" />
-                        <Button 
-                          onClick={handleSubscribe} 
-                          size="sm"
-                          className="bg-gradient-to-r from-[#f97316] to-[#ea580c] hover:from-[#ea580c] hover:to-[#f97316] text-white font-bold px-4 py-2 rounded-lg text-sm"
-                        >
-                          Subscribe to Premium
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 opacity-50">
-                      <p className="text-xs font-semibold text-white text-center">{prediction.league}</p>
-                    </div>
-                    <CardContent className="p-6 opacity-50">
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex-shrink-0 w-12 h-12 lg:w-16 lg:h-16 flex items-center justify-center bg-gray-50 rounded-lg border-2 border-gray-200">
-                          {homeLogo ? (
-                            <Image
-                              src={homeLogo}
-                              alt={prediction.home_team}
-                                width={48}
-                                height={48}
-                                className="object-contain w-full h-full p-1"
-                              unoptimized
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none'
-                              }}
-                            />
-                          ) : (
-                              <div className="w-full h-full rounded-lg bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-lg lg:text-xl font-bold text-white">
-                              {prediction.home_team.charAt(0)}
-                            </div>
-                          )}
-                        </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm lg:text-base font-semibold text-gray-900 truncate">{prediction.home_team}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-px bg-gray-300"></div>
-                          <span className="text-xs font-bold text-gray-500 uppercase px-2">vs</span>
-                          <div className="flex-1 h-px bg-gray-300"></div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex-shrink-0 w-12 h-12 lg:w-16 lg:h-16 flex items-center justify-center bg-gray-50 rounded-lg border-2 border-gray-200">
-                          {awayLogo ? (
-                            <Image
-                              src={awayLogo}
-                              alt={prediction.away_team}
-                                width={48}
-                                height={48}
-                                className="object-contain w-full h-full p-1"
-                              unoptimized
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none'
-                              }}
-                            />
-                          ) : (
-                              <div className="w-full h-full rounded-lg bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-lg lg:text-xl font-bold text-white">
-                              {prediction.away_team.charAt(0)}
-                            </div>
-                          )}
-                        </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm lg:text-base font-semibold text-gray-900 truncate">{prediction.away_team}</p>
-                      </div>
-                        </div>
-                      </div>
-                      <div className="mt-6 pt-4 border-t space-y-3">
-                        <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
-                          <span className="text-xs font-semibold text-gray-700">Predicted Score</span>
-                          <Badge className="bg-green-600 text-white font-bold text-sm px-3 py-1">
-                            {prediction.score_prediction}
-                          </Badge>
-                        </div>
-                        {prediction.odds && (
-                          <div className="flex items-center justify-between p-2 bg-blue-50 rounded-lg">
-                            <span className="text-xs font-medium text-gray-700">Odds</span>
-                            <span className="text-sm font-bold text-blue-700">{prediction.odds}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between text-xs text-gray-600">
-                          <span>⏰ {formatTime(prediction.kickoff_time)}</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  )
-                })}
-              </div>
-            ) : null
-          ) : predictions.length > 0 ? (
-            <div className="grid gap-4 lg:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-              {predictions.map((prediction) => {
-                const homeLogo = getTeamLogo(prediction.home_team)
-                const awayLogo = getTeamLogo(prediction.away_team)
-                
-                return (
-                <Card key={prediction.id} className="relative overflow-hidden border-2 border-gray-200">
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-10 rounded-lg">
-                    <div className="text-center p-4">
-                      <Lock className="mx-auto mb-3 h-10 w-10 text-[#f97316] animate-pulse" />
-                      <Button 
-                        onClick={handleSubscribe} 
-                        className="bg-gradient-to-r from-[#f97316] to-[#ea580c] hover:from-[#ea580c] hover:to-[#f97316] text-white font-bold px-6 py-2 rounded-lg"
-                      >
-                        Subscribe to Premium
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 opacity-50">
-                    <p className="text-xs font-semibold text-white text-center">{prediction.league}</p>
-                  </div>
-                  <CardContent className="p-6 opacity-50">
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex-shrink-0 w-12 h-12 lg:w-16 lg:h-16 flex items-center justify-center bg-gray-50 rounded-lg border-2 border-gray-200">
-                        {homeLogo ? (
-                          <Image
-                            src={homeLogo}
-                            alt={prediction.home_team}
-                              width={48}
-                              height={48}
-                              className="object-contain w-full h-full p-1"
-                            unoptimized
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none'
-                            }}
-                          />
-                        ) : (
-                            <div className="w-full h-full rounded-lg bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-lg lg:text-xl font-bold text-white">
-                            {prediction.home_team.charAt(0)}
-                          </div>
-                        )}
-                      </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm lg:text-base font-semibold text-gray-900 truncate">{prediction.home_team}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-px bg-gray-300"></div>
-                        <span className="text-xs font-bold text-gray-500 uppercase px-2">vs</span>
-                        <div className="flex-1 h-px bg-gray-300"></div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex-shrink-0 w-12 h-12 lg:w-16 lg:h-16 flex items-center justify-center bg-gray-50 rounded-lg border-2 border-gray-200">
-                        {awayLogo ? (
-                          <Image
-                            src={awayLogo}
-                            alt={prediction.away_team}
-                              width={48}
-                              height={48}
-                              className="object-contain w-full h-full p-1"
-                            unoptimized
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none'
-                            }}
-                          />
-                        ) : (
-                            <div className="w-full h-full rounded-lg bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-lg lg:text-xl font-bold text-white">
-                            {prediction.away_team.charAt(0)}
-                          </div>
-                        )}
-                      </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm lg:text-base font-semibold text-gray-900 truncate">{prediction.away_team}</p>
-                    </div>
-                      </div>
-                    </div>
-                    <div className="mt-6 pt-4 border-t space-y-3">
-                      <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
-                        <span className="text-xs font-semibold text-gray-700">Prediction</span>
-                        <Badge className="bg-green-600 text-white font-bold text-sm px-3 py-1">
-                          {prediction.prediction_type}
-                        </Badge>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="p-2 bg-blue-50 rounded-lg">
-                          <p className="text-xs text-gray-600 mb-1">Odds</p>
-                          <p className="text-sm font-bold text-blue-700">{prediction.odds}</p>
-                      </div>
-                        <div className="p-2 bg-purple-50 rounded-lg">
-                          <p className="text-xs text-gray-600 mb-1">Confidence</p>
-                          <p className="text-sm font-bold text-purple-700">{prediction.confidence}%</p>
-                      </div>
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-gray-600 pt-2 border-t">
-                        <span>⏰ {formatTime(prediction.kickoff_time)}</span>
-                      </div>
-                      </div>
-                    </CardContent>
-                </Card>
-                )
-              })}
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <p className="text-muted-foreground">No predictions available for this date.</p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+        )
       ) : isCorrectScorePlan ? (
         // Unlocked Correct Score Plan
         correctScorePredictions.length > 0 ? (
@@ -1074,6 +988,18 @@ export function PredictionsList({ allPlans, subscriptions }: PredictionsListProp
             <p className="text-muted-foreground">No predictions available for this date.</p>
           </CardContent>
         </Card>
+      )}
+
+      {/* Activation Fee Modal */}
+      {selectedPlan && selectedSubscription && (
+        <ActivationFeeModal
+          open={activationModalOpen}
+          onOpenChange={setActivationModalOpen}
+          planId={selectedPlan.id}
+          planName={selectedPlan.name}
+          userCountry={userCountry}
+          subscriptionId={selectedSubscription.id}
+        />
       )}
     </div>
   )

@@ -20,6 +20,9 @@ import { Plus, Edit, Trash2, Copy } from 'lucide-react'
 type PaymentMethodUpdate = Database['public']['Tables']['payment_methods']['Update']
 type PaymentMethodInsert = Database['public']['Tables']['payment_methods']['Insert']
 
+const AVAILABLE_COUNTRIES = ['Nigeria', 'Ghana', 'Kenya', 'Other'] as const
+type CountryOption = typeof AVAILABLE_COUNTRIES[number]
+
 interface PaymentMethodsManagerProps {
   paymentMethods: PaymentMethod[]
 }
@@ -36,6 +39,7 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
     details: {} as any,
     is_active: true,
     display_order: 0,
+    country: '' as CountryOption | '',
   })
 
   // Bank transfer form fields
@@ -63,6 +67,7 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
       details: {},
       is_active: true,
       display_order: 0,
+      country: '',
     })
     setBankDetails({
       account_name: '',
@@ -88,6 +93,7 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
       details: method.details as any,
       is_active: method.is_active,
       display_order: method.display_order,
+      country: ((method as any).country as CountryOption) || '',
     })
 
     if (method.type === 'bank_transfer') {
@@ -141,18 +147,19 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
         }
       }
 
-      const methodData: PaymentMethodInsert = {
+      const methodData: any = {
         name: methodForm.name,
         type: methodForm.type,
         currency: methodForm.type === 'crypto' ? methodForm.currency : null,
         details: details as any,
         is_active: methodForm.is_active,
         display_order: methodForm.display_order,
+        country: methodForm.country || null,
       }
 
       if (editingMethod) {
         // Update existing
-        const updateData: PaymentMethodUpdate = {
+        const updateData: any = {
           ...methodData,
           updated_at: new Date().toISOString(),
         }
@@ -169,7 +176,6 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
         // Create new
         const result: any = await supabase
           .from('payment_methods')
-          // @ts-expect-error - Supabase type inference issue
           .insert(methodData)
         const { error } = result
 
@@ -255,6 +261,7 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Type</TableHead>
+                <TableHead>Country</TableHead>
                 <TableHead>Details</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Order</TableHead>
@@ -264,7 +271,7 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
             <TableBody>
               {paymentMethods.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground">
                     No payment methods found. Create one to get started.
                   </TableCell>
                 </TableRow>
@@ -276,6 +283,13 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
                       <Badge variant={method.type === 'crypto' ? 'default' : 'secondary'}>
                         {method.type === 'crypto' ? 'Crypto' : 'Bank Transfer'}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {(method as any).country ? (
+                        <Badge variant="outline">{(method as any).country}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">All Countries</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="space-y-1 text-sm">
@@ -423,6 +437,30 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
                 </Select>
               </div>
             )}
+
+            {/* Country Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="country">Country (Optional)</Label>
+              <Select
+                value={methodForm.country || 'all'}
+                onValueChange={(value) => setMethodForm({ ...methodForm, country: value === 'all' ? '' : value as CountryOption })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select country (leave empty for all countries)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Countries</SelectItem>
+                  {AVAILABLE_COUNTRIES.map((country) => (
+                    <SelectItem key={country} value={country}>
+                      {country}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Select a country to restrict this payment method to that country only. Leave empty to make it available for all countries.
+              </p>
+            </div>
 
             {methodForm.type === 'bank_transfer' && (
               <div className="space-y-4 border-t pt-4">

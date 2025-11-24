@@ -85,27 +85,27 @@ export default function SignupPage() {
     try {
       const supabase = createClient()
       
-      // Map selected country code to country name
-      let countryName = 'Nigeria' // Default
-      if (selectedCountry) {
-        // Get country name from REST Countries API
-        try {
-          const countryResponse = await fetch(`https://restcountries.com/v3.1/alpha/${selectedCountry}?fields=name,cca2,cca3`)
-          const countryData = await countryResponse.json()
-          const countryCommonName = countryData?.name?.common || ''
-          
-          // Map to our supported countries
-          if (['Nigeria', 'Ghana', 'Kenya'].includes(countryCommonName)) {
-            countryName = countryCommonName
-          } else {
-            countryName = 'Other' // For any other country
+        // Map selected country code to country name
+        let countryName = 'Nigeria' // Default
+        if (selectedCountry) {
+          // Get country name from REST Countries API
+          try {
+            const countryResponse = await fetch(`https://restcountries.com/v3.1/alpha/${selectedCountry}?fields=name,cca2,cca3`)
+            const countryData = await countryResponse.json()
+            const countryCommonName = countryData?.name?.common || ''
+            
+            // Map to our supported countries
+            if (['Nigeria', 'Ghana', 'Kenya'].includes(countryCommonName)) {
+              countryName = countryCommonName
+            } else {
+              countryName = 'Other' // For any other country
+            }
+          } catch (error) {
+            console.error('Error fetching country name:', error)
+            // Default to Nigeria if API fails
+            countryName = 'Nigeria'
           }
-        } catch (error) {
-          console.error('Error fetching country name:', error)
-          // Default to Nigeria if API fails
-          countryName = 'Nigeria'
         }
-      }
 
       // Sign up user with metadata (database trigger will create user record)
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -125,17 +125,17 @@ export default function SignupPage() {
         // Try to create user profile manually as backup (trigger should handle this)
         // This ensures the user is created even if trigger hasn't run yet
         try {
-          const userData: UserInsert = {
+        const userData: UserInsert = {
             id: authData.user.id,
             email,
             full_name: fullName,
-            country: countryName,
-          }
-          const result: any = await supabase
-            .from('users')
-            // @ts-expect-error - Supabase type inference issue
-            .insert(userData)
-          const { error: profileError } = result
+          country: countryName,
+        }
+        const result: any = await supabase
+          .from('users')
+          // @ts-expect-error - Supabase type inference issue
+          .insert(userData)
+        const { error: profileError } = result
 
           // If error is due to duplicate (trigger already created it), that's fine
           if (profileError && !profileError.message?.includes('duplicate') && !profileError.code?.includes('23505')) {

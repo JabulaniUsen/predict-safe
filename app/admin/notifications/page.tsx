@@ -2,6 +2,9 @@ import { createClient } from '@/lib/supabase/server'
 import { AdminLayout } from '@/components/admin/admin-layout'
 import { NotificationsList } from '@/components/dashboard/notifications-list'
 import { redirect } from 'next/navigation'
+import { Database } from '@/types/database'
+
+type UserProfile = Pick<Database['public']['Tables']['users']['Row'], 'is_admin'>
 
 export default async function AdminNotificationsPage() {
   const supabase = await createClient()
@@ -16,7 +19,7 @@ export default async function AdminNotificationsPage() {
     .from('users')
     .select('is_admin')
     .eq('id', user.id)
-    .single()
+    .single() as { data: UserProfile | null }
 
   if (!userProfile?.is_admin) {
     redirect('/dashboard')

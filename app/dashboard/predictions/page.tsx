@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { DashboardLayout } from '@/components/dashboard/dashboard-layout'
 import { PredictionsList } from '@/components/dashboard/predictions-list'
@@ -46,7 +47,9 @@ export default async function PredictionsPage() {
           </p>
         </div>
 
-        <PredictionsList allPlans={allPlans || []} subscriptions={subscriptions || []} />
+        <Suspense fallback={<div>Loading predictions...</div>}>
+          <PredictionsList allPlans={allPlans || []} subscriptions={subscriptions || []} />
+        </Suspense>
       </div>
     </DashboardLayout>
   )

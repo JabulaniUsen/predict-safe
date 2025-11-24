@@ -433,6 +433,8 @@ export interface Database {
           details: Json
           is_active: boolean
           display_order: number
+          logo_url: string | null
+          country: string | null
           created_at: string
           updated_at: string
         }
@@ -444,6 +446,8 @@ export interface Database {
           details: Json
           is_active?: boolean
           display_order?: number
+          logo_url?: string | null
+          country?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -455,6 +459,8 @@ export interface Database {
           details?: Json
           is_active?: boolean
           display_order?: number
+          logo_url?: string | null
+          country?: string | null
           created_at?: string
           updated_at?: string
         }

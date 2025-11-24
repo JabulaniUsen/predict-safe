@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react'
 import { formatDate } from '@/lib/utils/date'
 import { Badge } from '@/components/ui/badge'
+import { ActivationFeeModal } from '@/components/dashboard/activation-fee-modal'
 
 interface DashboardContentProps {
   user: any
@@ -36,6 +38,8 @@ export function DashboardContent({
   subscriptions = [],
 }: DashboardContentProps) {
   const router = useRouter()
+  const [activationModalOpen, setActivationModalOpen] = useState(false)
+  const [selectedSubscription, setSelectedSubscription] = useState<any>(null)
 
   return (
     <div className="space-y-6">
@@ -178,9 +182,9 @@ export function DashboardContent({
                           </div>
                         )}
                         
-                        {isPendingActivation && (
+                        {isPendingActivation && plan?.slug === 'correct-score' && (
                           <div className="rounded-lg bg-orange-50 p-2 lg:p-3 text-xs lg:text-sm text-orange-800 border border-orange-200">
-                            <p className="font-medium mb-1">Activation Fee Required</p>
+                            <p className="font-medium mb-1">Locked, pay activation fee to unlock</p>
                             <p>Your subscription is active but requires an activation fee to unlock predictions.</p>
                           </div>
                         )}
@@ -202,11 +206,14 @@ export function DashboardContent({
                               View Predictions
                             </Button>
                           )}
-                          {isPendingActivation && (
+                          {isPendingActivation && plan?.slug === 'correct-score' && (
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => router.push(`/subscribe?plan=${plan?.slug}&step=activation`)}
+                              onClick={() => {
+                                setSelectedSubscription(subscription)
+                                setActivationModalOpen(true)
+                              }}
                             >
                               Pay Activation Fee
                             </Button>
@@ -322,6 +329,18 @@ export function DashboardContent({
           </Card>
         </div>
       </div>
+
+      {/* Activation Fee Modal */}
+      {selectedSubscription && (
+        <ActivationFeeModal
+          open={activationModalOpen}
+          onOpenChange={setActivationModalOpen}
+          planId={selectedSubscription.plan_id}
+          planName={selectedSubscription.plan?.name || 'Unknown Plan'}
+          userCountry={userProfile?.country || 'Nigeria'}
+          subscriptionId={selectedSubscription.id}
+        />
+      )}
     </div>
   )
 }
