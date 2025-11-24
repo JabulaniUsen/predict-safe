@@ -89,6 +89,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const [userProfile, setUserProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
     const loadUser = async () => {
@@ -103,12 +104,36 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           .eq('id', authUser.id)
           .single()
         setUserProfile(profile)
+
+        // Fetch unread notifications count
+        const { count } = await supabase
+          .from('notifications')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', authUser.id)
+          .eq('read', false)
+        setUnreadCount(count || 0)
       }
 
       setLoading(false)
     }
 
     loadUser()
+    
+    // Refresh notification count every 30 seconds
+    const interval = setInterval(async () => {
+      const supabase = createClient()
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (authUser) {
+        const { count } = await supabase
+          .from('notifications')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', authUser.id)
+          .eq('read', false)
+        setUnreadCount(count || 0)
+      }
+    }, 30000)
+
+    return () => clearInterval(interval)
   }, [])
 
   const handleLogout = async () => {
@@ -246,12 +271,16 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
             </button>
-            <button className="p-2 rounded-lg hover:bg-gray-100 relative">
+            <Link href="/admin/notifications" className="p-2 rounded-lg hover:bg-gray-100 relative">
               <svg className="h-5 w-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
-              <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
-            </button>
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 h-5 w-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </Link>
             {!loading && user && (
               <div className="flex items-center gap-2 pl-3 border-l border-gray-200">
                 <div className="w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-r from-red-600 to-red-700 rounded-full flex items-center justify-center text-white font-semibold text-sm">

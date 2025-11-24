@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getFixtures } from '@/lib/api-football'
 import { format } from 'date-fns'
+import { notifyPredictionDropped } from '@/lib/notifications'
 
 const API_KEY = process.env.API_FOOTBALL_KEY || '1cb32db603edc3ff2e0c13ba21224f6d55a88a1be0bc9536ac15f4c12011e9ac'
 
@@ -187,6 +188,35 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('Error inserting predictions:', error)
       return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    // Notify users subscribed to this plan type
+    if (data && data.length > 0) {
+      try {
+        // Map plan_type to plan slug to get plan ID
+        const planTypeToSlug: Record<string, string> = {
+          'profit_multiplier': 'profit-multiplier',
+          'daily_2_odds': 'daily-2-odds',
+          'standard': 'standard',
+          'free': 'free'
+        }
+
+        const planSlug = planTypeToSlug[planType]
+        if (planSlug) {
+          const { data: planData } = await supabase
+            .from('plans')
+            .select('id, name')
+            .eq('slug', planSlug)
+            .single()
+
+          if (planData) {
+            await notifyPredictionDropped(planData.id, planData.name)
+          }
+        }
+      } catch (notifyError) {
+        console.error('Error notifying users:', notifyError)
+        // Don't fail the request if notification fails
+      }
     }
 
     return NextResponse.json({ 

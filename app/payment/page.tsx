@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Plan, PlanPrice, Country } from '@/types'
 import { Database } from '@/types/database'
 import { toast } from 'sonner'
+import { notifySubscriptionEvent, notifyAdminNewSubscription } from '@/lib/notifications'
 
 type CountryOption = 'Nigeria' | 'Ghana' | 'Kenya' | 'Other'
 type UserProfile = Pick<Database['public']['Tables']['users']['Row'], 'country'>
@@ -170,6 +171,23 @@ function PaymentContent() {
             .eq('id', existingSub.id)
           const { error } = result
           if (error) throw error
+
+          // Notify subscription confirmed if active
+          if (!plan.requires_activation) {
+            const { data: userData } = await supabase
+              .from('users')
+              .select('email, full_name')
+              .eq('id', user!.id)
+              .single()
+            
+            await notifySubscriptionEvent(
+              user!.id,
+              plan.name,
+              'confirmed',
+              userData?.email,
+              userData?.full_name || undefined
+            )
+          }
         } else {
           // Create new subscription
           const insertData: UserSubscriptionInsert = {
@@ -187,6 +205,32 @@ function PaymentContent() {
             .insert(insertData)
           const { error } = insertResult
           if (error) throw error
+
+          // Get user data for notifications
+          const { data: userData } = await supabase
+            .from('users')
+            .select('email, full_name')
+            .eq('id', user!.id)
+            .single()
+
+          // Notify subscription confirmed if active
+          if (!plan.requires_activation) {
+            await notifySubscriptionEvent(
+              user!.id,
+              plan.name,
+              'confirmed',
+              userData?.email,
+              userData?.full_name || undefined
+            )
+          }
+
+          // Notify admin of new subscription
+          await notifyAdminNewSubscription(
+            user!.id,
+            plan.name,
+            userData?.email || user!.email!,
+            userData?.full_name || undefined
+          )
         }
       } else if (paymentType === 'activation') {
         // Update subscription to active
@@ -218,6 +262,21 @@ function PaymentContent() {
             .eq('id', subscription.id)
           const { error } = result
           if (error) throw error
+
+          // Notify subscription confirmed
+          const { data: userData } = await supabase
+            .from('users')
+            .select('email, full_name')
+            .eq('id', user!.id)
+            .single()
+
+          await notifySubscriptionEvent(
+            user!.id,
+            plan.name,
+            'confirmed',
+            userData?.email,
+            userData?.full_name || undefined
+          )
         }
       }
 
