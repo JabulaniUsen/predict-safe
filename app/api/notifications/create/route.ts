@@ -48,7 +48,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: result.error || 'Failed to create notification' }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true, notification: result.notification })
+    return NextResponse.json({ 
+      success: true, 
+      notification: 'notification' in result ? result.notification : null 
+    })
   } catch (error: any) {
     console.error('Error creating notification:', error)
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 })

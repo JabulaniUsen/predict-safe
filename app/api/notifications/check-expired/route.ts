@@ -13,11 +13,12 @@ export async function POST(request: NextRequest) {
 
     // Allow if admin or system token matches
     if (user) {
-      const { data: userProfile } = await supabase
+      const userProfileResult: any = await supabase
         .from('users')
         .select('is_admin')
         .eq('id', user.id)
         .single()
+      const userProfile = userProfileResult.data as { is_admin: boolean } | null
 
       if (!userProfile?.is_admin && (!systemToken || authHeader !== `Bearer ${systemToken}`)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -53,18 +54,20 @@ export async function POST(request: NextRequest) {
 
     let expired = 0
     for (const sub of expiredSubscriptions) {
-      const plan = (sub as any).plans
-      const user = (sub as any).users
+      const subData = sub as any
+      const plan = subData.plans
+      const user = subData.users
 
       // Update subscription status to expired
       await supabase
         .from('user_subscriptions')
+        // @ts-expect-error - Supabase type inference issue
         .update({ plan_status: 'expired' })
-        .eq('id', sub.id)
+        .eq('id', subData.id)
 
       // Notify user
       await notifySubscriptionEvent(
-        sub.user_id,
+        subData.user_id,
         plan.name,
         'expired',
         user?.email,

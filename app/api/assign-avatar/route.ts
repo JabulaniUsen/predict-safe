@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
     // Update user with avatar
     const { error } = await supabase
       .from('users')
+      // @ts-expect-error - Supabase type inference issue
       .update({ avatar_url: avatarUrl })
       .eq('id', user.id)
 

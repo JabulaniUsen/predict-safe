@@ -35,6 +35,7 @@ export function NotificationsList({ notifications: initialNotifications, unreadC
     try {
       const { error } = await supabase
         .from('notifications')
+        // @ts-expect-error - Supabase type inference issue
         .update({ read: true })
         .eq('id', id)
 
@@ -59,6 +60,7 @@ export function NotificationsList({ notifications: initialNotifications, unreadC
 
       const { error } = await supabase
         .from('notifications')
+        // @ts-expect-error - Supabase type inference issue
         .update({ read: true })
         .in('id', unreadIds)
 

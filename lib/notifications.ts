@@ -36,6 +36,7 @@ export async function createNotification({
   // Create notification in database
   const { data: notification, error } = await supabase
     .from('notifications')
+    // @ts-expect-error - Supabase type inference issue
     .insert({
       user_id: userId,
       type,
@@ -96,9 +97,10 @@ export async function notifyPredictionDropped(planId: string, planName: string) 
 
   let notified = 0
   for (const sub of subscriptions) {
-    const user = (sub as any).users
+    const subData = sub as any
+    const user = subData.users
     const result = await createNotification({
-      userId: sub.user_id,
+      userId: subData.user_id,
       type: 'prediction_dropped',
       title: 'New Predictions Available!',
       message: `Predictions for ${planName} have dropped!`,
@@ -161,12 +163,13 @@ export async function notifyAdminNewSubscription(
 ) {
   // Get admin user ID (first admin user)
   const supabase = await createClient()
-  const { data: admin } = await supabase
+  const adminResult: any = await supabase
     .from('users')
     .select('id')
     .eq('is_admin', true)
     .limit(1)
     .single()
+  const admin = adminResult.data as { id: string } | null
 
   if (!admin) {
     console.warn('No admin user found for notification')

@@ -203,11 +203,12 @@ export async function POST(request: NextRequest) {
 
         const planSlug = planTypeToSlug[planType]
         if (planSlug) {
-          const { data: planData } = await supabase
+          const planResult: any = await supabase
             .from('plans')
             .select('id, name')
             .eq('slug', planSlug)
             .single()
+          const planData = planResult.data as { id: string; name: string } | null
 
           if (planData) {
             await notifyPredictionDropped(planData.id, planData.name)

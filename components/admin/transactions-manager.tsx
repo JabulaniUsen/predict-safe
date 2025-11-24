@@ -312,6 +312,7 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
         // Create notification for user
         await supabase
           .from('notifications')
+          // @ts-expect-error - Supabase type inference issue
           .insert({
             user_id: selectedTransaction.user_id,
             type: 'payment_approved',
@@ -433,6 +434,7 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
           if (selectedTransaction.payment_type === 'subscription') {
             await supabase
               .from('user_subscriptions')
+              // @ts-expect-error - Supabase type inference issue
               .update({
                 plan_status: 'inactive',
                 subscription_fee_paid: false,
@@ -443,6 +445,7 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
             // If it's an activation fee, just mark activation_fee_paid as false
             await supabase
               .from('user_subscriptions')
+              // @ts-expect-error - Supabase type inference issue
               .update({
                 activation_fee_paid: false,
                 updated_at: new Date().toISOString(),
@@ -463,6 +466,7 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
       try {
         await supabase
           .from('notifications')
+          // @ts-expect-error - Supabase type inference issue
           .insert({
             user_id: selectedTransaction.user_id,
             type: 'payment_rejected',

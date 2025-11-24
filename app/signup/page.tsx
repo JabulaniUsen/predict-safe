@@ -130,9 +130,10 @@ export default function SignupPage() {
         
         // Function to update user with avatar
         const updateUserAvatar = async () => {
-          if (randomAvatarUrl) {
+          if (randomAvatarUrl && authData.user) {
             const { error: updateError } = await supabase
               .from('users')
+              // @ts-expect-error - Supabase type inference issue
               .update({ avatar_url: randomAvatarUrl })
               .eq('id', authData.user.id)
             
@@ -142,7 +143,7 @@ export default function SignupPage() {
               console.log('Successfully updated user avatar')
             }
           } else {
-            console.warn('No avatar URL to assign')
+            console.warn('No avatar URL to assign or user not found')
           }
         }
         
@@ -177,9 +178,10 @@ export default function SignupPage() {
             if (!randomAvatarUrl) {
               // If avatar fetch failed, try again
               const retryAvatarUrl = await getRandomAvatar()
-              if (retryAvatarUrl) {
+              if (retryAvatarUrl && authData.user) {
                 await supabase
                   .from('users')
+                  // @ts-expect-error - Supabase type inference issue
                   .update({ avatar_url: retryAvatarUrl })
                   .eq('id', authData.user.id)
               }
@@ -200,18 +202,22 @@ export default function SignupPage() {
         
         // Final fallback: wait a bit and try to update avatar one more time
         // This handles race conditions where trigger creates user after our insert attempt
-        setTimeout(async () => {
-          const { data: existingUser } = await supabase
-            .from('users')
-            .select('avatar_url')
-            .eq('id', authData.user.id)
-            .single()
-          
-          if (existingUser && !existingUser.avatar_url && randomAvatarUrl) {
-            console.log('Fallback: Updating avatar after delay...')
-            await updateUserAvatar()
-          }
-        }, 1000)
+        if (authData.user) {
+          const userId = authData.user.id
+          setTimeout(async () => {
+            const existingUserResult: any = await supabase
+              .from('users')
+              .select('avatar_url')
+              .eq('id', userId)
+              .single()
+            const existingUser = existingUserResult.data as { avatar_url: string | null } | null
+            
+            if (existingUser && !existingUser.avatar_url && randomAvatarUrl) {
+              console.log('Fallback: Updating avatar after delay...')
+              await updateUserAvatar()
+            }
+          }, 1000)
+        }
 
         toast.success('Account created successfully! Please check your email to verify your account.')
         router.push('/login')
