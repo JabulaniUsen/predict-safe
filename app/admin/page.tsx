@@ -6,6 +6,17 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { Database } from '@/types/database'
 import { SubscriptionCountdown } from '@/components/admin/subscription-countdown'
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Admin Dashboard',
+  robots: {
+    index: false,
+    follow: false,
+    noarchive: true,
+    nosnippet: true,
+  },
+}
 
 type UserProfile = Pick<Database['public']['Tables']['users']['Row'], 'is_admin'>
 

@@ -4,6 +4,13 @@ import { AdminLayout } from '@/components/admin/admin-layout'
 import { PredictionsManager } from '@/components/admin/predictions-manager'
 import { Plan, Prediction, CorrectScorePrediction } from '@/types'
 import { Database } from '@/types/database'
+import type { Metadata } from 'next'
+import { adminMetadata } from '@/lib/seo/metadata'
+
+export const metadata: Metadata = {
+  ...adminMetadata,
+  title: 'Manage Predictions',
+}
 
 type UserProfile = Pick<Database['public']['Tables']['users']['Row'], 'is_admin'>
 

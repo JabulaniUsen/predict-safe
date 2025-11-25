@@ -7,6 +7,60 @@ import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+import type { Metadata } from 'next'
+import { stripHtmlTags } from '@/lib/utils/html'
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}): Promise<Metadata> {
+  const { slug } = await params
+  const supabase = await createClient()
+
+  const { data: post } = await supabase
+    .from('blog_posts')
+    .select('*')
+    .eq('slug', slug)
+    .eq('published', true)
+    .single()
+
+  if (!post) {
+    return {
+      title: 'Post Not Found',
+    }
+  }
+
+  const blogPost = post as BlogPost
+  const description = blogPost.excerpt 
+    ? stripHtmlTags(blogPost.excerpt) 
+    : stripHtmlTags(blogPost.content).substring(0, 160)
+
+  return {
+    title: `${blogPost.title} | PredictSafe Blog`,
+    description: description,
+    keywords: blogPost.meta_keywords 
+      ? blogPost.meta_keywords.split(',').map(k => k.trim())
+      : ['football betting', 'betting tips', 'soccer predictions'],
+    openGraph: {
+      title: blogPost.title,
+      description: description,
+      type: 'article',
+      publishedTime: blogPost.published_at || undefined,
+      images: blogPost.featured_image ? [blogPost.featured_image] : [],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: blogPost.title,
+      description: description,
+      images: blogPost.featured_image ? [blogPost.featured_image] : [],
+    },
+    robots: {
+      index: true,
+      follow: true,
+    },
+  }
+}
 
 export default async function BlogPostPage({
   params,

@@ -5,6 +5,17 @@ import { DashboardContent } from '@/components/dashboard/dashboard-content'
 import { Database } from '@/types/database'
 import { UserSubscriptionWithPlan } from '@/types'
 import { notifySubscriptionEvent } from '@/lib/notifications'
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Dashboard',
+  robots: {
+    index: false,
+    follow: false,
+    noarchive: true,
+    nosnippet: true,
+  },
+}
 
 type UserProfile = Database['public']['Tables']['users']['Row'] & {
   country: string | null

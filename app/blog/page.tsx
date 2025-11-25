@@ -7,6 +7,33 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { getPlainTextExcerpt, stripHtmlTags } from '@/lib/utils/html'
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Football Betting Tips & Predictions Blog | PredictSafe',
+  description: 'Read expert football betting tips, predictions analysis, and betting strategies. Stay updated with the latest insights from PredictSafe\'s team of betting experts.',
+  keywords: [
+    'football betting blog',
+    'betting tips blog',
+    'soccer predictions blog',
+    'football analysis',
+    'betting strategies',
+    'football betting advice',
+    'sports betting insights',
+    'football tips and tricks',
+    'betting guides',
+    'football prediction analysis'
+  ],
+  openGraph: {
+    title: 'Football Betting Tips & Predictions Blog | PredictSafe',
+    description: 'Read expert football betting tips, predictions analysis, and betting strategies.',
+    type: 'website',
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+}
 
 export default async function BlogPage() {
   const supabase = await createClient()

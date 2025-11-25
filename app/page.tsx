@@ -10,12 +10,44 @@ import { LeagueTableSection } from '@/components/home/league-table-section'
 import { AboutSection } from '@/components/home/about-section'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
+import type { Metadata } from 'next'
+import { PredictionSchema } from '@/components/seo/prediction-schema'
+
+export const metadata: Metadata = {
+  title: "Free Football Predictions Today | Accurate Betting Tips & Expert Analysis",
+  description: "Get free daily football predictions, betting tips, and expert analysis. Access VIP packages for premium predictions, correct score tips, and live scores. Trusted by thousands of bettors worldwide.",
+  keywords: [
+    "free football predictions",
+    "football betting tips",
+    "soccer predictions today",
+    "daily football tips",
+    "accurate betting predictions",
+    "VIP football predictions",
+    "correct score predictions",
+    "football betting advice",
+    "sports betting tips",
+    "football analysis",
+    "betting predictions",
+    "soccer betting tips"
+  ],
+  openGraph: {
+    title: "Free Football Predictions Today | Accurate Betting Tips",
+    description: "Get free daily football predictions, betting tips, and expert analysis. Access VIP packages for premium predictions.",
+    type: "website",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+}
 
 export default function HomePage() {
   return (
-    <div className="flex min-h-screen flex-col">
-      <Navbar />
-      <main>
+    <>
+      <PredictionSchema />
+      <div className="flex min-h-screen flex-col">
+        <Navbar />
+        <main>
         <HeroSection />
         <FreePredictionsSection />
         <VIPWinningsSection />
@@ -53,5 +85,6 @@ export default function HomePage() {
       </main>
       <Footer />
     </div>
+    </>
   )
 }

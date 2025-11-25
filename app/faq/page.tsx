@@ -1,6 +1,27 @@
 import { Navbar } from '@/components/layout/navbar'
 import { Footer } from '@/components/layout/footer'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Frequently Asked Questions | PredictSafe',
+  description: 'Get answers to common questions about PredictSafe, our VIP packages, predictions, subscriptions, and betting tips. Learn how to get started with our premium football prediction service.',
+  keywords: [
+    'football predictions FAQ',
+    'betting tips questions',
+    'predictions help',
+    'betting tips FAQ',
+    'football betting questions',
+    'predictions support',
+    'VIP packages FAQ',
+    'subscription questions',
+    'football betting help',
+  ],
+  robots: {
+    index: true,
+    follow: true,
+  },
+}
 
 export default function FAQPage() {
   return (

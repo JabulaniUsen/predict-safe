@@ -1,0 +1,40 @@
+# robots.txt for PredictSafe
+
+# Allow all search engines to crawl the site
+User-agent: *
+Allow: /
+
+# Disallow admin and private pages
+Disallow: /admin/
+Disallow: /dashboard/
+Disallow: /api/
+Disallow: /checkout/
+Disallow: /payment/
+Disallow: /subscribe/
+Disallow: /login
+Disallow: /signup
+
+# Allow public pages
+Allow: /
+Allow: /blog
+Allow: /subscriptions
+Allow: /livescores
+Allow: /faq
+Allow: /about
+Allow: /contact
+Allow: /terms
+Allow: /privacy
+Allow: /disclaimer
+Allow: /refund
+Allow: /cookies
+Allow: /advertise
+
+# Allow match detail pages
+Allow: /match/
+
+# Sitemap location (update with your actual domain)
+Sitemap: https://predictsafe.com/sitemap.xml
+
+# Crawl delay (optional - adjust based on server capacity)
+Crawl-delay: 1
+

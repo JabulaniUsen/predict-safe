@@ -3,6 +3,13 @@ import { createClient } from '@/lib/supabase/server'
 import { AdminLayout } from '@/components/admin/admin-layout'
 import { UsersManager } from '@/components/admin/users-manager'
 import { Database } from '@/types/database'
+import type { Metadata } from 'next'
+import { adminMetadata } from '@/lib/seo/metadata'
+
+export const metadata: Metadata = {
+  ...adminMetadata,
+  title: 'Manage Users',
+}
 
 type UserProfile = Pick<Database['public']['Tables']['users']['Row'], 'is_admin'>
 
