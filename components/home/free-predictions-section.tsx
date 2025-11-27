@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
+import { Calendar } from 'lucide-react'
 
 const FILTERS = [
   { id: 'free', label: 'Safe free picks' },
@@ -43,14 +44,15 @@ interface FreePrediction {
 export function FreePredictionsSection() {
   const [predictions, setPredictions] = useState<FreePrediction[]>([])
   const [selectedFilter, setSelectedFilter] = useState('free')
-  const [dateType, setDateType] = useState<'previous' | 'today' | 'tomorrow'>('today')
+  const [dateType, setDateType] = useState<'previous' | 'today' | 'tomorrow' | 'custom'>('today')
+  const [customDate, setCustomDate] = useState<string>('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchPredictions = async () => {
       setLoading(true)
       try {
-        const { from, to } = getDateRange(dateType)
+        const { from, to } = getDateRange(dateType, customDate)
         
         // Fetch fixtures from API Football
         const fixtures = await getFixtures(from, undefined, to)
@@ -314,7 +316,7 @@ export function FreePredictionsSection() {
     }
 
     fetchPredictions()
-  }, [selectedFilter, dateType])
+  }, [selectedFilter, dateType, customDate])
 
   const getFilterLabel = () => {
     const filter = FILTERS.find((f) => f.id === selectedFilter)
@@ -388,18 +390,34 @@ export function FreePredictionsSection() {
           
           {/* Mobile Navigation */}
           <div className="flex items-center justify-center gap-1 bg-gray-100 p-1 rounded-lg mb-4">
+            <label className={`relative cursor-pointer px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all border flex items-center gap-1.5 ${
+              dateType === 'custom'
+                ? 'bg-[#1e40af] text-white border-[#1e40af] shadow-sm'
+                : 'text-gray-600 border-gray-300 hover:border-[#1e40af] hover:bg-white'
+            }`}>
+              <Calendar className="h-3.5 w-3.5" />
+              <input
+                type="date"
+                value={dateType === 'custom' ? customDate : ''}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    setCustomDate(e.target.value)
+                    setDateType('custom')
+                  }
+                }}
+                className="absolute inset-0 opacity-0 cursor-pointer"
+              />
+              <span className="whitespace-nowrap">
+                {dateType === 'custom' && customDate 
+                  ? new Date(customDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                  : 'Select Date'}
+              </span>
+            </label>
             <button
-              onClick={() => handleDateChange('previous')}
-              className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
-                dateType === 'previous'
-                  ? 'bg-[#1e40af] text-white shadow-sm'
-                  : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
-              }`}
-            >
-              Previous
-            </button>
-            <button
-              onClick={() => setDateType('today')}
+              onClick={() => {
+                setDateType('today')
+                setCustomDate('')
+              }}
               className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
                 dateType === 'today'
                   ? 'bg-[#1e40af] text-white shadow-sm'
@@ -409,7 +427,10 @@ export function FreePredictionsSection() {
               Today
             </button>
             <button
-              onClick={() => handleDateChange('next')}
+              onClick={() => {
+                setDateType('tomorrow')
+                setCustomDate('')
+              }}
               className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
                 dateType === 'tomorrow'
                   ? 'bg-[#1e40af] text-white shadow-sm'
@@ -451,18 +472,34 @@ export function FreePredictionsSection() {
           <p className="text-sm lg:text-base text-gray-600">Get expert predictions for today's matches</p>
           </div>
           <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+            <label className={`relative cursor-pointer px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all border flex items-center gap-1.5 ${
+              dateType === 'custom'
+                ? 'bg-[#1e40af] text-white border-[#1e40af] shadow-sm'
+                : 'text-gray-600 border-gray-300 hover:border-[#1e40af] hover:bg-white'
+            }`}>
+              <Calendar className="h-3.5 w-3.5" />
+              <input
+                type="date"
+                value={dateType === 'custom' ? customDate : ''}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    setCustomDate(e.target.value)
+                    setDateType('custom')
+                  }
+                }}
+                className="absolute inset-0 opacity-0 cursor-pointer"
+              />
+              <span className="whitespace-nowrap">
+                {dateType === 'custom' && customDate 
+                  ? new Date(customDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                  : 'Select Date'}
+              </span>
+            </label>
             <button
-              onClick={() => setDateType('previous')}
-              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
-                dateType === 'previous'
-                  ? 'bg-[#1e40af] text-white shadow-sm'
-                  : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
-              }`}
-            >
-              Previous
-            </button>
-            <button
-              onClick={() => setDateType('today')}
+              onClick={() => {
+                setDateType('today')
+                setCustomDate('')
+              }}
               className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
                 dateType === 'today'
                   ? 'bg-[#1e40af] text-white shadow-sm'
@@ -472,7 +509,10 @@ export function FreePredictionsSection() {
               Today
             </button>
             <button
-              onClick={() => setDateType('tomorrow')}
+              onClick={() => {
+                setDateType('tomorrow')
+                setCustomDate('')
+              }}
               className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
                 dateType === 'tomorrow'
                   ? 'bg-[#1e40af] text-white shadow-sm'

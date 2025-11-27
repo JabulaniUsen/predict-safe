@@ -1,6 +1,6 @@
 import { format, addDays, subDays, startOfDay, endOfDay, isToday, isTomorrow, isYesterday } from 'date-fns'
 
-export function getDateRange(type: 'previous' | 'today' | 'tomorrow'): { from: string; to: string } {
+export function getDateRange(type: 'previous' | 'today' | 'tomorrow' | 'custom', customDate?: string): { from: string; to: string } {
   const now = new Date()
   let date: Date
 
@@ -13,6 +13,13 @@ export function getDateRange(type: 'previous' | 'today' | 'tomorrow'): { from: s
       break
     case 'tomorrow':
       date = addDays(now, 1)
+      break
+    case 'custom':
+      if (customDate) {
+        date = new Date(customDate)
+      } else {
+        date = now
+      }
       break
     default:
       date = now
