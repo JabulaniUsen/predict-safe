@@ -104,7 +104,7 @@ export function BlogSection() {
                   asChild 
                   className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] hover:from-[#1e3a8a] hover:to-[#1e40af] text-white font-bold text-xs lg:text-sm w-full"
                 >
-                  <Link href={`/blog/${post.slug}`}>Read More</Link>
+                  <Link href={`/blog/${post.id}`}>Read More</Link>
                 </Button>
               </CardContent>
             </Card>

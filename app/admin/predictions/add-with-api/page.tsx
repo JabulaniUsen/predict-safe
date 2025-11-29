@@ -103,7 +103,8 @@ function AddPredictionWithAPIContent() {
       'profit-multiplier': 'profit_multiplier',
       'daily-2-odds': 'daily_2_odds',
       'standard': 'standard',
-      'free': 'free'
+      'free': 'free',
+      'correct-score': 'correct_score'
     }
     return mapping[slug] || 'profit_multiplier'
   }

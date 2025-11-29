@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { Navbar } from '@/components/layout/navbar'
 import { Footer } from '@/components/layout/footer'
 import { HeroSection } from '@/components/home/hero-section'
@@ -49,7 +50,9 @@ export default function HomePage() {
       <Navbar />
       <main>
         <HeroSection />
-        <FreePredictionsSection />
+        <Suspense fallback={<div className="py-8"><div className="container mx-auto px-4">Loading predictions...</div></div>}>
+          <FreePredictionsSection />
+        </Suspense>
         <VIPWinningsSection />
         <PremiumPredictionsSection />
         <WhatWeOfferSection />

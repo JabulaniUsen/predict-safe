@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS user_subscriptions (
 -- Predictions table
 CREATE TABLE IF NOT EXISTS predictions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  plan_type VARCHAR(20) NOT NULL CHECK (plan_type IN ('profit_multiplier', 'daily_2_odds', 'standard', 'free')),
+  plan_type VARCHAR(20) NOT NULL CHECK (plan_type IN ('profit_multiplier', 'daily_2_odds', 'standard', 'free', 'correct_score')),
   home_team VARCHAR(255) NOT NULL,
   away_team VARCHAR(255) NOT NULL,
   league VARCHAR(255) NOT NULL,

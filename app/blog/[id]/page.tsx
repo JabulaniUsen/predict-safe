@@ -1,4 +1,4 @@
-import { notFound, redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { PageLayout } from '@/components/layout/page-layout'
 import { BlogPost } from '@/types'
@@ -13,19 +13,18 @@ import { stripHtmlTags } from '@/lib/utils/html'
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ slug: string }>
+  params: Promise<{ id: string }>
 }): Promise<Metadata> {
-  const { slug } = await params
+  const { id } = await params
   const supabase = await createClient()
 
-  const { data: post } = await supabase
+  const { data: post, error } = await supabase
     .from('blog_posts')
     .select('*')
-    .eq('slug', slug)
-    .eq('published', true)
+    .eq('id', id)
     .single()
 
-  if (!post) {
+  if (error || !post) {
     return {
       title: 'Post Not Found',
     }
@@ -65,22 +64,50 @@ export async function generateMetadata({
 export default async function BlogPostPage({
   params,
 }: {
-  params: Promise<{ slug: string }>
+  params: Promise<{ id: string }>
 }) {
-  const { slug } = await params
+  const { id } = await params
   const supabase = await createClient()
 
-  // Get the blog post by slug
+  // Get the blog post by ID (without publishing restrictions for now to debug)
   const { data: post, error } = await supabase
     .from('blog_posts')
     .select('*')
-    .eq('slug', slug)
-    .eq('published', true)
-    .not('published_at', 'is', null)
-    .lte('published_at', new Date().toISOString())
+    .eq('id', id)
     .single()
 
   if (error || !post) {
+    console.error(`Blog post not found with id: ${id}`, error)
+    notFound()
+  }
+
+  // Check if post is published and available
+  const isPublished = post.published === true
+  const hasPublishedAt = post.published_at !== null
+  const isPublishedInPast = post.published_at 
+    ? new Date(post.published_at) <= new Date()
+    : false
+
+  // Log the post status for debugging
+  console.log('Blog post status:', {
+    id,
+    title: post.title,
+    published: isPublished,
+    hasPublishedAt,
+    isPublishedInPast,
+    published_at: post.published_at,
+    current_time: new Date().toISOString()
+  })
+
+  // Only show if published and published_at is set and in the past
+  if (!isPublished || !hasPublishedAt || !isPublishedInPast) {
+    console.error(`Blog post exists but is not available:`, {
+      id,
+      published: isPublished,
+      hasPublishedAt,
+      isPublishedInPast,
+      published_at: post.published_at
+    })
     notFound()
   }
 

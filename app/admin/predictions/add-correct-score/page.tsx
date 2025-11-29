@@ -15,7 +15,6 @@ import { AdminLayout } from '@/components/admin/admin-layout'
 import { Database } from '@/types/database'
 
 type UserProfile = Pick<Database['public']['Tables']['users']['Row'], 'is_admin'>
-type CorrectScorePrediction = Database['public']['Tables']['correct_score_predictions']['Row']
 
 function AddCorrectScoreContent() {
   const router = useRouter()
@@ -74,7 +73,7 @@ function AddCorrectScoreContent() {
       try {
         const supabase = createClient()
         const { data, error } = await supabase
-          .from('correct_score_predictions')
+          .from('predictions')
           .select('*')
           .eq('id', editId)
           .single()
@@ -86,11 +85,14 @@ function AddCorrectScoreContent() {
           return
         }
 
-        const prediction = data as CorrectScorePrediction
+        const prediction = data as any
+
+        // Extract score from prediction_type (just the score, e.g., "2-1")
+        const score = prediction.prediction_type || ''
 
         // Set form data
         setFormData({
-          score_prediction: prediction.score_prediction || '',
+          score_prediction: score,
           odds: prediction.odds?.toString() || '',
           kickoff_time: prediction.kickoff_time ? new Date(prediction.kickoff_time).toISOString().slice(0, 16) : '',
           admin_notes: prediction.admin_notes || '',
@@ -116,13 +118,19 @@ function AddCorrectScoreContent() {
     setLoading(true)
 
     const formDataObj = new FormData(e.currentTarget)
-    const baseData = {
+    const scorePrediction = formDataObj.get('score_prediction') as string
+    
+    // Prepare data for predictions table
+    const predictionData = {
+      plan_type: 'correct_score', // Use correct_score as plan_type
       home_team: (homeTeam || formDataObj.get('home_team')) as string,
       away_team: (awayTeam || formDataObj.get('away_team')) as string,
       league: (leagueName || formDataObj.get('league')) as string,
-      score_prediction: formDataObj.get('score_prediction') as string,
-      odds: formDataObj.get('odds') ? parseFloat(formDataObj.get('odds') as string) : null,
+      prediction_type: scorePrediction, // Just the score (e.g., "2-1")
+      odds: formDataObj.get('odds') ? parseFloat(formDataObj.get('odds') as string) : 1.0,
+      confidence: 80, // Default confidence for correct score predictions
       kickoff_time: formDataObj.get('kickoff_time') as string,
+      status: 'not_started' as const,
       admin_notes: (formDataObj.get('admin_notes') as string) || null,
     }
 
@@ -130,21 +138,19 @@ function AddCorrectScoreContent() {
       const supabase = createClient()
       
       if (isEditMode) {
-        const updateData: Database['public']['Tables']['correct_score_predictions']['Update'] = baseData
         const { error } = await supabase
-          .from('correct_score_predictions')
+          .from('predictions')
           // @ts-expect-error - Supabase type inference issue
-          .update(updateData)
+          .update(predictionData)
           .eq('id', editId)
 
         if (error) throw error
         toast.success('Correct score prediction updated successfully!')
       } else {
-        const insertData: Database['public']['Tables']['correct_score_predictions']['Insert'] = baseData
         const { error } = await supabase
-          .from('correct_score_predictions')
+          .from('predictions')
           // @ts-expect-error - Supabase type inference issue
-          .insert(insertData)
+          .insert(predictionData)
         if (error) throw error
         toast.success('Correct score prediction added successfully!')
       }

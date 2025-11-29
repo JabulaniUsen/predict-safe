@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Prediction, CorrectScorePrediction, Plan } from '@/types'
+import { Prediction, Plan } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { Edit, Trash2 } from 'lucide-react'
@@ -28,7 +28,6 @@ import {
 interface PredictionsManagerProps {
   plans: Plan[]
   predictions: Prediction[]
-  correctScorePredictions: CorrectScorePrediction[]
 }
 
 interface TeamLogoCache {
@@ -46,11 +45,14 @@ function getPlanTypeFromSlug(slug: string): string | null {
   return mapping[slug] || null
 }
 
-export function PredictionsManager({ plans, predictions, correctScorePredictions }: PredictionsManagerProps) {
+export function PredictionsManager({ plans, predictions }: PredictionsManagerProps) {
   const router = useRouter()
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [predictionToDelete, setPredictionToDelete] = useState<{ id: string; type: 'regular' | 'correct-score' } | null>(null)
+  const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false)
+  const [deletingAll, setDeletingAll] = useState(false)
+  const [planToDeleteAll, setPlanToDeleteAll] = useState<{ slug: string; name: string } | null>(null)
   const [teamLogos, setTeamLogos] = useState<TeamLogoCache>({})
 
   // Filter out correct-score plan from regular plans
@@ -63,23 +65,36 @@ export function PredictionsManager({ plans, predictions, correctScorePredictions
   // Filter predictions by plan type for each plan
   const getPredictionsForPlan = (planSlug: string) => {
     if (planSlug === 'correct-score') {
-      return correctScorePredictions
+      // Get correct score predictions from predictions table (identified by plan_type === 'correct_score')
+      return predictions.filter(pred => 
+        String(pred.plan_type) === 'correct_score'
+      )
     }
     
     const planType = getPlanTypeFromSlug(planSlug)
     if (!planType) return []
     
-    return predictions.filter(pred => pred.plan_type === planType)
+    // For regular plans, exclude correct score predictions
+    return predictions.filter(pred => 
+      pred.plan_type === planType && String(pred.plan_type) !== 'correct_score'
+    )
   }
 
   // Fetch team logos for predictions using fixtures API (same as home page)
-  const fetchTeamLogos = async (predictionsList: (Prediction | CorrectScorePrediction)[]) => {
+  const fetchTeamLogos = async (predictionsList: Prediction[]) => {
     if (predictionsList.length === 0) return
 
+    // Filter out predictions where we already have logos for both teams
+    const predictionsNeedingLogos = predictionsList.filter(pred => 
+      !teamLogos[pred.home_team] || !teamLogos[pred.away_team]
+    )
+
+    if (predictionsNeedingLogos.length === 0) return
+
     // Group predictions by date to minimize API calls
-    const predictionsByDate = new Map<string, (Prediction | CorrectScorePrediction)[]>()
+    const predictionsByDate = new Map<string, Prediction[]>()
     
-    predictionsList.forEach((pred) => {
+    predictionsNeedingLogos.forEach((pred) => {
       const kickoffDate = new Date(pred.kickoff_time).toISOString().split('T')[0]
       if (!predictionsByDate.has(kickoffDate)) {
         predictionsByDate.set(kickoffDate, [])
@@ -95,33 +110,53 @@ export function PredictionsManager({ plans, predictions, correctScorePredictions
         try {
           // Fetch fixtures for this date
           const response = await fetch(`/api/football/fixtures?from=${date}&to=${date}`)
-          if (!response.ok) continue
+          if (!response.ok) {
+            console.warn(`Failed to fetch fixtures for date ${date}: ${response.status} ${response.statusText}`)
+            continue
+          }
           
           const fixturesData = await response.json()
           // Handle both array and object responses
           const fixtures = Array.isArray(fixturesData) ? fixturesData : (Array.isArray(fixturesData?.data) ? fixturesData.data : [])
-          
+
+          if (!Array.isArray(fixtures) || fixtures.length === 0) {
+            console.warn(`No fixtures found for date ${date}`)
+            continue
+          }
+
           // Match predictions to fixtures by team names
           datePredictions.forEach((pred) => {
-            // Find matching fixture by team names
+            // Skip if we already have logos for both teams
+            if (teamLogos[pred.home_team] && teamLogos[pred.away_team]) return
+
+            // Find matching fixture by team names (improved matching)
             const fixture = fixtures.find((f: any) => {
-              const homeMatch = f.match_hometeam_name?.toLowerCase() === pred.home_team.toLowerCase() ||
-                               f.match_hometeam_name?.toLowerCase().includes(pred.home_team.toLowerCase()) ||
-                               pred.home_team.toLowerCase().includes(f.match_hometeam_name?.toLowerCase() || '')
+              const homeName = (f.match_hometeam_name || '').toLowerCase().trim()
+              const awayName = (f.match_awayteam_name || '').toLowerCase().trim()
+              const predHome = pred.home_team.toLowerCase().trim()
+              const predAway = pred.away_team.toLowerCase().trim()
               
-              const awayMatch = f.match_awayteam_name?.toLowerCase() === pred.away_team.toLowerCase() ||
-                               f.match_awayteam_name?.toLowerCase().includes(pred.away_team.toLowerCase()) ||
-                               pred.away_team.toLowerCase().includes(f.match_awayteam_name?.toLowerCase() || '')
+              // Exact match
+              if (homeName === predHome && awayName === predAway) return true
+              
+              // Partial match (one contains the other or vice versa)
+              const homeMatch = homeName === predHome || 
+                               homeName.includes(predHome) || 
+                               predHome.includes(homeName)
+              
+              const awayMatch = awayName === predAway || 
+                              awayName.includes(predAway) || 
+                              predAway.includes(awayName)
               
               return homeMatch && awayMatch
             })
             
             // Use team badges from fixture
             if (fixture) {
-              if (fixture.team_home_badge) {
+              if (fixture.team_home_badge && !teamLogos[pred.home_team]) {
                 newLogos[pred.home_team] = fixture.team_home_badge
               }
-              if (fixture.team_away_badge) {
+              if (fixture.team_away_badge && !teamLogos[pred.away_team]) {
                 newLogos[pred.away_team] = fixture.team_away_badge
               }
             }
@@ -140,20 +175,28 @@ export function PredictionsManager({ plans, predictions, correctScorePredictions
     }
   }
 
-  // Fetch logos when predictions change
+  // Fetch logos when predictions change or when component mounts
   useEffect(() => {
     if (predictions.length > 0) {
+      // Fetch logos for all predictions to ensure we have them for all tabs
       fetchTeamLogos(predictions)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [predictions])
 
+  // Also fetch logos when switching tabs to ensure current tab's predictions have logos
+  const [activeTab, setActiveTab] = useState<string>(defaultTab)
+  
   useEffect(() => {
-    if (correctScorePredictions.length > 0) {
-      fetchTeamLogos(correctScorePredictions)
+    if (predictions.length > 0 && activeTab) {
+      const tabPredictions = getPredictionsForPlan(activeTab)
+      if (tabPredictions.length > 0) {
+        fetchTeamLogos(tabPredictions)
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [correctScorePredictions])
+  }, [activeTab])
+
 
   // Helper to get team logo
   const getTeamLogo = (teamName: string): string | null => {
@@ -171,10 +214,9 @@ export function PredictionsManager({ plans, predictions, correctScorePredictions
     setDeletingId(predictionToDelete.id)
     try {
       const supabase = createClient()
-      const table = predictionToDelete.type === 'regular' ? 'predictions' : 'correct_score_predictions'
-      
+      // All predictions are in the predictions table now
       const { error } = await supabase
-        .from(table)
+        .from('predictions')
         .delete()
         .eq('id', predictionToDelete.id)
 
@@ -191,8 +233,58 @@ export function PredictionsManager({ plans, predictions, correctScorePredictions
     }
   }
 
+  const handleDeleteAllClick = (planSlug: string, planName: string) => {
+    setPlanToDeleteAll({ slug: planSlug, name: planName })
+    setDeleteAllDialogOpen(true)
+  }
+
+  const handleDeleteAllConfirm = async () => {
+    if (!planToDeleteAll) return
+
+    setDeletingAll(true)
+    try {
+      const supabase = createClient()
+      
+      if (planToDeleteAll.slug === 'correct-score') {
+        // Delete all correct score predictions (identified by plan_type === 'correct_score')
+        const { error } = await supabase
+          .from('predictions')
+          .delete()
+          .eq('plan_type', 'correct_score')
+
+        if (error) throw error
+      } else {
+        // Delete all predictions for this plan type, excluding correct score predictions
+        const planType = getPlanTypeFromSlug(planToDeleteAll.slug)
+        if (planType) {
+          // Get predictions for this plan that are NOT correct score predictions
+          const planPreds = getPredictionsForPlan(planToDeleteAll.slug)
+          const idsToDelete = planPreds.map(p => p.id)
+
+          if (idsToDelete.length > 0) {
+            const { error } = await supabase
+              .from('predictions')
+              .delete()
+              .in('id', idsToDelete)
+
+            if (error) throw error
+          }
+        }
+      }
+
+      toast.success(`All ${planToDeleteAll.name} predictions deleted successfully`)
+      router.refresh()
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete all predictions')
+    } finally {
+      setDeletingAll(false)
+      setDeleteAllDialogOpen(false)
+      setPlanToDeleteAll(null)
+    }
+  }
+
   return (
-    <Tabs defaultValue={defaultTab} className="space-y-4">
+    <Tabs defaultValue={defaultTab} className="space-y-4" onValueChange={setActiveTab}>
       <div className="overflow-x-auto">
         <TabsList className="min-w-full">
           {regularPlans.map((plan) => (
@@ -242,6 +334,17 @@ export function PredictionsManager({ plans, predictions, correctScorePredictions
                         Add Manually
                       </Link>
                     </Button>
+                    {planPredictions.length > 0 && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="text-xs lg:text-sm"
+                        onClick={() => handleDeleteAllClick(plan.slug, plan.name)}
+                      >
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        Delete All
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -519,31 +622,44 @@ export function PredictionsManager({ plans, predictions, correctScorePredictions
       })}
 
       {/* Correct Score Tab */}
-      {correctScorePlan && (
-        <TabsContent value="correct-score" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div>
-                  <CardTitle className="text-base lg:text-lg">Correct Score Predictions</CardTitle>
-                  <CardDescription className="text-xs lg:text-sm">
-                    Add correct score predictions using API or manually
-                  </CardDescription>
+      {correctScorePlan && (() => {
+        const correctScorePreds = getPredictionsForPlan('correct-score') as Prediction[]
+        return (
+          <TabsContent value="correct-score" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-base lg:text-lg">Correct Score Predictions</CardTitle>
+                    <CardDescription className="text-xs lg:text-sm">
+                      Add correct score predictions using API or manually
+                    </CardDescription>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button asChild variant="outline" size="sm" className="text-xs lg:text-sm">
+                      <Link href={`/admin/predictions/add-with-api?plan=correct-score`}>
+                        Add with API
+                      </Link>
+                    </Button>
+                    <Button asChild size="sm" className="text-xs lg:text-sm">
+                      <Link href="/admin/predictions/add-correct-score">Add Manually</Link>
+                    </Button>
+                    {correctScorePreds.length > 0 && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="text-xs lg:text-sm"
+                        onClick={() => handleDeleteAllClick('correct-score', correctScorePlan.name)}
+                      >
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        Delete All
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button asChild variant="outline" size="sm" className="text-xs lg:text-sm">
-                    <Link href={`/admin/predictions/add-with-api?plan=correct-score`}>
-                      Add with API
-                    </Link>
-                  </Button>
-                  <Button asChild size="sm" className="text-xs lg:text-sm">
-                    <Link href="/admin/predictions/add-correct-score">Add Manually</Link>
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {correctScorePredictions.length === 0 ? (
+              </CardHeader>
+              <CardContent>
+                {correctScorePreds.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground text-sm">
                   No correct score predictions found
                 </div>
@@ -557,17 +673,22 @@ export function PredictionsManager({ plans, predictions, correctScorePredictions
                       <div className="col-span-4">Teams</div>
                       <div className="col-span-1 text-center">Score</div>
                       <div className="col-span-1 text-center hidden md:block">Odds</div>
+                        <div className="col-span-1 text-center hidden lg:block">Confidence</div>
                       <div className="col-span-1 text-center hidden sm:block">Status</div>
                       <div className="col-span-1 text-right">Actions</div>
                     </div>
 
                     {/* Predictions */}
-                    {correctScorePredictions.map((pred, index) => (
+                      {correctScorePreds.map((pred, index) => {
+                        // Score is stored directly in prediction_type (e.g., "2-1")
+                        const score = pred.prediction_type || '-'
+                        
+                        return (
                       <div
                         key={pred.id}
                         className={cn(
                           'px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 grid grid-cols-12 gap-2 lg:gap-4 items-center border-b border-gray-100 bg-white hover:bg-gradient-to-r hover:from-blue-50 hover:to-green-50 hover:shadow-md transition-all duration-300',
-                          index === correctScorePredictions.length - 1 && 'border-b-0',
+                              index === correctScorePreds.length - 1 && 'border-b-0',
                           index % 2 === 0 && 'bg-gray-50/50'
                         )}
                       >
@@ -641,7 +762,16 @@ export function PredictionsManager({ plans, predictions, correctScorePredictions
 
                         {/* Score */}
                         <div className="col-span-1 text-center">
-                              <Badge variant="secondary" className="text-xs">{pred.score_prediction}</Badge>
+                          <Badge variant="secondary" className="text-xs">{score}</Badge>
+                        </div>
+                        
+                        {/* Confidence */}
+                        <div className="col-span-1 text-center hidden lg:block">
+                          {pred.confidence ? (
+                            <CircularProgress value={pred.confidence} size={40} strokeWidth={4} />
+                          ) : (
+                            <span className="text-xs text-gray-400">N/A</span>
+                          )}
                         </div>
 
                         {/* Odds */}
@@ -682,12 +812,15 @@ export function PredictionsManager({ plans, predictions, correctScorePredictions
                           </Button>
                         </div>
                       </div>
-                    ))}
+                        )
+                      })}
                   </div>
                   
-                  {/* Mobile Card View */}
-                  <div className="md:hidden space-y-3">
-                    {correctScorePredictions.map((pred) => {
+                    {/* Mobile Card View */}
+                    <div className="md:hidden space-y-3">
+                      {correctScorePreds.map((pred) => {
+                        // Score is stored directly in prediction_type (e.g., "2-1")
+                        const score = pred.prediction_type || '-'
                       const homeLogo = getTeamLogo(pred.home_team)
                       const awayLogo = getTeamLogo(pred.away_team)
                       
@@ -758,12 +891,18 @@ export function PredictionsManager({ plans, predictions, correctScorePredictions
                           <div className="flex flex-wrap gap-2 pt-2 border-t">
                             <div className="flex items-center gap-1">
                               <span className="text-xs text-gray-600">Score:</span>
-                              <Badge variant="secondary" className="text-xs">{pred.score_prediction}</Badge>
+                              <Badge variant="secondary" className="text-xs">{score}</Badge>
                             </div>
                             <div className="flex items-center gap-1">
                               <span className="text-xs text-gray-600">Odds:</span>
-                              <span className="text-xs font-semibold">{pred.odds || 'N/A'}</span>
+                              <span className="text-xs font-semibold">{pred.odds ? pred.odds.toFixed(2) : 'N/A'}</span>
                             </div>
+                            {pred.confidence && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-xs text-gray-600">Confidence:</span>
+                                <CircularProgress value={pred.confidence} size={24} strokeWidth={3} />
+                              </div>
+                            )}
                           </div>
                           <div className="flex gap-2 pt-2 border-t">
                             <Button
@@ -798,7 +937,8 @@ export function PredictionsManager({ plans, predictions, correctScorePredictions
             </CardContent>
           </Card>
         </TabsContent>
-      )}
+        )
+      })()}
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -822,6 +962,34 @@ export function PredictionsManager({ plans, predictions, correctScorePredictions
               disabled={!!deletingId}
             >
               {deletingId ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete All Confirmation Dialog */}
+      <Dialog open={deleteAllDialogOpen} onOpenChange={setDeleteAllDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete All {planToDeleteAll?.name} Predictions</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete ALL predictions for {planToDeleteAll?.name}? This will permanently remove all {planToDeleteAll?.name} predictions. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteAllDialogOpen(false)}
+              disabled={deletingAll}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDeleteAllConfirm}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={deletingAll}
+            >
+              {deletingAll ? 'Deleting All...' : 'Delete All'}
             </Button>
           </DialogFooter>
         </DialogContent>

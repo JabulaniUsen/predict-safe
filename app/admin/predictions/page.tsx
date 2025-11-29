@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { AdminLayout } from '@/components/admin/admin-layout'
 import { PredictionsManager } from '@/components/admin/predictions-manager'
-import { Plan, Prediction, CorrectScorePrediction } from '@/types'
+import { Plan, Prediction } from '@/types'
 import { Database } from '@/types/database'
 import type { Metadata } from 'next'
 import { adminMetadata } from '@/lib/seo/metadata'
@@ -42,19 +42,12 @@ export default async function AdminPredictionsPage() {
     .eq('is_active', true)
     .order('created_at')
 
-  // Get all predictions
+  // Get all predictions (including correct score predictions)
   const { data: predictions } = await supabase
     .from('predictions')
     .select('*')
     .order('created_at', { ascending: false })
-    .limit(200)
-
-  // Get correct score predictions
-  const { data: correctScorePredictions } = await supabase
-    .from('correct_score_predictions')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(50)
+    .limit(250)
 
   return (
     <AdminLayout>
@@ -67,7 +60,6 @@ export default async function AdminPredictionsPage() {
         <PredictionsManager
           plans={plans as Plan[] || []}
           predictions={predictions as Prediction[] || []}
-          correctScorePredictions={correctScorePredictions as CorrectScorePrediction[] || []}
         />
       </div>
     </AdminLayout>
