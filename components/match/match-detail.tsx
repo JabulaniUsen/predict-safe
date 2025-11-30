@@ -49,15 +49,15 @@ export function MatchDetail({ matchId, predictionType, predictionData }: MatchDe
     const fetchMatchData = async () => {
       setLoading(true)
       try {
-        // Fetch fixture details - search across yesterday, today, and tomorrow
+        // Fetch fixture details - search across multiple date ranges
         let match: Fixture | null = null
         
-        // Try fetching for previous, today, and tomorrow
+        // Try fetching for previous (up to 7 days back), today, and tomorrow
         const dateTypes: Array<'previous' | 'today' | 'tomorrow'> = ['previous', 'today', 'tomorrow']
         
         for (const dateType of dateTypes) {
           try {
-            const { from, to } = getDateRange(dateType)
+            const { from, to } = getDateRange(dateType, undefined, dateType === 'previous' ? 7 : undefined)
             const fixtures = await getFixtures(from, undefined, to)
             
             if (Array.isArray(fixtures)) {
@@ -72,8 +72,38 @@ export function MatchDetail({ matchId, predictionType, predictionData }: MatchDe
             // Continue to next date range
           }
         }
+        
+        // If still not found, try searching the last 7 days individually
+        if (!match) {
+          for (let daysBack = 1; daysBack <= 7; daysBack++) {
+            try {
+              const { from, to } = getDateRange('previous', undefined, daysBack)
+              const fixtures = await getFixtures(from, undefined, to)
+              
+              if (Array.isArray(fixtures)) {
+                const foundMatch = fixtures.find((f: any) => String(f.match_id) === String(matchId))
+                if (foundMatch) {
+                  match = foundMatch as Fixture
+                  break
+                }
+              }
+            } catch (error) {
+              console.error(`Error fetching fixtures for ${daysBack} days back:`, error)
+            }
+          }
+        }
 
         if (match) {
+          // Debug: Log match data to see what scores are available
+          console.log('Match data:', {
+            match_id: match.match_id,
+            status: (match as any).match_status,
+            live: (match as any).match_live,
+            home_score: (match as any).match_hometeam_score,
+            away_score: (match as any).match_awayteam_score,
+            home_ft_score: (match as any).match_hometeam_ft_score,
+            away_ft_score: (match as any).match_awayteam_ft_score,
+          })
           setFixture(match as Fixture)
 
           // Fetch odds
@@ -336,7 +366,63 @@ export function MatchDetail({ matchId, predictionType, predictionData }: MatchDe
                 </div>
               </div>
 
-              <div className="mx-1 sm:mx-4 lg:mx-8 text-lg sm:text-2xl lg:text-3xl font-bold text-gray-400 flex-shrink-0">VS</div>
+              <div className="mx-1 sm:mx-4 lg:mx-8 flex flex-col items-center justify-center flex-shrink-0">
+                {(() => {
+                  const matchStatus = ((fixture as any)?.match_status || '').toString().trim()
+                  const isLive = (fixture as any)?.match_live === '1'
+                  const isFinished = matchStatus === 'Finished' || 
+                                   matchStatus === 'FT' || 
+                                   matchStatus === 'Match Finished' ||
+                                   matchStatus.toLowerCase().includes('finished')
+                  
+                  // For finished matches, prefer FT scores, fallback to regular scores
+                  let homeScore = ''
+                  let awayScore = ''
+                  
+                  if (isFinished) {
+                    // Check FT scores first (for finished matches)
+                    homeScore = ((fixture as any)?.match_hometeam_ft_score || 
+                                (fixture as any)?.match_hometeam_score || '').toString().trim()
+                    awayScore = ((fixture as any)?.match_awayteam_ft_score || 
+                                (fixture as any)?.match_awayteam_score || '').toString().trim()
+                  } else {
+                    // For live or upcoming matches, use regular scores
+                    homeScore = ((fixture as any)?.match_hometeam_score || '').toString().trim()
+                    awayScore = ((fixture as any)?.match_awayteam_score || '').toString().trim()
+                  }
+                  
+                  // Clean up scores - remove null/undefined strings
+                  homeScore = homeScore === 'null' || homeScore === 'undefined' ? '' : homeScore
+                  awayScore = awayScore === 'null' || awayScore === 'undefined' ? '' : awayScore
+                  
+                  // Check if we have valid scores (non-empty and numeric)
+                  const hasScores = homeScore !== '' && awayScore !== '' && 
+                                   !isNaN(Number(homeScore)) && !isNaN(Number(awayScore))
+                  
+                  if (hasScores && (isFinished || isLive)) {
+                    return (
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="text-xl sm:text-3xl lg:text-4xl font-bold text-gray-900">
+                          {homeScore} - {awayScore}
+                        </div>
+                        {isLive && (
+                          <Badge className="bg-red-500 text-white animate-pulse text-xs">
+                            LIVE
+                          </Badge>
+                        )}
+                        {isFinished && !isLive && (
+                          <Badge variant="secondary" className="bg-gray-500 text-white text-xs">
+                            FT
+                          </Badge>
+                        )}
+                      </div>
+                    )
+                  }
+                  return (
+                    <div className="text-lg sm:text-2xl lg:text-3xl font-bold text-gray-400">VS</div>
+                  )
+                })()}
+              </div>
 
               <div className="flex-1 text-center">
                 <div className="flex justify-center mb-2 sm:mb-3">
