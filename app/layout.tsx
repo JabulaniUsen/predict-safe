@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Skranji } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import { InstallPrompt } from "@/components/pwa/install-prompt";
+import { PWAHead } from "@/components/pwa/pwa-head";
+import { FloatingChatButton } from "@/components/layout/floating-chat-button";
 
 const skranji = Skranji({
   variable: "--font-skranji",
@@ -32,6 +35,13 @@ export const metadata: Metadata = {
   authors: [{ name: "PredictSafe" }],
   creator: "PredictSafe",
   publisher: "PredictSafe",
+  manifest: "/manifest.json",
+  themeColor: "#1e40af",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "PredictSafe",
+  },
   robots: {
     index: true,
     follow: true,
@@ -72,8 +82,11 @@ export default function RootLayout({
       <body
         className={`${skranji.variable} font-skranji antialiased`}
       >
+        <PWAHead />
         {children}
         <Toaster />
+        <InstallPrompt />
+        <FloatingChatButton />
       </body>
     </html>
   );

@@ -46,6 +46,11 @@ export function AdminChat() {
   const [sending, setSending] = useState(false)
   const [adminUser, setAdminUser] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting')
+  const [isUserTyping, setIsUserTyping] = useState(false)
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const typingDebounceRef = useRef<NodeJS.Timeout | null>(null)
+  const typingChannelRef = useRef<any>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = () => {
@@ -214,129 +219,224 @@ export function AdminChat() {
 
     loadMessages()
 
-    // Set up real-time subscription
-    const supabase = createClient()
-    const channelName = `admin-messages-${selectedUserId}-${Date.now()}`
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'messages',
-          filter: `user_id=eq.${selectedUserId}`,
-        },
-        async (payload) => {
-          console.log('Admin real-time event received:', payload.eventType, payload.new)
-          
-          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            try {
-              const newMessage = payload.new as any
-              
-              // For INSERT, try to use payload data directly first, then fetch if needed
-              if (payload.eventType === 'INSERT' && newMessage) {
-                // Fetch sender info for the new message
-                const { data: senderData } = await supabase
-                  .from('users')
-                  .select('id, full_name, email, avatar_url, is_admin')
-                  .eq('id', newMessage.sender_id)
-                  .single()
+    let reconnectAttempts = 0
+    const maxReconnectAttempts = 5
+    let reconnectTimer: NodeJS.Timeout | null = null
+    let heartbeatInterval: NodeJS.Timeout | null = null
 
-                const messageWithSender = {
-                  ...newMessage,
-                  sender: senderData || null
-                }
+    const setupRealtimeSubscription = () => {
+      setConnectionStatus('connecting')
+      const supabase = createClient()
+      const channelName = `admin-messages-${selectedUserId}-${Date.now()}`
+      
+      // Set up separate typing channel
+      const typingChannel = supabase.channel(`typing-${selectedUserId}`, {
+        config: {
+          broadcast: { self: true }
+        }
+      })
+      
+      typingChannel
+        .on('broadcast', { event: 'typing' }, (payload) => {
+          // User is typing
+          if (payload.payload.user_id === selectedUserId && !payload.payload.is_admin && payload.payload.typing) {
+            setIsUserTyping(true)
+            
+            // Clear typing indicator after 3 seconds of no activity
+            if (typingTimeoutRef.current) {
+              clearTimeout(typingTimeoutRef.current)
+            }
+            typingTimeoutRef.current = setTimeout(() => {
+              setIsUserTyping(false)
+            }, 3000)
+          } else if (payload.payload.user_id === selectedUserId && !payload.payload.is_admin && !payload.payload.typing) {
+            setIsUserTyping(false)
+            if (typingTimeoutRef.current) {
+              clearTimeout(typingTimeoutRef.current)
+            }
+          }
+        })
+        .subscribe()
+      
+      typingChannelRef.current = typingChannel
+      
+      const channel = supabase
+        .channel(channelName, {
+          config: {
+            broadcast: { self: true },
+            presence: { key: adminUser.id }
+          }
+        })
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'messages',
+            filter: `user_id=eq.${selectedUserId}`,
+          },
+          async (payload) => {
+            console.log('Admin real-time event received:', payload.eventType, payload.new)
+            
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              try {
+                const newMessage = payload.new as any
+                
+                // For INSERT, try to use payload data directly first, then fetch if needed
+                if (payload.eventType === 'INSERT' && newMessage) {
+                  // Fetch sender info for the new message
+                  const { data: senderData } = await supabase
+                    .from('users')
+                    .select('id, full_name, email, avatar_url, is_admin')
+                    .eq('id', newMessage.sender_id)
+                    .single()
 
-                setMessages((prev) => {
-                  const exists = prev.find((m: any) => m.id === messageWithSender.id)
-                  if (exists) {
-                    return prev.map((m: any) => m.id === messageWithSender.id ? messageWithSender : m)
+                  const messageWithSender = {
+                    ...newMessage,
+                    sender: senderData || null
                   }
-                  return [...prev, messageWithSender].sort((a: any, b: any) => 
-                    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-                  )
-                })
 
-                // Mark as read if it's from admin
-                if (messageWithSender.sender_id === adminUser.id && !messageWithSender.read) {
-                  await supabase
-                    .from('messages')
-                    // @ts-expect-error - Supabase type inference issue
-                    .update({ read: true })
-                    .eq('id', messageWithSender.id)
-                }
-
-                // Reload users to update unread counts
-                loadUsers()
-              } else {
-                // For UPDATE or if INSERT payload is incomplete, fetch full message
-                const { data: messageData, error: fetchError } = await supabase
-                  .from('messages')
-                  .select(`
-                    *,
-                    sender:users!sender_id(id, full_name, email, avatar_url, is_admin)
-                  `)
-                  .eq('id', newMessage.id)
-                  .single()
-
-                if (fetchError) {
-                  console.error('Error fetching message:', fetchError)
-                  return
-                }
-
-                if (messageData) {
                   setMessages((prev) => {
-                    const exists = prev.find((m: any) => m.id === (messageData as any).id)
+                    const exists = prev.find((m: any) => m.id === messageWithSender.id)
                     if (exists) {
-                      return prev.map((m: any) => m.id === (messageData as any).id ? messageData : m)
+                      return prev.map((m: any) => m.id === messageWithSender.id ? messageWithSender : m)
                     }
-                    return [...prev, messageData].sort((a: any, b: any) => 
+                    return [...prev, messageWithSender].sort((a: any, b: any) => 
                       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
                     )
                   })
 
                   // Mark as read if it's from admin
-                  if ((messageData as any).sender_id === adminUser.id && !(messageData as any).read) {
+                  if (messageWithSender.sender_id === adminUser.id && !messageWithSender.read) {
                     await supabase
                       .from('messages')
                       // @ts-expect-error - Supabase type inference issue
                       .update({ read: true })
-                      .eq('id', (messageData as any).id)
+                      .eq('id', messageWithSender.id)
                   }
 
                   // Reload users to update unread counts
                   loadUsers()
+                } else {
+                  // For UPDATE or if INSERT payload is incomplete, fetch full message
+                  const { data: messageData, error: fetchError } = await supabase
+                    .from('messages')
+                    .select(`
+                      *,
+                      sender:users!sender_id(id, full_name, email, avatar_url, is_admin)
+                    `)
+                    .eq('id', newMessage.id)
+                    .single()
+
+                  if (fetchError) {
+                    console.error('Error fetching message:', fetchError)
+                    return
+                  }
+
+                  if (messageData) {
+                    setMessages((prev) => {
+                      const exists = prev.find((m: any) => m.id === (messageData as any).id)
+                      if (exists) {
+                        return prev.map((m: any) => m.id === (messageData as any).id ? messageData : m)
+                      }
+                      return [...prev, messageData].sort((a: any, b: any) => 
+                        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                      )
+                    })
+
+                    // Mark as read if it's from admin
+                    if ((messageData as any).sender_id === adminUser.id && !(messageData as any).read) {
+                      await supabase
+                        .from('messages')
+                        // @ts-expect-error - Supabase type inference issue
+                        .update({ read: true })
+                        .eq('id', (messageData as any).id)
+                    }
+
+                    // Reload users to update unread counts
+                    loadUsers()
+                  }
                 }
+              } catch (error) {
+                console.error('Error processing real-time message:', error)
               }
-            } catch (error) {
-              console.error('Error processing real-time message:', error)
             }
           }
-        }
-      )
-      .subscribe((status) => {
-        console.log('Admin subscription status:', status)
-        if (status === 'SUBSCRIBED') {
-          console.log('Successfully subscribed to admin messages')
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('Admin channel error occurred')
-          // Try to reload messages as fallback
-          setTimeout(() => {
-            loadMessages()
-          }, 1000)
-        } else if (status === 'TIMED_OUT') {
-          console.warn('Admin subscription timed out, reconnecting...')
-          // Reconnect after a delay
-          setTimeout(() => {
-            loadMessages()
-          }, 2000)
-        }
-      })
+        )
+        .subscribe((status, err) => {
+          console.log('Admin subscription status:', status)
+          
+          if (status === 'SUBSCRIBED') {
+            console.log('Successfully subscribed to admin messages via WebSocket')
+            setConnectionStatus('connected')
+            reconnectAttempts = 0 // Reset on successful connection
+            
+            // Set up heartbeat to keep connection alive
+            heartbeatInterval = setInterval(() => {
+              channel.send({
+                type: 'presence',
+                event: 'heartbeat',
+                payload: { admin_id: adminUser.id, user_id: selectedUserId, timestamp: Date.now() }
+              })
+            }, 30000) // Send heartbeat every 30 seconds
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            setConnectionStatus('disconnected')
+            console.error('Admin WebSocket connection error:', status, err)
+            
+            // Clear heartbeat
+            if (heartbeatInterval) {
+              clearInterval(heartbeatInterval)
+              heartbeatInterval = null
+            }
+            
+            // Attempt reconnection with exponential backoff
+            if (reconnectAttempts < maxReconnectAttempts) {
+              reconnectAttempts++
+              const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000) // Max 30 seconds
+              
+              console.log(`Admin reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})...`)
+              
+              reconnectTimer = setTimeout(() => {
+                setupRealtimeSubscription()
+              }, delay)
+            } else {
+              console.error('Max reconnection attempts reached. Falling back to polling.')
+              // Fallback to polling every 5 seconds
+              const pollInterval = setInterval(() => {
+                loadMessages()
+              }, 5000)
+              
+              return () => clearInterval(pollInterval)
+            }
+          }
+        })
+
+      return channel
+    }
+
+    const channel = setupRealtimeSubscription()
 
     return () => {
-      console.log('Cleaning up admin subscription')
-      supabase.removeChannel(channel)
+      console.log('Cleaning up admin WebSocket subscription')
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer)
+      }
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+      if (typingDebounceRef.current) {
+        clearTimeout(typingDebounceRef.current)
+      }
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval)
+      }
+      const supabase = createClient()
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
+      if (typingChannelRef.current) {
+        supabase.removeChannel(typingChannelRef.current)
+      }
     }
   }, [selectedUserId, adminUser?.id, loadUsers])
 
@@ -375,6 +475,23 @@ export function AdminChat() {
       }
       setNewMessage('')
       toast.success('Message sent!')
+      
+      // Stop typing indicator
+      if (typingChannelRef.current && selectedUserId) {
+        typingChannelRef.current.send({
+          type: 'broadcast',
+          event: 'typing',
+          payload: {
+            user_id: selectedUserId,
+            is_admin: true,
+            typing: false
+          }
+        })
+      }
+      if (typingDebounceRef.current) {
+        clearTimeout(typingDebounceRef.current)
+      }
+      
       // Reload users to update unread counts
       loadUsers()
     }
@@ -404,8 +521,8 @@ export function AdminChat() {
   return (
     <div className="flex h-[calc(100vh-200px)] gap-4">
       {/* Users List */}
-      <Card className="w-80 flex flex-col">
-        <CardHeader className="pb-3">
+      <Card className="w-80 flex flex-col h-full">
+        <CardHeader className="pb-3 flex-shrink-0">
           <CardTitle className="text-lg">Conversations</CardTitle>
           <div className="relative mt-2">
             <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -417,7 +534,7 @@ export function AdminChat() {
             />
           </div>
         </CardHeader>
-        <CardContent className="flex-1 overflow-y-auto p-0">
+        <CardContent className="flex-1 overflow-y-auto p-0 min-h-0">
           {filteredUsers.length === 0 ? (
             <div className="p-4 text-center text-gray-500">
               <MessageCircle className="h-12 w-12 mx-auto mb-2 text-gray-300" />
@@ -475,33 +592,47 @@ export function AdminChat() {
       </Card>
 
       {/* Chat Area */}
-      <Card className="flex-1 flex flex-col">
+      <Card className="flex-1 flex flex-col h-full">
         {selectedUser ? (
           <>
-            <CardHeader className="border-b">
-              <div className="flex items-center gap-3">
-                {selectedUser.avatar_url ? (
-                  <Image
-                    src={selectedUser.avatar_url}
-                    alt={selectedUser.full_name || selectedUser.email}
-                    width={40}
-                    height={40}
-                    className="w-10 h-10 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-red-700 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                    {(selectedUser.full_name || selectedUser.email).charAt(0).toUpperCase()}
+            <CardHeader className="border-b flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {selectedUser.avatar_url ? (
+                    <Image
+                      src={selectedUser.avatar_url}
+                      alt={selectedUser.full_name || selectedUser.email}
+                      width={40}
+                      height={40}
+                      className="w-10 h-10 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-red-700 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                      {(selectedUser.full_name || selectedUser.email).charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div>
+                    <CardTitle className="text-lg">
+                      {selectedUser.full_name || selectedUser.email.split('@')[0]}
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
                   </div>
-                )}
-                <div>
-                  <CardTitle className="text-lg">
-                    {selectedUser.full_name || selectedUser.email.split('@')[0]}
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className={`h-2 w-2 rounded-full ${
+                    connectionStatus === 'connected' ? 'bg-green-500' :
+                    connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+                    'bg-red-500'
+                  }`} />
+                  <span className="text-xs text-muted-foreground">
+                    {connectionStatus === 'connected' ? 'Online' :
+                     connectionStatus === 'connecting' ? 'Connecting...' :
+                     'Offline'}
+                  </span>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="flex-1 flex flex-col p-0">
+            <CardContent className="flex-1 flex flex-col p-0 min-h-0">
               {/* Messages Area */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {messages.length === 0 ? (
@@ -557,34 +688,87 @@ export function AdminChat() {
                         </div>
                         {isOwnMessage && (
                           <div className="flex-shrink-0">
-                            {adminUser?.user_metadata?.avatar_url ? (
-                              <Image
-                                src={adminUser.user_metadata.avatar_url}
-                                alt="Admin"
-                                width={40}
-                                height={40}
-                                className="w-10 h-10 rounded-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-red-700 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                                A
-                              </div>
-                            )}
+                            <Image
+                              src="/logo.png"
+                              alt="Admin"
+                              width={40}
+                              height={40}
+                              className="w-10 h-10 rounded-full object-cover border-2 border-red-600"
+                            />
                           </div>
                         )}
                       </div>
                     )
                   })
                 )}
+                {isUserTyping && selectedUser && (
+                  <div className="flex gap-3 justify-start">
+                    <div className="flex-shrink-0">
+                      {selectedUser.avatar_url ? (
+                        <Image
+                          src={selectedUser.avatar_url}
+                          alt={selectedUser.full_name || selectedUser.email}
+                          width={40}
+                          height={40}
+                          className="w-10 h-10 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-red-700 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                          {(selectedUser.full_name || selectedUser.email || 'U').charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-start">
+                      <div className="bg-gray-100 text-gray-900 rounded-lg px-4 py-2">
+                        <div className="flex gap-1">
+                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div ref={messagesEndRef} />
               </div>
 
               {/* Input Area */}
-              <div className="border-t p-4">
+              <div className="border-t p-4 flex-shrink-0">
                 <form onSubmit={handleSendMessage} className="flex gap-2">
                   <Textarea
                     value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
+                    onChange={(e) => {
+                      setNewMessage(e.target.value)
+                      
+                      // Debounce typing indicator
+                      if (typingDebounceRef.current) {
+                        clearTimeout(typingDebounceRef.current)
+                      }
+                      
+                      if (e.target.value.trim() && typingChannelRef.current && selectedUserId) {
+                        typingDebounceRef.current = setTimeout(() => {
+                          typingChannelRef.current?.send({
+                            type: 'broadcast',
+                            event: 'typing',
+                            payload: {
+                              user_id: selectedUserId,
+                              is_admin: true,
+                              typing: true
+                            }
+                          })
+                        }, 500) // Wait 500ms before sending typing indicator
+                      } else if (!e.target.value.trim() && typingChannelRef.current && selectedUserId) {
+                        typingChannelRef.current.send({
+                          type: 'broadcast',
+                          event: 'typing',
+                          payload: {
+                            user_id: selectedUserId,
+                            is_admin: true,
+                            typing: false
+                          }
+                        })
+                      }
+                    }}
                     placeholder="Type your message..."
                     className="min-h-[60px] resize-none"
                     onKeyDown={(e) => {
