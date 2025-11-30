@@ -4,7 +4,6 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { InstallPrompt } from "@/components/pwa/install-prompt";
 import { PWAHead } from "@/components/pwa/pwa-head";
-import { FloatingChatButton } from "@/components/layout/floating-chat-button";
 
 const skranji = Skranji({
   variable: "--font-skranji",
@@ -82,11 +81,15 @@ export default function RootLayout({
       <body
         className={`${skranji.variable} font-skranji antialiased`}
       >
+        <script
+          src="https://nordan-backend-production.up.railway.app/public/widget.js"
+          defer
+          {...({ nordankey: "drQsq8VSVOimI" } as any)}
+        />
         <PWAHead />
         {children}
         <Toaster />
         <InstallPrompt />
-        <FloatingChatButton />
       </body>
     </html>
   );
