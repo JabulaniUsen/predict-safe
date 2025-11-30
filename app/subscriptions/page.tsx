@@ -194,14 +194,6 @@ export default function SubscriptionsPage() {
                     emptyMessage="No country found."
                   />
                 </div>
-                {selectedCountry && (
-                  <div className="text-sm text-gray-600">
-                    Currency: <span className="font-bold">{currency}</span>
-                    {selectedCountry !== 'Nigeria' && (
-                      <span className="ml-2 text-xs text-gray-500">(USD pricing)</span>
-                    )}
-                  </div>
-                )}
               </div>
             </CardContent>
           </Card>
