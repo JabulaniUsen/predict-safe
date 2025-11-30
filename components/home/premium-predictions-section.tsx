@@ -30,6 +30,8 @@ interface PremiumPrediction {
   type: 'profit_multiplier' | 'correct_score'
   home_team_logo?: string | null
   away_team_logo?: string | null
+  home_score?: string | null
+  away_score?: string | null
 }
 
 export function PremiumPredictionsSection() {
@@ -133,7 +135,7 @@ export function PremiumPredictionsSection() {
         })
       }
 
-      // Sort by kickoff time and take first 3 of each
+      // Sort by kickoff time
       profitMultiplier.sort((a, b) => 
         new Date(a.kickoff_time).getTime() - new Date(b.kickoff_time).getTime()
       )
@@ -141,11 +143,12 @@ export function PremiumPredictionsSection() {
         new Date(a.kickoff_time).getTime() - new Date(b.kickoff_time).getTime()
       )
       
-      setProfitMultiplierPredictions(profitMultiplier.slice(0, 2))
-      setCorrectScorePredictions(correctScore.slice(0, 2))
+      // Take first 2 of each for display
+      const displayProfitMultiplier = profitMultiplier.slice(0, 2)
+      const displayCorrectScore = correctScore.slice(0, 2)
 
-      // Fetch team logos for all predictions
-      const allPredictions = [...profitMultiplier, ...correctScore]
+      // Fetch team logos and match scores for all predictions
+      const allPredictions = [...displayProfitMultiplier, ...displayCorrectScore]
       if (allPredictions.length > 0) {
         const predictionsByDate = new Map<string, PremiumPrediction[]>()
         allPredictions.forEach((pred) => {
@@ -158,46 +161,100 @@ export function PremiumPredictionsSection() {
 
         try {
           const newLogos: Record<string, string | null> = {}
-          for (const [date, datePredictions] of predictionsByDate.entries()) {
+          const updatedProfitMultiplier = [...displayProfitMultiplier]
+          const updatedCorrectScore = [...displayCorrectScore]
+          
+          // Fetch fixtures for each date
+          const fixturePromises = Array.from(predictionsByDate.keys()).map(async (date) => {
             try {
               const response = await fetch(`/api/football/fixtures?from=${date}&to=${date}`)
-              if (!response.ok) continue
+              if (!response.ok) return { date, fixtures: [] }
               
               const fixturesData = await response.json()
               const fixtures = Array.isArray(fixturesData) ? fixturesData : (Array.isArray(fixturesData?.data) ? fixturesData.data : [])
-              
-              datePredictions.forEach((pred) => {
-                const fixture = fixtures.find((f: any) => {
-                  const homeMatch = f.match_hometeam_name?.toLowerCase() === pred.home_team.toLowerCase() ||
-                                   f.match_hometeam_name?.toLowerCase().includes(pred.home_team.toLowerCase()) ||
-                                   pred.home_team.toLowerCase().includes(f.match_hometeam_name?.toLowerCase() || '')
-                  
-                  const awayMatch = f.match_awayteam_name?.toLowerCase() === pred.away_team.toLowerCase() ||
-                                   f.match_awayteam_name?.toLowerCase().includes(pred.away_team.toLowerCase()) ||
-                                   pred.away_team.toLowerCase().includes(f.match_awayteam_name?.toLowerCase() || '')
-                  
-                  return homeMatch && awayMatch
-                })
-                
-                if (fixture) {
-                  if (fixture.team_home_badge) {
-                    newLogos[pred.home_team] = fixture.team_home_badge
-                  }
-                  if (fixture.team_away_badge) {
-                    newLogos[pred.away_team] = fixture.team_away_badge
-                  }
-                }
-              })
+              return { date, fixtures }
             } catch (err) {
               console.error(`Error fetching fixtures for date ${date}:`, err)
+              return { date, fixtures: [] }
             }
+          })
+          
+          const fixtureResults = await Promise.all(fixturePromises)
+          const fixturesByDate = new Map<string, any[]>()
+          fixtureResults.forEach(({ date, fixtures }) => {
+            fixturesByDate.set(date, fixtures)
+          })
+          
+          // Process each date's predictions
+          for (const [date, datePredictions] of predictionsByDate.entries()) {
+            const fixtures = fixturesByDate.get(date) || []
+            
+            datePredictions.forEach((pred) => {
+              const fixture = fixtures.find((f: any) => {
+                const homeMatch = f.match_hometeam_name?.toLowerCase() === pred.home_team.toLowerCase() ||
+                                 f.match_hometeam_name?.toLowerCase().includes(pred.home_team.toLowerCase()) ||
+                                 pred.home_team.toLowerCase().includes(f.match_hometeam_name?.toLowerCase() || '')
+                
+                const awayMatch = f.match_awayteam_name?.toLowerCase() === pred.away_team.toLowerCase() ||
+                                 f.match_awayteam_name?.toLowerCase().includes(pred.away_team.toLowerCase()) ||
+                                 pred.away_team.toLowerCase().includes(f.match_awayteam_name?.toLowerCase() || '')
+                
+                return homeMatch && awayMatch
+              })
+              
+              if (fixture) {
+                // Update logos
+                if (fixture.team_home_badge) {
+                  newLogos[pred.home_team] = fixture.team_home_badge
+                }
+                if (fixture.team_away_badge) {
+                  newLogos[pred.away_team] = fixture.team_away_badge
+                }
+                
+                // Update match scores if finished
+                // Check for finished status and valid scores (not null, undefined, or empty string)
+                const homeScore = fixture.match_hometeam_score
+                const awayScore = fixture.match_awayteam_score
+                const isFinished = fixture.match_status === 'Finished' || fixture.match_status === 'FT' || fixture.match_status === 'FT_PEN'
+                const hasValidScores = homeScore !== null && homeScore !== undefined && homeScore !== '' &&
+                                       awayScore !== null && awayScore !== undefined && awayScore !== ''
+                
+                if (isFinished && hasValidScores) {
+                  const predIndex = pred.type === 'profit_multiplier' 
+                    ? updatedProfitMultiplier.findIndex(p => p.id === pred.id)
+                    : updatedCorrectScore.findIndex(p => p.id === pred.id)
+                  
+                  if (predIndex !== -1) {
+                    if (pred.type === 'profit_multiplier') {
+                      // Only update scores, preserve prediction_type
+                      updatedProfitMultiplier[predIndex] = {
+                        ...updatedProfitMultiplier[predIndex],
+                        home_score: String(homeScore).trim(),
+                        away_score: String(awayScore).trim()
+                      }
+                    } else {
+                      // Only update scores, preserve score_prediction
+                      updatedCorrectScore[predIndex] = {
+                        ...updatedCorrectScore[predIndex],
+                        home_score: String(homeScore).trim(),
+                        away_score: String(awayScore).trim()
+                      }
+                    }
+                  }
+                }
+              }
+            })
           }
           
           if (Object.keys(newLogos).length > 0) {
             setTeamLogos((latestLogos) => ({ ...latestLogos, ...newLogos }))
           }
+          
+          // Update predictions with scores
+          setProfitMultiplierPredictions(updatedProfitMultiplier)
+          setCorrectScorePredictions(updatedCorrectScore)
         } catch (error) {
-          console.error('Error fetching team logos:', error)
+          console.error('Error fetching team logos and scores:', error)
         }
       }
 
@@ -610,7 +667,9 @@ export function PremiumPredictionsSection() {
                           )}
                         </div>
                         <div className="text-[10px] sm:text-xs font-semibold text-gray-400 text-center">
-                          -
+                          {prediction.status === 'finished' && prediction.home_score && prediction.away_score
+                            ? `${prediction.home_score}-${prediction.away_score}`
+                            : '-'}
                         </div>
                         <div className="text-[10px] sm:text-xs font-semibold text-gray-400 text-center flex items-center justify-center gap-1">
                           {shouldShowLocks(prediction.kickoff_time) ? (
@@ -722,7 +781,11 @@ export function PremiumPredictionsSection() {
 
                   {/* Score */}
                   <div className="col-span-1 text-center hidden sm:block">
-                    <span className="text-sm font-semibold text-gray-400">-</span>
+                    <span className="text-sm font-semibold text-gray-400">
+                      {prediction.status === 'finished' && prediction.home_score && prediction.away_score
+                        ? `${prediction.home_score}-${prediction.away_score}`
+                        : '-'}
+                    </span>
                   </div>
 
                   {/* Status */}
@@ -972,7 +1035,9 @@ export function PremiumPredictionsSection() {
                           )}
                         </div>
                         <div className="text-[10px] sm:text-xs font-semibold text-gray-400 text-center">
-                          -
+                          {prediction.status === 'finished' && prediction.home_score && prediction.away_score
+                            ? `${prediction.home_score}-${prediction.away_score}`
+                            : '-'}
                         </div>
                         <div className="text-[10px] sm:text-xs font-semibold text-gray-400 text-center flex items-center justify-center gap-1">
                           {showLocks ? (

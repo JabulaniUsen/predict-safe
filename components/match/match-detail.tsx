@@ -15,6 +15,11 @@ import { Fixture, H2HData } from '@/lib/api-football'
 interface MatchDetailProps {
   matchId: string
   predictionType?: string
+  predictionData?: {
+    odds: number
+    prediction_type: string
+    confidence: number
+  } | null
 }
 
 interface H2HMatch {
@@ -29,7 +34,7 @@ interface H2HMatch {
   result?: 'W' | 'L' | 'D'
 }
 
-export function MatchDetail({ matchId, predictionType }: MatchDetailProps) {
+export function MatchDetail({ matchId, predictionType, predictionData }: MatchDetailProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [fixture, setFixture] = useState<Fixture | null>(null)
@@ -78,35 +83,64 @@ export function MatchDetail({ matchId, predictionType }: MatchDetailProps) {
               const matchOdds = oddsData[0] as any // API returns flat odds object
               setOdds(matchOdds)
               
-              // Set selected prediction based on predictionType
-              if (predictionType) {
+              // Set selected prediction based on predictionType and predictionData
+              if (predictionType || predictionData) {
                 let tip = ''
                 let odd = 0
                 let prob = 0
 
-                if (predictionType === 'Home Win' && matchOdds.odd_1) {
-                  tip = 'Home Win'
-                  odd = parseFloat(matchOdds.odd_1)
-                } else if (predictionType === 'Away Win' && matchOdds.odd_2) {
-                  tip = 'Away Win'
-                  odd = parseFloat(matchOdds.odd_2)
-                } else if (predictionType === 'Over 1.5' && matchOdds['o+1.5']) {
-                  tip = 'Ov 1.5'
-                  odd = parseFloat(matchOdds['o+1.5'])
-                } else if (predictionType === 'Over 2.5' && matchOdds['o+2.5']) {
-                  tip = 'Ov 2.5'
-                  odd = parseFloat(matchOdds['o+2.5'])
-                } else if (predictionType === 'BTTS' && matchOdds.bts_yes) {
-                  tip = 'BTTS'
-                  odd = parseFloat(matchOdds.bts_yes)
+                // Use database prediction data if available (has stored odds and confidence)
+                if (predictionData) {
+                  tip = predictionData.prediction_type
+                  odd = parseFloat(predictionData.odds.toString())
+                  prob = predictionData.confidence
+                } else if (predictionType && matchOdds) {
+                  // Match prediction type with API odds
+                  const normalizedType = predictionType.toLowerCase().trim()
+                  
+                  if ((normalizedType === 'home win' || normalizedType.includes('home')) && matchOdds.odd_1) {
+                    tip = 'Home Win'
+                    odd = parseFloat(matchOdds.odd_1)
+                  } else if ((normalizedType === 'away win' || normalizedType.includes('away')) && matchOdds.odd_2) {
+                    tip = 'Away Win'
+                    odd = parseFloat(matchOdds.odd_2)
+                  } else if ((normalizedType === 'over 1.5' || normalizedType.includes('1.5')) && matchOdds['o+1.5']) {
+                    tip = 'Over 1.5'
+                    odd = parseFloat(matchOdds['o+1.5'])
+                  } else if ((normalizedType === 'over 2.5' || normalizedType.includes('2.5')) && matchOdds['o+2.5']) {
+                    tip = 'Over 2.5'
+                    odd = parseFloat(matchOdds['o+2.5'])
+                  } else if ((normalizedType === 'btts' || normalizedType.includes('btts') || normalizedType.includes('gg')) && matchOdds.bts_yes) {
+                    tip = 'BTTS'
+                    odd = parseFloat(matchOdds.bts_yes)
+                  } else if ((normalizedType === 'double chance' || normalizedType.includes('double')) && matchOdds.odd_1x) {
+                    tip = 'Double Chance'
+                    odd = parseFloat(matchOdds.odd_1x)
+                  } else if (normalizedType === 'draw' && matchOdds.odd_x) {
+                    tip = 'Draw'
+                    odd = parseFloat(matchOdds.odd_x)
+                  }
+
+                  // Calculate probability if we found a match
+                  if (odd > 0) {
+                    prob = Math.min(95, Math.max(60, 100 - (odd - 1) * 20))
+                  }
                 }
 
-                prob = Math.min(95, Math.max(60, 100 - (odd - 1) * 20))
-                setSelectedPrediction({ tip, odd, prob })
+                if (tip && odd > 0) {
+                  setSelectedPrediction({ tip, odd, prob })
+                }
               }
             }
           } catch (oddsError) {
             console.error('Error fetching odds:', oddsError)
+            // If API fails but we have prediction data, still show the prediction
+            if (predictionData) {
+              const tip = predictionData.prediction_type
+              const odd = parseFloat(predictionData.odds.toString())
+              const prob = predictionData.confidence
+              setSelectedPrediction({ tip, odd, prob })
+            }
           }
 
           // Fetch H2H data

@@ -13,9 +13,10 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
 import { Database } from '@/types/database'
-import { Plus, Edit, Trash2, X } from 'lucide-react'
+import { Plus, Edit, Trash2, X, Search } from 'lucide-react'
 import { getCurrencyFromCountry, getCurrencySymbol } from '@/lib/utils/currency'
 
 type PlanUpdate = Database['public']['Tables']['plans']['Update']
@@ -23,6 +24,16 @@ type PlanUpdate = Database['public']['Tables']['plans']['Update']
 interface PlansManagerProps {
   plans: any[]
   subscriptions: any[]
+}
+
+interface CountryPrice {
+  country: string
+  currency: string
+  price_7d: string
+  price_30d: string
+  activation_fee_7d: string
+  activation_fee_30d: string
+  selected: boolean
 }
 
 export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
@@ -51,6 +62,14 @@ export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
     currency: 'NGN',
   })
   const [newBenefit, setNewBenefit] = useState('')
+  const [countryPrices, setCountryPrices] = useState<Record<string, CountryPrice>>({})
+  const [othersPrice, setOthersPrice] = useState({
+    price_7d: '',
+    price_30d: '',
+    activation_fee_7d: '',
+    activation_fee_30d: '',
+  })
+  const [countrySearch, setCountrySearch] = useState('')
 
   // Fetch countries on mount
   useEffect(() => {
@@ -112,6 +131,13 @@ export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
       is_active: true,
       max_predictions_per_day: null,
     })
+    setCountryPrices({})
+    setOthersPrice({
+      price_7d: '',
+      price_30d: '',
+      activation_fee_7d: '',
+      activation_fee_30d: '',
+    })
     setShowPlanDialog(true)
   }
 
@@ -126,6 +152,55 @@ export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
       is_active: plan.is_active,
       max_predictions_per_day: plan.max_predictions_per_day,
     })
+    
+    // Initialize country prices from existing plan prices
+    const prices: Record<string, CountryPrice> = {}
+    const othersPrices = {
+      price_7d: '',
+      price_30d: '',
+      activation_fee_7d: '',
+      activation_fee_30d: '',
+    }
+    
+    if (plan.plan_prices && plan.plan_prices.length > 0) {
+      plan.plan_prices.forEach((price: any) => {
+        const country = price.country || 'Nigeria'
+        const currency = price.currency || getCurrencyFromCountry(country)
+        
+        if (country === 'Other' || country === 'Others') {
+          if (price.duration_days === 7) {
+            othersPrices.price_7d = price.price.toString()
+            othersPrices.activation_fee_7d = price.activation_fee?.toString() || ''
+          } else if (price.duration_days === 30) {
+            othersPrices.price_30d = price.price.toString()
+            othersPrices.activation_fee_30d = price.activation_fee?.toString() || ''
+          }
+        } else {
+          if (!prices[country]) {
+            prices[country] = {
+              country,
+              currency,
+              price_7d: '',
+              price_30d: '',
+              activation_fee_7d: '',
+              activation_fee_30d: '',
+              selected: true,
+            }
+          }
+          
+          if (price.duration_days === 7) {
+            prices[country].price_7d = price.price.toString()
+            prices[country].activation_fee_7d = price.activation_fee?.toString() || ''
+          } else if (price.duration_days === 30) {
+            prices[country].price_30d = price.price.toString()
+            prices[country].activation_fee_30d = price.activation_fee?.toString() || ''
+          }
+        }
+      })
+    }
+    
+    setCountryPrices(prices)
+    setOthersPrice(othersPrices)
     setShowPlanDialog(true)
   }
 
@@ -138,6 +213,7 @@ export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
     setLoading(true)
     try {
       const supabase = createClient()
+      let planId: string
       
       if (editingPlan) {
         // Update existing plan
@@ -160,7 +236,7 @@ export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
         const { error } = result
 
         if (error) throw error
-        toast.success('Plan updated successfully!')
+        planId = editingPlan.id
       } else {
         // Create new plan
         const insertData: Database['public']['Tables']['plans']['Insert'] = {
@@ -176,12 +252,88 @@ export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
           .from('plans')
           // @ts-expect-error - Supabase type inference issue
           .insert(insertData)
-        const { error } = result
+          .select('id')
+          .single()
+        const { error, data } = result
 
         if (error) throw error
-        toast.success('Plan created successfully!')
+        planId = data.id
       }
 
+      // Save pricing
+      if (editingPlan) {
+        // Delete all existing prices for this plan
+        await supabase
+          .from('plan_prices')
+          .delete()
+          .eq('plan_id', planId)
+      }
+
+      // Prepare prices to insert
+      const pricesToInsert: any[] = []
+
+      // Add selected country prices
+      Object.values(countryPrices).forEach((cp) => {
+        if (cp.selected) {
+          const currency = getCurrencyFromCountry(cp.country)
+          
+          if (cp.price_7d) {
+            pricesToInsert.push({
+              plan_id: planId,
+              country: cp.country,
+              duration_days: 7,
+              price: parseFloat(cp.price_7d),
+              activation_fee: cp.activation_fee_7d ? parseFloat(cp.activation_fee_7d) : null,
+              currency: currency,
+            })
+          }
+          
+          if (cp.price_30d) {
+            pricesToInsert.push({
+              plan_id: planId,
+              country: cp.country,
+              duration_days: 30,
+              price: parseFloat(cp.price_30d),
+              activation_fee: cp.activation_fee_30d ? parseFloat(cp.activation_fee_30d) : null,
+              currency: currency,
+            })
+          }
+        }
+      })
+
+      // Add "Others" prices (USD)
+      if (othersPrice.price_7d) {
+        pricesToInsert.push({
+          plan_id: planId,
+          country: 'Others',
+          duration_days: 7,
+          price: parseFloat(othersPrice.price_7d),
+          activation_fee: othersPrice.activation_fee_7d ? parseFloat(othersPrice.activation_fee_7d) : null,
+          currency: 'USD',
+        })
+      }
+      
+      if (othersPrice.price_30d) {
+        pricesToInsert.push({
+          plan_id: planId,
+          country: 'Others',
+          duration_days: 30,
+          price: parseFloat(othersPrice.price_30d),
+          activation_fee: othersPrice.activation_fee_30d ? parseFloat(othersPrice.activation_fee_30d) : null,
+          currency: 'USD',
+        })
+      }
+
+      // Insert all prices
+      if (pricesToInsert.length > 0) {
+        const { error: priceError } = await supabase
+          .from('plan_prices')
+          .insert(pricesToInsert as any)
+
+        if (priceError) throw priceError
+      }
+
+      toast.success(editingPlan ? 'Plan updated successfully!' : 'Plan created successfully!')
       setShowPlanDialog(false)
       window.location.reload()
     } catch (error: any) {
@@ -207,6 +359,82 @@ export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
       benefits: planForm.benefits.filter((_, i) => i !== index),
     })
   }
+
+  const toggleCountrySelection = (countryName: string) => {
+    const currency = getCurrencyFromCountry(countryName)
+    setCountryPrices((prev) => {
+      if (prev[countryName]) {
+        return {
+          ...prev,
+          [countryName]: {
+            ...prev[countryName],
+            selected: !prev[countryName].selected,
+          },
+        }
+      } else {
+        return {
+          ...prev,
+          [countryName]: {
+            country: countryName,
+            currency,
+            price_7d: '',
+            price_30d: '',
+            activation_fee_7d: '',
+            activation_fee_30d: '',
+            selected: true,
+          },
+        }
+      }
+    })
+  }
+
+  const updateCountryPrice = (countryName: string, field: keyof CountryPrice, value: string) => {
+    setCountryPrices((prev) => {
+      if (!prev[countryName]) {
+        const currency = getCurrencyFromCountry(countryName)
+        prev[countryName] = {
+          country: countryName,
+          currency,
+          price_7d: '',
+          price_30d: '',
+          activation_fee_7d: '',
+          activation_fee_30d: '',
+          selected: true,
+        }
+      }
+      return {
+        ...prev,
+        [countryName]: {
+          ...prev[countryName],
+          [field]: value,
+        },
+      }
+    })
+  }
+
+  // Get countries that have prices (selected countries)
+  const countriesWithPrices = Object.values(countryPrices)
+    .filter((cp) => cp.selected)
+    .map((cp) => {
+      const country = countries.find((c) => c.name === cp.country)
+      return {
+        ...cp,
+        code: country?.code || 'XX',
+        name: cp.country,
+      }
+    })
+
+  // Get available countries to add (countries not already selected)
+  const availableCountriesToAdd = countries.filter(
+    (country) =>
+      !countryPrices[country.name]?.selected &&
+      country.name !== 'Other' &&
+      country.name !== 'Others'
+  )
+
+  const filteredAvailableCountries = availableCountriesToAdd.filter((country) =>
+    country.name.toLowerCase().includes(countrySearch.toLowerCase())
+  )
 
   const handleEditPrice = (price: any, planId: string) => {
     setEditingPrice(price)
@@ -554,109 +782,355 @@ export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
 
       {/* Plan Edit/Create Dialog */}
       <Dialog open={showPlanDialog} onOpenChange={setShowPlanDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="min-w-7xl max-h-[95vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>{editingPlan ? 'Edit Plan' : 'Create New Plan'}</DialogTitle>
             <DialogDescription>
-              {editingPlan ? 'Update plan details' : 'Create a new subscription plan'}
+              {editingPlan ? 'Update plan details and pricing' : 'Create a new subscription plan with pricing'}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Plan Name *</Label>
-                <Input
-                  id="name"
-                  value={planForm.name}
-                  onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
-                  placeholder="e.g., Profit Multiplier"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="slug">Slug *</Label>
-                <Input
-                  id="slug"
-                  value={planForm.slug}
-                  onChange={(e) => setPlanForm({ ...planForm, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') })}
-                  placeholder="e.g., profit-multiplier"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={planForm.description}
-                onChange={(e) => setPlanForm({ ...planForm, description: e.target.value })}
-                placeholder="Plan description..."
-                rows={3}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Benefits</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={newBenefit}
-                  onChange={(e) => setNewBenefit(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleAddBenefit()}
-                  placeholder="Add benefit..."
-                />
-                <Button type="button" onClick={handleAddBenefit}>Add</Button>
-              </div>
-              {planForm.benefits.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {planForm.benefits.map((benefit, idx) => (
-                    <Badge key={idx} variant="secondary" className="flex items-center gap-1">
-                      {benefit}
-                      <button
-                        onClick={() => handleRemoveBenefit(idx)}
-                        className="ml-1 hover:text-red-500"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
+          <Tabs defaultValue="details" className="flex-1 flex flex-col overflow-hidden">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="details">Plan Details</TabsTrigger>
+              <TabsTrigger value="pricing">Pricing</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="details" className="flex-1 overflow-y-auto space-y-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Plan Name *</Label>
+                  <Input
+                    id="name"
+                    value={planForm.name}
+                    onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
+                    placeholder="e.g., Profit Multiplier"
+                  />
                 </div>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="slug">Slug *</Label>
+                  <Input
+                    id="slug"
+                    value={planForm.slug}
+                    onChange={(e) => setPlanForm({ ...planForm, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') })}
+                    placeholder="e.g., profit-multiplier"
+                  />
+                </div>
+              </div>
               <div className="space-y-2">
-                <Label htmlFor="max_predictions">Max Predictions Per Day</Label>
-                <Input
-                  id="max_predictions"
-                  type="number"
-                  value={planForm.max_predictions_per_day || ''}
-                  onChange={(e) => setPlanForm({
-                    ...planForm,
-                    max_predictions_per_day: e.target.value ? parseInt(e.target.value) : null,
-                  })}
-                  placeholder="Optional"
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={planForm.description}
+                  onChange={(e) => setPlanForm({ ...planForm, description: e.target.value })}
+                  placeholder="Plan description..."
+                  rows={3}
                 />
               </div>
-            </div>
-            <div className="flex items-center gap-6">
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="requires_activation"
-                  checked={planForm.requires_activation}
-                  onChange={(e) => setPlanForm({ ...planForm, requires_activation: e.target.checked })}
-                  className="rounded"
-                />
-                <Label htmlFor="requires_activation">Requires Activation Fee</Label>
+              <div className="space-y-2">
+                <Label>Benefits</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={newBenefit}
+                    onChange={(e) => setNewBenefit(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleAddBenefit()}
+                    placeholder="Add benefit..."
+                  />
+                  <Button type="button" onClick={handleAddBenefit}>Add</Button>
+                </div>
+                {planForm.benefits.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {planForm.benefits.map((benefit, idx) => (
+                      <Badge key={idx} variant="secondary" className="flex items-center gap-1">
+                        {benefit}
+                        <button
+                          onClick={() => handleRemoveBenefit(idx)}
+                          className="ml-1 hover:text-red-500"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="is_active"
-                  checked={planForm.is_active}
-                  onChange={(e) => setPlanForm({ ...planForm, is_active: e.target.checked })}
-                  className="rounded"
-                />
-                <Label htmlFor="is_active">Active</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="max_predictions">Max Predictions Per Day</Label>
+                  <Input
+                    id="max_predictions"
+                    type="number"
+                    value={planForm.max_predictions_per_day || ''}
+                    onChange={(e) => setPlanForm({
+                      ...planForm,
+                      max_predictions_per_day: e.target.value ? parseInt(e.target.value) : null,
+                    })}
+                    placeholder="Optional"
+                  />
+                </div>
               </div>
-            </div>
-          </div>
+              <div className="flex items-center gap-6">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="requires_activation"
+                    checked={planForm.requires_activation}
+                    onChange={(e) => setPlanForm({ ...planForm, requires_activation: e.target.checked })}
+                    className="rounded"
+                  />
+                  <Label htmlFor="requires_activation">Requires Activation Fee</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="is_active"
+                    checked={planForm.is_active}
+                    onChange={(e) => setPlanForm({ ...planForm, is_active: e.target.checked })}
+                    className="rounded"
+                  />
+                  <Label htmlFor="is_active">Active</Label>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="pricing" className="flex-1 overflow-hidden flex flex-col mt-4">
+              <div className="space-y-4 flex-1 overflow-y-auto">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-base font-semibold">Country Pricing</Label>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Manage prices for selected countries. Add countries using the dropdown below.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value=""
+                      onValueChange={(countryName) => {
+                        if (countryName) {
+                          toggleCountrySelection(countryName)
+                          setCountrySearch('')
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-[250px]">
+                        <SelectValue placeholder="Add a country..." />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[300px]">
+                        <div className="p-2 border-b">
+                          <div className="relative">
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <Input
+                              placeholder="Search countries..."
+                              value={countrySearch}
+                              onChange={(e) => setCountrySearch(e.target.value)}
+                              className="pl-8 h-8"
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </div>
+                        {filteredAvailableCountries.length > 0 ? (
+                          filteredAvailableCountries.map((country) => {
+                            const currency = getCurrencyFromCountry(country.name)
+                            const symbol = getCurrencySymbol(currency)
+                            return (
+                              <SelectItem key={country.code} value={country.name}>
+                                {country.name} ({symbol} {currency})
+                              </SelectItem>
+                            )
+                          })
+                        ) : (
+                          <div className="p-4 text-sm text-gray-500 text-center">
+                            {countrySearch ? 'No countries found' : 'All countries added'}
+                          </div>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {countriesWithPrices.length > 0 ? (
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="bg-gray-50 p-4 border-b">
+                      <div className="grid grid-cols-7 gap-4 font-semibold text-sm">
+                        <div>Remove</div>
+                        <div>Country</div>
+                        <div>1 Week Price</div>
+                        <div>1 Week Act. Fee</div>
+                        <div>1 Month Price</div>
+                        <div>1 Month Act. Fee</div>
+                        <div>Currency</div>
+                      </div>
+                    </div>
+                    <div className="max-h-[400px] overflow-y-auto">
+                      {countriesWithPrices.map((cp) => {
+                        const currencySymbol = getCurrencySymbol(cp.currency)
+                        
+                        return (
+                          <div
+                            key={cp.code}
+                            className="p-4 border-b grid grid-cols-7 gap-4 items-center bg-blue-50"
+                          >
+                            <div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => toggleCountrySelection(cp.country)}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            <div className="font-medium">{cp.country}</div>
+                            <div>
+                              <div className="relative">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">
+                                  {currencySymbol}
+                                </span>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={cp.price_7d}
+                                  onChange={(e) => updateCountryPrice(cp.country, 'price_7d', e.target.value)}
+                                  placeholder="0.00"
+                                  className="pl-6 h-9"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <div className="relative">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">
+                                  {currencySymbol}
+                                </span>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={cp.activation_fee_7d}
+                                  onChange={(e) => updateCountryPrice(cp.country, 'activation_fee_7d', e.target.value)}
+                                  placeholder="0.00"
+                                  className="pl-6 h-9"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <div className="relative">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">
+                                  {currencySymbol}
+                                </span>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={cp.price_30d}
+                                  onChange={(e) => updateCountryPrice(cp.country, 'price_30d', e.target.value)}
+                                  placeholder="0.00"
+                                  className="pl-6 h-9"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <div className="relative">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">
+                                  {currencySymbol}
+                                </span>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={cp.activation_fee_30d}
+                                  onChange={(e) => updateCountryPrice(cp.country, 'activation_fee_30d', e.target.value)}
+                                  placeholder="0.00"
+                                  className="pl-6 h-9"
+                                />
+                              </div>
+                            </div>
+                            <div className="text-sm text-gray-600">{cp.currency}</div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="border rounded-lg p-8 text-center text-gray-500">
+                    <p>No countries added yet. Use the dropdown above to add countries.</p>
+                  </div>
+                )}
+
+                {/* Others Row */}
+                <div className="border rounded-lg p-4 bg-yellow-50">
+                  <div className="mb-3">
+                    <Label className="font-semibold text-base">Others (All countries not listed above - USD)</Label>
+                    <p className="text-xs text-gray-600 mt-1">
+                      This price will apply to all countries that are not in the list above
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-4 gap-4">
+                    <div>
+                      <Label className="text-sm">1 Week Price ($)</Label>
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">$</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={othersPrice.price_7d}
+                          onChange={(e) => setOthersPrice({ ...othersPrice, price_7d: e.target.value })}
+                          placeholder="0.00"
+                          className="pl-6"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-sm">1 Week Act. Fee ($)</Label>
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">$</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={othersPrice.activation_fee_7d}
+                          onChange={(e) => setOthersPrice({ ...othersPrice, activation_fee_7d: e.target.value })}
+                          placeholder="0.00"
+                          className="pl-6"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-sm">1 Month Price ($)</Label>
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">$</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={othersPrice.price_30d}
+                          onChange={(e) => setOthersPrice({ ...othersPrice, price_30d: e.target.value })}
+                          placeholder="0.00"
+                          className="pl-6"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-sm">1 Month Act. Fee ($)</Label>
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">$</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={othersPrice.activation_fee_30d}
+                          onChange={(e) => setOthersPrice({ ...othersPrice, activation_fee_30d: e.target.value })}
+                          placeholder="0.00"
+                          className="pl-6"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowPlanDialog(false)}>
               Cancel
