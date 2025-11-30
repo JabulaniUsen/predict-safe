@@ -42,51 +42,51 @@ export function UserChat() {
     scrollToBottom()
   }, [messages])
 
-  useEffect(() => {
-    const loadUserAndMessages = async () => {
-      const supabase = createClient()
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      
-      if (!authUser) {
-        toast.error('Please log in to use chat')
-        return
-      }
-
-      setUser(authUser)
-
-      // Fetch messages
-      const { data: messagesData, error } = await supabase
-        .from('messages')
-        .select(`
-          *,
-          sender:users!sender_id(id, full_name, email, avatar_url, is_admin)
-        `)
-        .eq('user_id', authUser.id)
-        .order('created_at', { ascending: true })
-
-      if (error) {
-        console.error('Error fetching messages:', error)
-        toast.error('Failed to load messages')
-      } else {
-        setMessages(messagesData || [])
-        
-        // Mark messages as read
-        const unreadIds = messagesData
-          ?.filter((m: any) => !m.read && m.sender_id !== authUser.id)
-          .map((m: any) => m.id) || []
-        
-        if (unreadIds.length > 0) {
-          await supabase
-            .from('messages')
-            // @ts-expect-error - Supabase type inference issue
-            .update({ read: true })
-            .in('id', unreadIds)
-        }
-      }
-
-      setLoading(false)
+  const loadUserAndMessages = async () => {
+    const supabase = createClient()
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    
+    if (!authUser) {
+      toast.error('Please log in to use chat')
+      return
     }
 
+    setUser(authUser)
+
+    // Fetch messages
+    const { data: messagesData, error } = await supabase
+      .from('messages')
+      .select(`
+        *,
+        sender:users!sender_id(id, full_name, email, avatar_url, is_admin)
+      `)
+      .eq('user_id', authUser.id)
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      console.error('Error fetching messages:', error)
+      toast.error('Failed to load messages')
+    } else {
+      setMessages(messagesData || [])
+      
+      // Mark messages as read
+      const unreadIds = messagesData
+        ?.filter((m: any) => !m.read && m.sender_id !== authUser.id)
+        .map((m: any) => m.id) || []
+      
+      if (unreadIds.length > 0) {
+        await supabase
+          .from('messages')
+          // @ts-expect-error - Supabase type inference issue
+          .update({ read: true })
+          .in('id', unreadIds)
+      }
+    }
+
+    setLoading(false)
+  }
+
+  useEffect(() => {
     loadUserAndMessages()
   }, [])
 

@@ -5,12 +5,11 @@ import { useRouter } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { CircularProgress } from '@/components/ui/circular-progress'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Navbar } from '@/components/layout/navbar'
 import { Footer } from '@/components/layout/footer'
 import { Fixture, getFixtures, TOP_LEAGUES, getLeagueName } from '@/lib/api-football'
-import { RefreshCw, Clock, Trophy } from 'lucide-react'
+import { RefreshCw, Clock, Trophy, Loader2 } from 'lucide-react'
 import Image from 'next/image'
 
 export default function LiveScoresPage() {
@@ -230,8 +229,9 @@ export default function LiveScoresPage() {
 
           {/* Matches List */}
           {loading ? (
-            <div className="flex justify-center items-center py-20">
-              <CircularProgress />
+            <div className="flex flex-col justify-center items-center py-20 gap-4">
+              <Loader2 className="h-8 w-8 animate-spin text-[#1e40af]" />
+              <p className="text-gray-600">Loading matches...</p>
             </div>
           ) : matches.length === 0 ? (
             <Card className="p-8 sm:p-12 text-center">
