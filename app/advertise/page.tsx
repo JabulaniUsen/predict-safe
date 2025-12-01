@@ -123,7 +123,7 @@ export default function AdvertisePage() {
                   <div>
                     <p className="text-base text-gray-700 mb-2">Contact us:</p>
                     <ul className="list-none space-y-2 text-base text-gray-700">
-                      <li>📧 Email: <a href="mailto:advert@predictsafe.com" className="text-[#1e40af] hover:underline font-semibold">advert@predictsafe.com</a></li>
+                      <li>📧 Email: <a href="mailto:Advert.predictsafe@gmail.com" className="text-[#1e40af] hover:underline font-semibold">Advert.predictsafe@gmail.com</a></li>
                       <li>📧 Alternative: <a href="mailto:predictsafe@gmail.com" className="text-[#1e40af] hover:underline font-semibold">predictsafe@gmail.com</a></li>
                       <li>🌐 Or use our Contact Page on the website</li>
                     </ul>
