@@ -172,7 +172,8 @@ export function PremiumPredictionsSection() {
             league: pred.league,
             score_prediction: score,
             odds: Number(pred.odds) || 0,
-            confidence: undefined, // correct_score predictions do not use confidence
+            // Preserve confidence from the predictions table so we can display it on the home page
+            confidence: (pred as any).confidence ?? undefined,
             kickoff_time: pred.kickoff_time,
             status: (pred as any).status || 'not_started',
             type: 'correct_score'
@@ -1130,7 +1131,7 @@ export function PremiumPredictionsSection() {
                           {prediction.confidence ? (
                             <CircularProgress value={prediction.confidence} size={40} strokeWidth={3} />
                           ) : (
-                            showLocks && <Lock className="h-4 w-4 text-[#f97316]" />
+                            <span className="text-[10px] sm:text-xs text-gray-400">-</span>
                           )}
                         </div>
                       </div>
@@ -1264,7 +1265,7 @@ export function PremiumPredictionsSection() {
                               {prediction.confidence ? (
                                 <CircularProgress value={prediction.confidence} size={50} strokeWidth={5} />
                               ) : (
-                                showLocks && <Lock className="h-5 w-5 text-[#f97316]" />
+                                <span className="text-xs text-gray-400">-</span>
                               )}
                             </div>
                           </div>
