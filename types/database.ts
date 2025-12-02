@@ -165,6 +165,8 @@ export interface Database {
           kickoff_time: string
           status: 'not_started' | 'live' | 'finished'
           result: 'win' | 'loss' | 'pending' | null
+          home_score: number | null
+          away_score: number | null
           admin_notes: string | null
           created_at: string
           updated_at: string
@@ -181,6 +183,8 @@ export interface Database {
           kickoff_time: string
           status?: 'not_started' | 'live' | 'finished'
           result?: 'win' | 'loss' | 'pending' | null
+          home_score?: number | null
+          away_score?: number | null
           admin_notes?: string | null
           created_at?: string
           updated_at?: string
@@ -197,6 +201,8 @@ export interface Database {
           kickoff_time?: string
           status?: 'not_started' | 'live' | 'finished'
           result?: 'win' | 'loss' | 'pending' | null
+          home_score?: number | null
+          away_score?: number | null
           admin_notes?: string | null
           created_at?: string
           updated_at?: string
@@ -213,6 +219,8 @@ export interface Database {
           kickoff_time: string
           status: 'not_started' | 'live' | 'finished'
           result: 'win' | 'loss' | 'pending' | null
+          home_score: number | null
+          away_score: number | null
           admin_notes: string | null
           created_at: string
           updated_at: string
@@ -227,6 +235,8 @@ export interface Database {
           kickoff_time: string
           status?: 'not_started' | 'live' | 'finished'
           result?: 'win' | 'loss' | 'pending' | null
+          home_score?: number | null
+          away_score?: number | null
           admin_notes?: string | null
           created_at?: string
           updated_at?: string
@@ -241,6 +251,8 @@ export interface Database {
           kickoff_time?: string
           status?: 'not_started' | 'live' | 'finished'
           result?: 'win' | 'loss' | 'pending' | null
+          home_score?: number | null
+          away_score?: number | null
           admin_notes?: string | null
           created_at?: string
           updated_at?: string

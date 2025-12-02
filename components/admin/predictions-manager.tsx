@@ -65,6 +65,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
   const [planToDeleteAll, setPlanToDeleteAll] = useState<{ slug: string; name: string } | null>(null)
   const [teamLogos, setTeamLogos] = useState<TeamLogoCache>({})
   const [addingToVIP, setAddingToVIP] = useState<string | null>(null)
+  const [updatingScores, setUpdatingScores] = useState<Record<string, boolean>>({})
   
   // Date filter state - separate for each plan tab
   const [dateFilters, setDateFilters] = useState<Record<string, {
@@ -113,18 +114,20 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
       )
     }
 
-    // Apply date filter
+    // Apply date filter - always filter by the selected date
     const dateFilter = getDateFilter(planSlug)
-    if (dateFilter.dateType !== 'today' || dateFilter.customDate || dateFilter.daysBack > 0) {
-      const { from, to } = getDateRange(dateFilter.dateType, dateFilter.customDate || undefined, dateFilter.daysBack)
-      const fromTimestamp = `${from}T00:00:00.000Z`
-      const toTimestamp = `${to}T23:59:59.999Z`
-      
-      filtered = filtered.filter(pred => {
-        const kickoffTime = new Date(pred.kickoff_time)
-        return kickoffTime >= new Date(fromTimestamp) && kickoffTime <= new Date(toTimestamp)
-      })
-    }
+    const { from, to } = getDateRange(dateFilter.dateType, dateFilter.customDate || undefined, dateFilter.daysBack)
+    
+    // Normalize the target date to YYYY-MM-DD format for comparison
+    const targetDateStr = from // from and to should be the same for single day filters
+    
+    filtered = filtered.filter(pred => {
+      const kickoffTime = new Date(pred.kickoff_time)
+      // Get the date part in YYYY-MM-DD format for comparison
+      const kickoffDateStr = format(kickoffTime, 'yyyy-MM-dd')
+      // Compare date strings to avoid timezone issues
+      return kickoffDateStr === targetDateStr
+    })
 
     return filtered
   }
@@ -138,18 +141,25 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
         customDate: type === 'custom' && prev[planSlug]?.selectedDate 
           ? format(prev[planSlug].selectedDate!, 'yyyy-MM-dd')
           : '',
+        daysBack: type === 'previous' ? (prev[planSlug]?.daysBack || 1) : 0,
+        selectedDate: type === 'custom' ? prev[planSlug]?.selectedDate : undefined,
       }
     }))
   }
 
   const handlePreviousDays = (planSlug: string) => {
     const currentFilter = getDateFilter(planSlug)
+    const newDaysBack = currentFilter.dateType === 'previous' 
+      ? currentFilter.daysBack + 1 
+      : 1
     setDateFilters(prev => ({
       ...prev,
       [planSlug]: {
         ...currentFilter,
-        daysBack: currentFilter.daysBack + 1,
+        daysBack: newDaysBack,
         dateType: 'previous',
+        customDate: '',
+        selectedDate: undefined,
       }
     }))
   }
@@ -282,6 +292,45 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
+
+  // Manual update scores for a specific date
+  const updateScoresForDate = async (date: string, planSlug: string) => {
+    const key = `${planSlug}-${date}`
+    setUpdatingScores(prev => ({ ...prev, [key]: true }))
+
+    try {
+      const response = await fetch('/api/predictions/update-scores', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ date }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update scores')
+      }
+
+      if (data.updated > 0) {
+        toast.success(`Updated ${data.updated} prediction(s) with actual scores`)
+        // Refresh the page to show updated data
+        router.refresh()
+      } else {
+        toast.info('No predictions were updated. They may already be up to date or no matches found.')
+      }
+    } catch (error: any) {
+      console.error('Error updating scores:', error)
+      toast.error(error.message || 'Failed to update scores')
+    } finally {
+      setUpdatingScores(prev => {
+        const newState = { ...prev }
+        delete newState[key]
+        return newState
+      })
+    }
+  }
 
 
   // Helper to get team logo
@@ -537,6 +586,40 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                         />
                       </PopoverContent>
                     </Popover>
+                    {(() => {
+                      const dateFilter = getDateFilter(plan.slug)
+                      const { from } = getDateRange(
+                        dateFilter.dateType,
+                        dateFilter.customDate || undefined,
+                        dateFilter.daysBack
+                      )
+                      const key = `${plan.slug}-${from}`
+                      const isUpdating = updatingScores[key]
+                      const today = new Date()
+                      today.setHours(0, 0, 0, 0)
+                      const targetDate = new Date(from)
+                      targetDate.setHours(0, 0, 0, 0)
+                      const isPastDate = targetDate < today
+                      
+                      return (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => updateScoresForDate(from, plan.slug)}
+                          disabled={isUpdating || !isPastDate}
+                          className="px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium"
+                        >
+                          {isUpdating ? (
+                            <>
+                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current mr-2"></div>
+                              Updating...
+                            </>
+                          ) : (
+                            'Update'
+                          )}
+                        </Button>
+                      )
+                    })()}
                   </div>
                 </div>
               </CardHeader>
@@ -551,11 +634,12 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                     <div className="hidden md:block space-y-0 border-2 border-gray-200 rounded-xl overflow-hidden bg-white shadow-lg">
                       {/* Header */}
                       <div className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white px-3 sm:px-4 lg:px-6 py-3 lg:py-4 grid grid-cols-12 gap-2 lg:gap-4 items-center font-bold text-xs sm:text-sm shadow-md">
-                        <div className="col-span-3 lg:col-span-2">Time & League</div>
-                        <div className="col-span-4">Teams</div>
+                        <div className="col-span-2 lg:col-span-2">Time & League</div>
+                        <div className="col-span-3">Teams</div>
                         <div className="col-span-1 text-center">Tip</div>
                         <div className="col-span-1 text-center hidden md:block">Odd</div>
                         <div className="col-span-1 text-center hidden lg:block">Confidence</div>
+                        <div className="col-span-1 text-center hidden md:block">Score</div>
                         <div className="col-span-1 text-center hidden sm:block">Status</div>
                         <div className="col-span-1 text-right">Actions</div>
                       </div>
@@ -579,7 +663,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                           </div>
 
                           {/* Teams */}
-                          <div className="col-span-4 flex flex-col gap-2">
+                          <div className="col-span-3 flex flex-col gap-2">
                             <div className="flex items-center gap-2">
                               {getTeamLogo(pred.home_team) ? (
                                 <div className="relative w-6 h-6 flex-shrink-0">
@@ -655,6 +739,27 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                           {/* Confidence */}
                           <div className="col-span-1 flex justify-center hidden lg:flex">
                             <CircularProgress value={pred.confidence} size={50} strokeWidth={5} />
+                          </div>
+
+                          {/* Score */}
+                          <div className="col-span-1 text-center hidden md:block">
+                            {pred.home_score !== null && pred.away_score !== null ? (
+                              <div className="flex flex-col items-center">
+                                <span className="text-sm font-bold text-blue-600">
+                                  {pred.home_score} - {pred.away_score}
+                                </span>
+                                {pred.result && (
+                                  <Badge
+                                    variant={pred.result === 'win' ? 'default' : 'destructive'}
+                                    className="text-[10px] mt-1"
+                                  >
+                                    {pred.result === 'win' ? 'Win' : 'Loss'}
+                                  </Badge>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-400">-</span>
+                            )}
                           </div>
 
                           {/* Status */}
@@ -741,6 +846,11 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                                   <p className="text-sm font-semibold text-gray-900 truncate">
                                     {pred.home_team}
                                   </p>
+                                  {pred.home_score !== null && pred.away_score !== null && (
+                                    <span className="text-sm font-bold text-blue-600 ml-auto">
+                                      {pred.home_score}
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-2">
                                   {awayLogo ? (
@@ -763,6 +873,11 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                                 <p className="text-sm font-semibold text-gray-900 truncate">
                                     {pred.away_team}
                                 </p>
+                                  {pred.home_score !== null && pred.away_score !== null && (
+                                    <span className="text-sm font-bold text-blue-600 ml-auto">
+                                      {pred.away_score}
+                                    </span>
+                                  )}
                                 </div>
                                 <p className="text-xs text-gray-600 mt-1">{pred.league}</p>
                               </div>
@@ -792,6 +907,22 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                                 <span className="text-xs text-gray-600">Confidence:</span>
                                 <span className="text-xs font-semibold">{pred.confidence}%</span>
                               </div>
+                              {pred.home_score !== null && pred.away_score !== null && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs text-gray-600">Score:</span>
+                                  <span className="text-xs font-bold text-blue-600">
+                                    {pred.home_score} - {pred.away_score}
+                                  </span>
+                                  {pred.result && (
+                                    <Badge
+                                      variant={pred.result === 'win' ? 'default' : 'destructive'}
+                                      className="text-[10px]"
+                                    >
+                                      {pred.result === 'win' ? 'Win' : 'Loss'}
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
                             </div>
                             <div className="flex gap-2 pt-2 border-t">
                               <DropdownMenu>
@@ -949,6 +1080,40 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                         />
                       </PopoverContent>
                     </Popover>
+                    {(() => {
+                      const dateFilter = getDateFilter('correct-score')
+                      const { from } = getDateRange(
+                        dateFilter.dateType,
+                        dateFilter.customDate || undefined,
+                        dateFilter.daysBack
+                      )
+                      const key = `correct-score-${from}`
+                      const isUpdating = updatingScores[key]
+                      const today = new Date()
+                      today.setHours(0, 0, 0, 0)
+                      const targetDate = new Date(from)
+                      targetDate.setHours(0, 0, 0, 0)
+                      const isPastDate = targetDate < today
+                      
+                      return (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => updateScoresForDate(from, 'correct-score')}
+                          disabled={isUpdating || !isPastDate}
+                          className="px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium"
+                        >
+                          {isUpdating ? (
+                            <>
+                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current mr-2"></div>
+                              Updating...
+                            </>
+                          ) : (
+                            'Update'
+                          )}
+                        </Button>
+                      )
+                    })()}
                   </div>
                 </div>
               </CardHeader>
@@ -963,11 +1128,12 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                   <div className="hidden md:block space-y-0 border-2 border-gray-200 rounded-xl overflow-hidden bg-white shadow-lg">
                     {/* Header */}
                     <div className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white px-3 sm:px-4 lg:px-6 py-3 lg:py-4 grid grid-cols-12 gap-2 lg:gap-4 items-center font-bold text-xs sm:text-sm shadow-md">
-                      <div className="col-span-3 lg:col-span-2">Time & League</div>
-                      <div className="col-span-4">Teams</div>
-                      <div className="col-span-1 text-center">Score</div>
+                      <div className="col-span-2 lg:col-span-2">Time & League</div>
+                      <div className="col-span-3">Teams</div>
+                      <div className="col-span-1 text-center">Predicted</div>
                       <div className="col-span-1 text-center hidden md:block">Odds</div>
-                        <div className="col-span-1 text-center hidden lg:block">Confidence</div>
+                      <div className="col-span-1 text-center hidden lg:block">Confidence</div>
+                      <div className="col-span-1 text-center hidden md:block">Actual Score</div>
                       <div className="col-span-1 text-center hidden sm:block">Status</div>
                       <div className="col-span-1 text-right">Actions</div>
                     </div>
@@ -987,7 +1153,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                         )}
                       >
                         {/* Time & League */}
-                        <div className="col-span-3 lg:col-span-2">
+                        <div className="col-span-2 lg:col-span-2">
                           <div className="text-xs sm:text-sm font-medium text-gray-900">
                             {formatTime(pred.kickoff_time)}
                           </div>
@@ -995,7 +1161,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                         </div>
 
                         {/* Teams */}
-                        <div className="col-span-4 flex flex-col gap-2">
+                        <div className="col-span-3 flex flex-col gap-2">
                           <div className="flex items-center gap-2">
                             {getTeamLogo(pred.home_team) ? (
                               <div className="relative w-6 h-6 flex-shrink-0">
@@ -1054,9 +1220,14 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                           </div>
                         </div>
 
-                        {/* Score */}
+                        {/* Predicted Score */}
                         <div className="col-span-1 text-center">
                           <Badge variant="secondary" className="text-xs">{score}</Badge>
+                        </div>
+                        
+                        {/* Odds */}
+                        <div className="col-span-1 text-center hidden md:block">
+                          <span className="text-sm font-semibold text-gray-900">{pred.odds ? pred.odds.toFixed(2) : 'N/A'}</span>
                         </div>
                         
                         {/* Confidence */}
@@ -1068,9 +1239,25 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                           )}
                         </div>
 
-                        {/* Odds */}
+                        {/* Actual Score */}
                         <div className="col-span-1 text-center hidden md:block">
-                          <span className="text-sm font-semibold text-gray-900">{pred.odds ? pred.odds.toFixed(2) : 'N/A'}</span>
+                          {pred.home_score !== null && pred.away_score !== null ? (
+                            <div className="flex flex-col items-center">
+                              <span className="text-sm font-bold text-blue-600">
+                                {pred.home_score} - {pred.away_score}
+                              </span>
+                              {pred.result && (
+                                <Badge
+                                  variant={pred.result === 'win' ? 'default' : 'destructive'}
+                                  className="text-[10px] mt-1"
+                                >
+                                  {pred.result === 'win' ? 'Win' : 'Loss'}
+                                </Badge>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400">-</span>
+                          )}
                         </div>
 
                         {/* Status */}
@@ -1160,6 +1347,11 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                                 <p className="text-sm font-semibold text-gray-900 truncate">
                                   {pred.home_team}
                                 </p>
+                                {pred.home_score !== null && pred.away_score !== null && (
+                                  <span className="text-sm font-bold text-blue-600 ml-auto">
+                                    {pred.home_score}
+                                  </span>
+                                )}
                               </div>
                               <div className="flex items-center gap-2">
                                 {awayLogo ? (
@@ -1182,6 +1374,11 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                                 <p className="text-sm font-semibold text-gray-900 truncate">
                                   {pred.away_team}
                                 </p>
+                                {pred.home_score !== null && pred.away_score !== null && (
+                                  <span className="text-sm font-bold text-blue-600 ml-auto">
+                                    {pred.away_score}
+                                  </span>
+                                )}
                               </div>
                               <p className="text-xs text-gray-600 mt-1">{pred.league}</p>
                             </div>
@@ -1200,7 +1397,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                           </div>
                           <div className="flex flex-wrap gap-2 pt-2 border-t">
                             <div className="flex items-center gap-1">
-                              <span className="text-xs text-gray-600">Score:</span>
+                              <span className="text-xs text-gray-600">Predicted:</span>
                               <Badge variant="secondary" className="text-xs">{score}</Badge>
                             </div>
                             <div className="flex items-center gap-1">
@@ -1211,6 +1408,22 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                               <div className="flex items-center gap-1">
                                 <span className="text-xs text-gray-600">Confidence:</span>
                                 <CircularProgress value={pred.confidence} size={24} strokeWidth={3} />
+                              </div>
+                            )}
+                            {pred.home_score !== null && pred.away_score !== null && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-xs text-gray-600">Actual:</span>
+                                <span className="text-xs font-bold text-blue-600">
+                                  {pred.home_score} - {pred.away_score}
+                                </span>
+                                {pred.result && (
+                                  <Badge
+                                    variant={pred.result === 'win' ? 'default' : 'destructive'}
+                                    className="text-[10px]"
+                                  >
+                                    {pred.result === 'win' ? 'Win' : 'Loss'}
+                                  </Badge>
+                                )}
                               </div>
                             )}
                           </div>

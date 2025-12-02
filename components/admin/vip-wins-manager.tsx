@@ -13,10 +13,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner'
 import { Database } from '@/types/database'
 import { Plus, Edit, Trash2 } from 'lucide-react'
-import { formatDate } from '@/lib/utils/date'
+import { formatDate, getDateRange } from '@/lib/utils/date'
 import { LeagueSelector } from '@/components/admin/league-selector'
 import { TeamSelector } from '@/components/admin/team-selector'
 import Link from 'next/link'
+import { Calendar } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { CalendarIcon } from 'lucide-react'
+import { format } from 'date-fns'
 
 type VIPWinningInsert = Database['public']['Tables']['vip_winnings']['Insert']
 type VIPWinningUpdate = Database['public']['Tables']['vip_winnings']['Update']
@@ -31,6 +35,17 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
   const [loading, setLoading] = useState(false)
   const [editingWinning, setEditingWinning] = useState<any>(null)
   const [showDialog, setShowDialog] = useState(false)
+  const [dateFilter, setDateFilter] = useState<{
+    dateType: 'all' | 'previous' | 'today' | 'tomorrow' | 'custom'
+    customDate: string
+    daysBack: number
+    selectedDate: Date | undefined
+  }>({
+    dateType: 'all',
+    customDate: '',
+    daysBack: 1,
+    selectedDate: undefined,
+  })
   const [form, setForm] = useState({
     plan_id: '',
     plan_name: '',
@@ -46,6 +61,55 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
   useEffect(() => {
     setWinnings(initialWinnings)
   }, [initialWinnings])
+
+  const handleDateTypeChange = (type: 'all' | 'previous' | 'today' | 'tomorrow' | 'custom') => {
+    setDateFilter(prev => ({
+      ...prev,
+      dateType: type,
+      customDate: type === 'custom' && prev.selectedDate 
+        ? format(prev.selectedDate, 'yyyy-MM-dd')
+        : '',
+      daysBack: type === 'previous' ? (prev.daysBack || 1) : prev.daysBack,
+      selectedDate: type === 'custom' ? prev.selectedDate : undefined,
+    }))
+  }
+
+  const handlePreviousDays = () => {
+    setDateFilter(prev => ({
+      ...prev,
+      daysBack: prev.dateType === 'previous' ? prev.daysBack + 1 : 1,
+      dateType: 'previous',
+      customDate: '',
+      selectedDate: undefined,
+    }))
+  }
+
+  const handleDateSelect = (date: Date | undefined) => {
+    setDateFilter(prev => ({
+      ...prev,
+      selectedDate: date,
+      customDate: date ? format(date, 'yyyy-MM-dd') : '',
+      dateType: date ? 'custom' : 'all',
+    }))
+  }
+
+  // Filter winnings based on date filter
+  const filteredWinnings = (() => {
+    if (dateFilter.dateType === 'all') {
+      return winnings
+    }
+
+    const { from } = getDateRange(
+      dateFilter.dateType,
+      dateFilter.customDate || undefined,
+      dateFilter.daysBack
+    )
+    
+    return winnings.filter((winning) => {
+      const winningDate = new Date(winning.date).toISOString().split('T')[0]
+      return winningDate === from
+    })
+  })()
 
   const handleEdit = (winning: any) => {
     setEditingWinning(winning)
@@ -205,30 +269,127 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
     <div className="space-y-6">
       <Card className="border-2 border-gray-200 shadow-sm">
         <CardHeader className="p-5 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-lg font-semibold">VIP Previous Wins</CardTitle>
-              <CardDescription className="text-sm mt-1">
-                Manage VIP winning records for each plan type
-              </CardDescription>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg font-semibold">VIP Previous Wins</CardTitle>
+                <CardDescription className="text-sm mt-1">
+                  Manage VIP winning records for each plan type
+                </CardDescription>
+              </div>
+              <Button asChild className="bg-red-600 hover:bg-red-700 text-white">
+                <Link href="/admin/vip-wins/add">
+                <Plus className="h-4 w-4 mr-2" />
+                Add VIP Win
+                </Link>
+              </Button>
             </div>
-            <Button asChild className="bg-red-600 hover:bg-red-700 text-white">
-              <Link href="/admin/vip-wins/add">
-              <Plus className="h-4 w-4 mr-2" />
-              Add VIP Win
-              </Link>
-            </Button>
+            
+            {/* Date Filters */}
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
+              <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+                <Button
+                  variant={dateFilter.dateType === 'all' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => handleDateTypeChange('all')}
+                  className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                    dateFilter.dateType === 'all'
+                      ? 'bg-[#1e40af] text-white'
+                      : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
+                  }`}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={dateFilter.dateType === 'previous' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={handlePreviousDays}
+                  className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                    dateFilter.dateType === 'previous'
+                      ? 'bg-[#1e40af] text-white'
+                      : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
+                  }`}
+                >
+                  Previous {dateFilter.dateType === 'previous' && dateFilter.daysBack > 1 ? `(${dateFilter.daysBack})` : ''}
+                </Button>
+                <Button
+                  variant={dateFilter.dateType === 'today' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => handleDateTypeChange('today')}
+                  className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                    dateFilter.dateType === 'today'
+                      ? 'bg-[#1e40af] text-white'
+                      : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
+                  }`}
+                >
+                  Today
+                </Button>
+                <Button
+                  variant={dateFilter.dateType === 'tomorrow' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => handleDateTypeChange('tomorrow')}
+                  className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                    dateFilter.dateType === 'tomorrow'
+                      ? 'bg-[#1e40af] text-white'
+                      : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
+                  }`}
+                >
+                  Tomorrow
+                </Button>
+              </div>
+              {/* Custom Date Picker */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={dateFilter.dateType === 'custom' ? 'default' : 'outline'}
+                    size="sm"
+                    className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium ${
+                      dateFilter.dateType === 'custom'
+                        ? 'bg-[#1e40af] text-white'
+                        : ''
+                    }`}
+                  >
+                    <CalendarIcon className="h-4 w-4 mr-2" />
+                    {dateFilter.selectedDate 
+                      ? format(dateFilter.selectedDate, 'MMM dd') 
+                      : 'Pick Date'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={dateFilter.selectedDate}
+                    onSelect={handleDateSelect}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-4 lg:p-6">
-          {winnings.length === 0 ? (
+          {filteredWinnings.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-muted-foreground">No VIP winnings records yet.</p>
-              <Button asChild className="mt-4 bg-red-600 hover:bg-red-700 text-white">
-                <Link href="/admin/vip-wins/add">
-                Add First VIP Win
-                </Link>
-              </Button>
+              <p className="text-muted-foreground">
+                {winnings.length === 0 
+                  ? 'No VIP winnings records yet.'
+                  : `No VIP winnings found for ${
+                      dateFilter.dateType === 'today' ? 'today' 
+                      : dateFilter.dateType === 'tomorrow' ? 'tomorrow'
+                      : dateFilter.dateType === 'previous' ? `${dateFilter.daysBack} day(s) ago`
+                      : dateFilter.dateType === 'custom' && dateFilter.selectedDate
+                        ? format(dateFilter.selectedDate, 'MMMM dd, yyyy')
+                      : 'the selected date'
+                    }.`
+                }
+              </p>
+              {winnings.length === 0 && (
+                <Button asChild className="mt-4 bg-red-600 hover:bg-red-700 text-white">
+                  <Link href="/admin/vip-wins/add">
+                  Add First VIP Win
+                  </Link>
+                </Button>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -245,7 +406,7 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {winnings.map((winning) => (
+                  {filteredWinnings.map((winning) => (
                     <TableRow key={winning.id}>
                       <TableCell className="font-medium">
                         {formatDate(winning.date)}

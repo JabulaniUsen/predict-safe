@@ -73,6 +73,8 @@ CREATE TABLE IF NOT EXISTS predictions (
   kickoff_time TIMESTAMP WITH TIME ZONE NOT NULL,
   status VARCHAR(20) DEFAULT 'not_started' CHECK (status IN ('not_started', 'live', 'finished')),
   result VARCHAR(10) CHECK (result IN ('win', 'loss', 'pending')),
+  home_score INTEGER,
+  away_score INTEGER,
   admin_notes TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -89,6 +91,8 @@ CREATE TABLE IF NOT EXISTS correct_score_predictions (
   kickoff_time TIMESTAMP WITH TIME ZONE NOT NULL,
   status VARCHAR(20) DEFAULT 'not_started' CHECK (status IN ('not_started', 'live', 'finished')),
   result VARCHAR(10) CHECK (result IN ('win', 'loss', 'pending')),
+  home_score INTEGER,
+  away_score INTEGER,
   admin_notes TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

@@ -359,10 +359,19 @@ export function FreePredictionsSection() {
         }
         }
 
+        // Filter predictions based on odds range for free filter (1.2 to 1.6)
+        let filteredPredictions = allPredictions
+        if (selectedFilter === 'free') {
+          filteredPredictions = allPredictions.filter(pred => {
+            const odds = pred.odds
+            return odds >= 1.2 && odds <= 1.6
+          })
+        }
+        
         // For "free" filter, limit to 5. For others, use all collected predictions
         const finalPredictions = selectedFilter === 'free' 
-          ? allPredictions.slice(0, 5)
-          : allPredictions
+          ? filteredPredictions.slice(0, 5)
+          : filteredPredictions
         setPredictions(finalPredictions)
       } catch (error) {
         console.error('Error fetching predictions:', error)
@@ -780,11 +789,15 @@ export function FreePredictionsSection() {
                     </div>
                   </div>
 
-                  {/* Score Row - Show if available */}
-                  {(prediction.home_score !== undefined && prediction.away_score !== undefined) && (
+                  {/* Score Row - Show if game is finished or scores are available */}
+                  {(prediction.status === 'finished' || (prediction.home_score !== undefined && prediction.away_score !== undefined)) && (
                     <div className="flex items-center justify-center gap-2 py-1">
                       <span className="text-sm font-semibold text-gray-900">
-                        {prediction.home_score} - {prediction.away_score}
+                        {prediction.home_score !== undefined && prediction.away_score !== undefined
+                          ? `${prediction.home_score} - ${prediction.away_score}`
+                          : prediction.status === 'finished'
+                          ? 'FT'
+                          : '-'}
                       </span>
                     </div>
                   )}
@@ -817,8 +830,10 @@ export function FreePredictionsSection() {
                        prediction.prediction_type}
                     </div>
                     <div className="text-[10px] sm:text-xs font-semibold text-gray-900 text-center">
-                      {prediction.home_score !== undefined && prediction.away_score !== undefined 
+                      {prediction.status === 'finished' && prediction.home_score !== undefined && prediction.away_score !== undefined
                         ? `${prediction.home_score}-${prediction.away_score}`
+                        : prediction.status === 'finished'
+                        ? 'FT'
                         : '-'}
                     </div>
                     <div className="text-[10px] sm:text-[5px] font-semibold text-gray-900 text-center">
@@ -929,10 +944,12 @@ export function FreePredictionsSection() {
 
                 {/* Score */}
                 <div className="col-span-1 text-center">
-                  {prediction.home_score !== undefined && prediction.away_score !== undefined ? (
+                  {prediction.status === 'finished' && prediction.home_score !== undefined && prediction.away_score !== undefined ? (
                     <div className="text-sm font-semibold text-gray-900">
                       {prediction.home_score} - {prediction.away_score}
                     </div>
+                  ) : prediction.status === 'finished' ? (
+                    <div className="text-xs font-semibold text-gray-600">FT</div>
                   ) : (
                     <div className="text-xs text-gray-400">-</div>
                   )}
