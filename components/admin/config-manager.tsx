@@ -43,6 +43,35 @@ export function ConfigManager({ config }: ConfigManagerProps) {
     linkedin: socialLinks.linkedin || '',
   })
 
+  // Get WhatsApp number from config - handle both array (legacy) and string formats
+  const getWhatsAppNumber = () => {
+    const whatsappValue = configMap.get('whatsapp_number') || configMap.get('whatsapp_numbers')
+    if (!whatsappValue) return ''
+    
+    // If it's already a string, use it
+    if (typeof whatsappValue === 'string') {
+      // Check if it's a JSON array (legacy format)
+      try {
+        const parsed = JSON.parse(whatsappValue)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed[0] // Use first number from legacy array
+        }
+      } catch {
+        // Not JSON, use as string
+        return whatsappValue
+      }
+    }
+    
+    // If it's an array (legacy), use first number
+    if (Array.isArray(whatsappValue) && whatsappValue.length > 0) {
+      return whatsappValue[0]
+    }
+    
+    return ''
+  }
+  
+  const [whatsappNumber, setWhatsappNumber] = useState<string>(getWhatsAppNumber())
+
   const handleUpdateConfig = async (key: string, value: any) => {
     setLoading(true)
     try {
@@ -91,6 +120,36 @@ export function ConfigManager({ config }: ConfigManagerProps) {
       toast.success('Social links updated!')
     } catch (error: any) {
       toast.error(error.message || 'Failed to update social links')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleUpdateWhatsAppNumber = async () => {
+    if (!whatsappNumber.trim()) {
+      toast.error('WhatsApp number cannot be empty')
+      return
+    }
+
+    setLoading(true)
+    try {
+      const supabase = createClient()
+      
+      const upsertData: Database['public']['Tables']['site_config']['Insert'] = {
+        key: 'whatsapp_number',
+        value: whatsappNumber.trim(),
+      }
+      
+      const { error } = await supabase
+        .from('site_config')
+        // @ts-expect-error - Supabase type inference issue
+        .upsert(upsertData, { onConflict: 'key' })
+
+      if (error) throw error
+
+      toast.success('WhatsApp number updated!')
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update WhatsApp number')
     } finally {
       setLoading(false)
     }
@@ -163,7 +222,7 @@ export function ConfigManager({ config }: ConfigManagerProps) {
         <Card className="border-2 border-gray-200 shadow-sm">
           <CardHeader className="p-5 border-b border-gray-200">
             <CardTitle className="text-lg font-semibold">Contact Information</CardTitle>
-            <CardDescription className="text-sm mt-1">Contact details and Telegram</CardDescription>
+            <CardDescription className="text-sm mt-1">Contact details, Telegram, and WhatsApp</CardDescription>
         </CardHeader>
           <CardContent className="p-5 space-y-4">
           <div className="space-y-2">
@@ -184,6 +243,19 @@ export function ConfigManager({ config }: ConfigManagerProps) {
               onBlur={(e) => handleUpdateConfig('contact_email', e.target.value)}
                 placeholder="contact@predictsafe.com"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp_number">WhatsApp Number</Label>
+              <Input
+                id="whatsapp_number"
+                value={whatsappNumber}
+                onChange={(e) => setWhatsappNumber(e.target.value)}
+                onBlur={handleUpdateWhatsAppNumber}
+                placeholder="+234 704 532 1193"
+              />
+              <p className="text-xs text-muted-foreground">
+                Enter the WhatsApp number that will be used across the website
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -250,4 +322,5 @@ export function ConfigManager({ config }: ConfigManagerProps) {
     </div>
   )
 }
+
 

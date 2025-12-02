@@ -12,7 +12,7 @@ interface SiteConfig {
   site_subheader?: string
   telegram_link?: string
   contact_email?: string
-  whatsapp_numbers?: string[]
+  whatsapp_number?: string
   social_links?: {
     facebook?: string
     twitter?: string
@@ -33,7 +33,7 @@ export function Footer() {
       const { data } = await supabase
         .from('site_config')
         .select('key, value')
-        .in('key', ['site_header', 'site_subheader', 'telegram_link', 'contact_email', 'whatsapp_numbers', 'social_links'])
+        .in('key', ['site_header', 'site_subheader', 'telegram_link', 'contact_email', 'whatsapp_number', 'whatsapp_numbers', 'social_links'])
 
       if (data) {
         const configData: SiteConfig = {}
@@ -49,6 +49,28 @@ export function Footer() {
                 : (item.value as any)
             } catch {
               configData[item.key as keyof SiteConfig] = item.value as any
+            }
+          } else if (item.key === 'whatsapp_number') {
+            // Use single WhatsApp number
+            const value = item.value
+            if (value && typeof value === 'string') {
+              configData.whatsapp_number = value
+            }
+          } else if (item.key === 'whatsapp_numbers') {
+            // Legacy support: if whatsapp_number doesn't exist, try whatsapp_numbers (array)
+            if (!configData.whatsapp_number) {
+              try {
+                const parsed = typeof item.value === 'string' 
+                  ? JSON.parse(item.value) 
+                  : item.value
+                if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
+                  configData.whatsapp_number = parsed[0] // Use first number from legacy array
+                }
+              } catch {
+                if (Array.isArray(item.value) && item.value.length > 0 && typeof item.value[0] === 'string') {
+                  configData.whatsapp_number = item.value[0]
+                }
+              }
             }
           } else {
             configData[item.key as keyof SiteConfig] = item.value as any
@@ -243,14 +265,29 @@ export function Footer() {
             </ul>
             
             {/* Contact Info */}
-            {config.contact_email && (
-              <div className="mt-6 pt-6 border-t border-gray-700">
-                <div className="flex items-center gap-2 text-gray-300 text-sm mb-2">
-                  <Mail className="h-4 w-4" />
-                  <a href={`mailto:${config.contact_email}`} className="hover:text-white transition-colors">
-                    {config.contact_email}
-                  </a>
-                </div>
+            {(config.contact_email || config.whatsapp_number) && (
+              <div className="mt-6 pt-6 border-t border-gray-700 space-y-2">
+                {config.contact_email && (
+                  <div className="flex items-center gap-2 text-gray-300 text-sm">
+                    <Mail className="h-4 w-4" />
+                    <a href={`mailto:${config.contact_email}`} className="hover:text-white transition-colors">
+                      {config.contact_email}
+                    </a>
+                  </div>
+                )}
+                {config.whatsapp_number && (
+                  <div className="flex items-center gap-2 text-gray-300 text-sm">
+                    <Phone className="h-4 w-4" />
+                    <a 
+                      href={`https://wa.me/${config.whatsapp_number.replace(/[^0-9]/g, '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:text-white transition-colors"
+                    >
+                      {config.whatsapp_number}
+                    </a>
+                  </div>
+                )}
               </div>
             )}
           </div>

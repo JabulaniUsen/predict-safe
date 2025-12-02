@@ -3,6 +3,7 @@ import { Footer } from '@/components/layout/footer'
 import type { Metadata } from 'next'
 import { Mail, Phone, Send } from 'lucide-react'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/server'
 
 export const metadata: Metadata = {
   title: 'Contact Us | PredictSafe',
@@ -10,7 +11,51 @@ export const metadata: Metadata = {
     'Contact PredictSafe support team for questions about subscriptions, VIP packages, payments, or technical issues.',
 }
 
-export default function ContactPage() {
+export default async function ContactPage() {
+  const supabase = await createClient()
+  
+  // Fetch site config
+  const { data: configData } = await supabase
+    .from('site_config')
+    .select('key, value')
+    .in('key', ['contact_email', 'telegram_link', 'whatsapp_number', 'whatsapp_numbers'])
+
+  const config: {
+    contact_email?: string
+    telegram_link?: string
+    whatsapp_number?: string
+  } = {}
+
+  if (configData && Array.isArray(configData)) {
+    configData.forEach((item: { key: string; value: any }) => {
+      if (item.key === 'whatsapp_number') {
+        config.whatsapp_number = typeof item.value === 'string' ? item.value : String(item.value || '')
+      } else if (item.key === 'whatsapp_numbers' && !config.whatsapp_number) {
+        // Legacy support: if whatsapp_number doesn't exist, try whatsapp_numbers (array)
+        try {
+          const parsed = typeof item.value === 'string' 
+            ? JSON.parse(item.value) 
+            : item.value
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            config.whatsapp_number = parsed[0] // Use first number from legacy array
+          }
+        } catch {
+          if (Array.isArray(item.value) && item.value.length > 0) {
+            config.whatsapp_number = item.value[0]
+          }
+        }
+      } else if (item.key === 'contact_email') {
+        config.contact_email = item.value as string
+      } else if (item.key === 'telegram_link') {
+        config.telegram_link = item.value as string
+      }
+    })
+  }
+
+  const contactEmail = config.contact_email || 'predictsafe@gmail.com'
+  const telegramLink = config.telegram_link || 'https://t.me/joinsurefixedwin'
+  const whatsappNumber = config.whatsapp_number || '+234 704 532 1193'
+
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
       <Navbar />
@@ -39,27 +84,38 @@ export default function ContactPage() {
                     <div className="flex items-center gap-3">
                       <Mail className="h-4 w-4" />
                       <a
-                        href="mailto:predictsafe@gmail.com"
+                        href={`mailto:${contactEmail}`}
                         className="hover:underline break-all"
                       >
-                        predictsafe@gmail.com
+                        {contactEmail}
                       </a>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <Phone className="h-4 w-4" />
-                      <span className="text-blue-100">WhatsApp support: +234 704 532 1193</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Send className="h-4 w-4" />
-                      <Link
-                        href="https://t.me/joinsurefixedwin"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="hover:underline"
-                      >
-                        Join our Telegram channel
-                      </Link>
-                    </div>
+                    {whatsappNumber && (
+                      <div className="flex items-center gap-3">
+                        <Phone className="h-4 w-4" />
+                        <a
+                          href={`https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-100 hover:underline"
+                        >
+                          WhatsApp support: {whatsappNumber}
+                        </a>
+                      </div>
+                    )}
+                    {telegramLink && (
+                      <div className="flex items-center gap-3">
+                        <Send className="h-4 w-4" />
+                        <Link
+                          href={telegramLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:underline"
+                        >
+                          Join our Telegram channel
+                        </Link>
+                      </div>
+                    )}
                   </div>
 
                   <p className="mt-5 text-[11px] text-blue-100/80 leading-relaxed">
@@ -103,5 +159,3 @@ export default function ContactPage() {
     </div>
   )
 }
-
-
