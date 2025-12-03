@@ -24,7 +24,7 @@ function AddPredictionContent() {
   const planSlug = searchParams.get('plan') || ''
   const editId = searchParams.get('edit') || ''
   const isEditMode = !!editId
-  
+
   const [loading, setLoading] = useState(false)
   const [checkingAuth, setCheckingAuth] = useState(true)
   const [loadingPrediction, setLoadingPrediction] = useState(isEditMode)
@@ -36,6 +36,7 @@ function AddPredictionContent() {
     prediction_type: '',
     odds: '',
     confidence: '',
+    kickoff_date: '',
     kickoff_time: '',
     admin_notes: '',
   })
@@ -44,7 +45,7 @@ function AddPredictionContent() {
     const checkAuth = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      
+
       if (!user) {
         router.push('/login')
         return
@@ -92,11 +93,13 @@ function AddPredictionContent() {
         const prediction = data as Prediction
 
         // Set form data
+        const kickoffDateTime = prediction.kickoff_time ? new Date(prediction.kickoff_time) : null
         setFormData({
           prediction_type: prediction.prediction_type || '',
           odds: prediction.odds?.toString() || '',
           confidence: prediction.confidence?.toString() || '',
-          kickoff_time: prediction.kickoff_time ? new Date(prediction.kickoff_time).toISOString().slice(0, 16) : '',
+          kickoff_date: kickoffDateTime ? kickoffDateTime.toISOString().slice(0, 10) : '',
+          kickoff_time: kickoffDateTime ? kickoffDateTime.toISOString().slice(11, 16) : '',
           admin_notes: prediction.admin_notes || '',
         })
 
@@ -131,10 +134,15 @@ function AddPredictionContent() {
     setLoading(true)
 
     const formDataObj = new FormData(e.currentTarget)
-    const planType = planSlug 
+    const planType = planSlug
       ? getPlanTypeFromSlug(planSlug)
       : (formDataObj.get('plan_type') as string)
-    
+
+    // Combine date and time into ISO datetime string
+    const kickoffDate = formDataObj.get('kickoff_date') as string
+    const kickoffTime = formDataObj.get('kickoff_time') as string
+    const kickoffDateTime = `${kickoffDate}T${kickoffTime}:00`
+
     const baseData = {
       plan_type: planType as 'profit_multiplier' | 'daily_2_odds' | 'standard' | 'free',
       home_team: (homeTeam || formDataObj.get('home_team')) as string,
@@ -143,13 +151,13 @@ function AddPredictionContent() {
       prediction_type: formDataObj.get('prediction_type') as string,
       odds: parseFloat(formDataObj.get('odds') as string),
       confidence: parseInt(formDataObj.get('confidence') as string),
-      kickoff_time: formDataObj.get('kickoff_time') as string,
+      kickoff_time: kickoffDateTime,
       admin_notes: (formDataObj.get('admin_notes') as string) || null,
     }
 
     try {
       const supabase = createClient()
-      
+
       if (isEditMode) {
         const updateData: Database['public']['Tables']['predictions']['Update'] = baseData
         const { error } = await supabase
@@ -169,7 +177,7 @@ function AddPredictionContent() {
         if (error) throw error
         toast.success('Prediction added successfully!')
       }
-      
+
       router.push('/admin/predictions')
     } catch (error: any) {
       toast.error(error.message || `Failed to ${isEditMode ? 'update' : 'add'} prediction`)
@@ -241,10 +249,10 @@ function AddPredictionContent() {
               {planSlug && (
                 <div className="space-y-2">
                   <Label htmlFor="prediction_type">Prediction Type *</Label>
-                  <Input 
-                    name="prediction_type" 
-                    placeholder="e.g., Over 2.5, Home Win" 
-                    required 
+                  <Input
+                    name="prediction_type"
+                    placeholder="e.g., Over 2.5, Home Win"
+                    required
                     value={formData.prediction_type}
                     onChange={(e) => setFormData({ ...formData, prediction_type: e.target.value })}
                   />
@@ -292,45 +300,61 @@ function AddPredictionContent() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="odds">Odds *</Label>
-                  <Input 
-                    name="odds" 
-                    type="number" 
-                    step="0.01" 
-                    required 
+                  <Input
+                    name="odds"
+                    type="number"
+                    step="0.01"
+                    required
                     value={formData.odds}
                     onChange={(e) => setFormData({ ...formData, odds: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="confidence">Confidence (%) *</Label>
-                  <Input 
-                    name="confidence" 
-                    type="number" 
-                    min="0" 
-                    max="100" 
-                    required 
+                  <Input
+                    name="confidence"
+                    type="number"
+                    min="0"
+                    max="100"
+                    required
                     value={formData.confidence}
                     onChange={(e) => setFormData({ ...formData, confidence: e.target.value })}
                   />
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="kickoff_time">Kickoff Time *</Label>
-                <Input 
-                  name="kickoff_time" 
-                  type="datetime-local" 
-                  required 
-                  value={formData.kickoff_time}
-                  onChange={(e) => setFormData({ ...formData, kickoff_time: e.target.value })}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="kickoff_date">Kickoff Date *</Label>
+                  <Input
+                    name="kickoff_date"
+                    type="date"
+                    required
+                    value={formData.kickoff_date}
+                    onChange={(e) => setFormData({ ...formData, kickoff_date: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="kickoff_time">Kickoff Time (24h format: HH:MM) *</Label>
+                  <Input
+                    name="kickoff_time"
+                    type="text"
+                    pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]"
+                    placeholder="14:30"
+                    required
+                    value={formData.kickoff_time}
+                    onChange={(e) => setFormData({ ...formData, kickoff_time: e.target.value })}
+                    title="Enter time in 24-hour format (HH:MM), e.g., 14:30 or 19:45"
+                  />
+                  <p className="text-xs text-muted-foreground">Format: HH:MM (e.g., 14:30, 19:45)</p>
+                </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="admin_notes">Admin Notes (Optional)</Label>
-                <Textarea 
-                  name="admin_notes" 
-                  rows={4} 
+                <Textarea
+                  name="admin_notes"
+                  rows={4}
                   value={formData.admin_notes}
                   onChange={(e) => setFormData({ ...formData, admin_notes: e.target.value })}
                 />

@@ -124,11 +124,14 @@ export function FreePredictionsSection() {
         const allPredictions: FreePrediction[] = []
 
         // Determine max predictions based on filter
-        // Only "free" (Safe Picks) should have 5, others should have more
+        // "free" (Safe Picks) should have minimum 5 games
         const maxPredictions = selectedFilter === 'free' ? 5 : 15
 
         // Track which prediction types we've used to ensure variety
-        const typeRotation = ['Home Win', 'Away Win', 'Over 2.5', 'Over 1.5', 'BTTS', 'Double Chance']
+        // Safe free picks only use: Super Single, Double Chance, Home Win, Away Win, 1.5 Goals
+        const typeRotation = selectedFilter === 'free'
+          ? ['Home Win', 'Away Win', 'Over 1.5', 'Double Chance']
+          : ['Home Win', 'Away Win', 'Over 2.5', 'Over 1.5', 'BTTS', 'Double Chance']
         let typeIndex = 0
 
         // For "all" filter, we need to collect all predictions from all filters
@@ -160,11 +163,11 @@ export function FreePredictionsSection() {
               const predictionTypes: Array<{ type: string, odds: number }> = []
 
               if (oddsData) {
-                // Helper to check if odds are in range (1.30 - 1.50)
+                // Helper to check if odds are in range (1.15 - 1.60)
                 const isInRange = (odd: string | undefined) => {
                   if (!odd) return false
                   const val = parseFloat(odd)
-                  return val >= 1.30 && val <= 1.50
+                  return val >= 1.15 && val <= 1.60
                 }
 
                 if (isInRange(oddsData.odd_1)) predictionTypes.push({ type: 'Home Win', odds: parseFloat(oddsData.odd_1!) })
@@ -214,7 +217,8 @@ export function FreePredictionsSection() {
         } else {
           // For other filters, process fixtures until we have enough predictions
           // Increase buffer to find enough matches with the odds criteria
-          const buffer = selectedFilter === 'free' ? 15 : 10
+          // For safe free picks, use larger buffer to ensure we get minimum 5 games
+          const buffer = selectedFilter === 'free' ? 30 : 10
           const fixturesToProcess = fixtures.slice(0, maxPredictions + buffer)
 
           // Fetch all odds in parallel for the fixtures we need
@@ -246,24 +250,25 @@ export function FreePredictionsSection() {
               let predictionType: string
 
               if (selectedFilter === 'free') {
-                // Add multiple prediction types for free/all - get all available types
-                // Filter by odds range 1.30 - 1.50
+                // Safe free picks: Only include specific categories
+                // Categories: Super Single, Double Chance, Home Win, Away Win, 1.5 Goals
+                // Filter by odds range 1.15 - 1.60
                 const isInRange = (odd: string | undefined) => {
                   if (!odd) return false
                   const val = parseFloat(odd)
-                  return val >= 1.30 && val <= 1.50
+                  return val >= 1.15 && val <= 1.60
                 }
 
                 if (oddsData) {
+                  // Only add allowed prediction types for safe free picks
                   if (isInRange(oddsData.odd_1)) availableTypes.push('Home Win')
                   if (isInRange(oddsData.odd_2)) availableTypes.push('Away Win')
-                  if (isInRange(oddsData['o+2.5'])) availableTypes.push('Over 2.5')
                   if (isInRange(oddsData['o+1.5'])) availableTypes.push('Over 1.5')
-                  if (isInRange(oddsData.bts_yes)) availableTypes.push('BTTS')
                   if (isInRange(oddsData.odd_1x)) availableTypes.push('Double Chance')
+                  // Note: Super Single will be the highest odd among Home Win, Away Win, Over 1.5
                 } else {
-                  // Default predictions if no odds
-                  availableTypes.push('Over 2.5', 'Home Win', 'BTTS', 'Over 1.5', 'Away Win', 'Double Chance')
+                  // Default predictions if no odds - only allowed types
+                  availableTypes.push('Home Win', 'Away Win', 'Over 1.5', 'Double Chance')
                 }
 
                 // Select prediction type from rotation to ensure variety
@@ -283,18 +288,19 @@ export function FreePredictionsSection() {
                 if (!selectedType && availableTypes.length > 0) {
                   selectedType = availableTypes[0]
                 } else if (!selectedType) {
-                  selectedType = 'Over 2.5'
+                  // Default to Home Win for safe free picks
+                  selectedType = 'Home Win'
                 }
 
                 predictionType = selectedType
               } else {
                 // Filter-specific predictions
-                // Apply odds filter 1.30-1.50 to all filters including super_single
+                // Apply odds filter 1.15-1.60 to all filters including super_single
 
                 const isInRange = (odd: string | undefined) => {
                   if (!odd) return false
                   const val = parseFloat(odd)
-                  return val >= 1.30 && val <= 1.50
+                  return val >= 1.15 && val <= 1.60
                 }
 
                 if (selectedFilter === 'home_win' && isInRange(oddsData?.odd_1)) {
@@ -312,12 +318,12 @@ export function FreePredictionsSection() {
                 } else if (selectedFilter === 'super_single') {
                   // Super single - pick the best odds prediction within range
                   if (oddsData) {
-                    // Find the highest odd that is still within our range (1.30-1.50)
+                    // Find the highest odd that is still within our range (1.15-1.60)
                     const validOptions = [
                       { type: 'Home Win', odd: parseFloat(oddsData.odd_1 || '0') },
                       { type: 'Away Win', odd: parseFloat(oddsData.odd_2 || '0') },
                       { type: 'Over 2.5', odd: parseFloat(oddsData['o+2.5'] || '0') }
-                    ].filter(opt => opt.odd >= 1.30 && opt.odd <= 1.50)
+                    ].filter(opt => opt.odd >= 1.15 && opt.odd <= 1.60)
 
                     // Sort by odds descending to get the "super" single (highest valid odd)
                     validOptions.sort((a, b) => b.odd - a.odd)
@@ -386,12 +392,20 @@ export function FreePredictionsSection() {
           }
         }
 
-        // Filter predictions based on odds range for all filters (1.30 to 1.50)
+        // Filter predictions based on odds range for all filters (1.15 to 1.60)
         // Note: We already filtered during generation, but this is a safety check
         let filteredPredictions = allPredictions.filter(pred => {
           const odds = pred.odds
-          return odds >= 1.30 && odds <= 1.50
+          return odds >= 1.15 && odds <= 1.60
         })
+
+        // For safe free picks, ensure we only have allowed prediction types
+        if (selectedFilter === 'free') {
+          const allowedTypes = ['Home Win', 'Away Win', 'Over 1.5', 'Double Chance']
+          filteredPredictions = filteredPredictions.filter(pred =>
+            allowedTypes.includes(pred.prediction_type)
+          )
+        }
 
         // For "free" filter, limit to 5. For others, use all collected predictions
         const finalPredictions = selectedFilter === 'free'
@@ -541,8 +555,8 @@ export function FreePredictionsSection() {
                 setDaysBack(0)
               }}
               className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'today'
-                  ? 'bg-[#1e40af] text-white shadow-sm'
-                  : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
+                ? 'bg-[#1e40af] text-white shadow-sm'
+                : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
                 }`}
             >
               Today
@@ -554,8 +568,8 @@ export function FreePredictionsSection() {
                 setDaysBack(0)
               }}
               className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'tomorrow'
-                  ? 'bg-[#1e40af] text-white shadow-sm'
-                  : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
+                ? 'bg-[#1e40af] text-white shadow-sm'
+                : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
                 }`}
             >
               Tomorrow
@@ -631,8 +645,8 @@ export function FreePredictionsSection() {
                 setDaysBack(0)
               }}
               className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'today'
-                  ? 'bg-[#1e40af] text-white shadow-sm'
-                  : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
+                ? 'bg-[#1e40af] text-white shadow-sm'
+                : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
                 }`}
             >
               Today
@@ -644,8 +658,8 @@ export function FreePredictionsSection() {
                 setDaysBack(0)
               }}
               className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'tomorrow'
-                  ? 'bg-[#1e40af] text-white shadow-sm'
-                  : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
+                ? 'bg-[#1e40af] text-white shadow-sm'
+                : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
                 }`}
             >
               Tomorrow

@@ -67,31 +67,28 @@ export function CorrectScorePreviewSection() {
           <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
             <button
               onClick={() => setDateType('previous')}
-              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
-                dateType === 'previous'
+              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'previous'
                   ? 'bg-[#1e40af] text-white shadow-sm'
                   : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
-              }`}
+                }`}
             >
               Previous
             </button>
             <button
               onClick={() => setDateType('today')}
-              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
-                dateType === 'today'
+              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'today'
                   ? 'bg-[#1e40af] text-white shadow-sm'
                   : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
-              }`}
+                }`}
             >
               Today
             </button>
             <button
               onClick={() => setDateType('tomorrow')}
-              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
-                dateType === 'tomorrow'
+              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'tomorrow'
                   ? 'bg-[#1e40af] text-white shadow-sm'
                   : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
-              }`}
+                }`}
             >
               Tomorrow
             </button>
@@ -118,8 +115,8 @@ export function CorrectScorePreviewSection() {
                 <Lock className="mx-auto mb-4 h-16 w-16 text-[#f97316]" />
                 <h3 className="text-xl font-bold text-white mb-2">Premium Content Locked</h3>
                 <p className="text-gray-200 mb-6">Subscribe to unlock Correct Score predictions</p>
-                <Button 
-                  onClick={handleSubscribe} 
+                <Button
+                  onClick={handleSubscribe}
                   className="bg-gradient-to-r from-[#f97316] to-[#ea580c] hover:from-[#ea580c] hover:to-[#f97316] text-white font-bold px-8 py-3 rounded-lg text-lg"
                 >
                   Subscribe to Premium
@@ -160,8 +157,8 @@ export function CorrectScorePreviewSection() {
                     <Lock className="mx-auto mb-4 h-14 w-14 text-[#f97316] animate-pulse" />
                     <h3 className="text-lg font-bold text-white mb-2">Premium Locked</h3>
                     <p className="text-sm text-gray-200 mb-4">Subscribe to view this prediction</p>
-                    <Button 
-                      onClick={handleSubscribe} 
+                    <Button
+                      onClick={handleSubscribe}
                       className="bg-gradient-to-r from-[#f97316] to-[#ea580c] hover:from-[#ea580c] hover:to-[#f97316] text-white font-bold px-8 py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
                     >
                       Subscribe to Premium

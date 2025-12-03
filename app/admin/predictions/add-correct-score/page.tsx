@@ -21,7 +21,7 @@ function AddCorrectScoreContent() {
   const searchParams = useSearchParams()
   const editId = searchParams.get('edit') || ''
   const isEditMode = !!editId
-  
+
   const [loading, setLoading] = useState(false)
   const [checkingAuth, setCheckingAuth] = useState(true)
   const [loadingPrediction, setLoadingPrediction] = useState(isEditMode)
@@ -32,6 +32,7 @@ function AddCorrectScoreContent() {
   const [formData, setFormData] = useState({
     score_prediction: '',
     odds: '',
+    kickoff_date: '',
     kickoff_time: '',
     admin_notes: '',
   })
@@ -40,7 +41,7 @@ function AddCorrectScoreContent() {
     const checkAuth = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      
+
       if (!user) {
         router.push('/login')
         return
@@ -91,10 +92,12 @@ function AddCorrectScoreContent() {
         const score = prediction.prediction_type || ''
 
         // Set form data
+        const kickoffDateTime = prediction.kickoff_time ? new Date(prediction.kickoff_time) : null
         setFormData({
           score_prediction: score,
           odds: prediction.odds?.toString() || '',
-          kickoff_time: prediction.kickoff_time ? new Date(prediction.kickoff_time).toISOString().slice(0, 16) : '',
+          kickoff_date: kickoffDateTime ? kickoffDateTime.toISOString().slice(0, 10) : '',
+          kickoff_time: kickoffDateTime ? kickoffDateTime.toISOString().slice(11, 16) : '',
           admin_notes: prediction.admin_notes || '',
         })
 
@@ -119,7 +122,12 @@ function AddCorrectScoreContent() {
 
     const formDataObj = new FormData(e.currentTarget)
     const scorePrediction = formDataObj.get('score_prediction') as string
-    
+
+    // Combine date and time into ISO datetime string
+    const kickoffDate = formDataObj.get('kickoff_date') as string
+    const kickoffTime = formDataObj.get('kickoff_time') as string
+    const kickoffDateTime = `${kickoffDate}T${kickoffTime}:00`
+
     // Prepare data for predictions table
     const predictionData = {
       plan_type: 'correct_score', // Use correct_score as plan_type
@@ -129,14 +137,14 @@ function AddCorrectScoreContent() {
       prediction_type: scorePrediction, // Just the score (e.g., "2-1")
       odds: formDataObj.get('odds') ? parseFloat(formDataObj.get('odds') as string) : 1.0,
       confidence: 80, // Default confidence for correct score predictions
-      kickoff_time: formDataObj.get('kickoff_time') as string,
+      kickoff_time: kickoffDateTime,
       status: 'not_started' as const,
       admin_notes: (formDataObj.get('admin_notes') as string) || null,
     }
 
     try {
       const supabase = createClient()
-      
+
       if (isEditMode) {
         const { error } = await supabase
           .from('predictions')
@@ -154,7 +162,7 @@ function AddCorrectScoreContent() {
         if (error) throw error
         toast.success('Correct score prediction added successfully!')
       }
-      
+
       router.push('/admin/predictions')
     } catch (error: any) {
       toast.error(error.message || `Failed to ${isEditMode ? 'update' : 'add'} prediction`)
@@ -235,42 +243,58 @@ function AddCorrectScoreContent() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="score_prediction">Score Prediction *</Label>
-                  <Input 
-                    name="score_prediction" 
-                    placeholder="e.g., 2-1" 
-                    required 
+                  <Input
+                    name="score_prediction"
+                    placeholder="e.g., 2-1"
+                    required
                     value={formData.score_prediction}
                     onChange={(e) => setFormData({ ...formData, score_prediction: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="odds">Odds (Optional)</Label>
-                  <Input 
-                    name="odds" 
-                    type="number" 
-                    step="0.01" 
+                  <Input
+                    name="odds"
+                    type="number"
+                    step="0.01"
                     value={formData.odds}
                     onChange={(e) => setFormData({ ...formData, odds: e.target.value })}
                   />
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="kickoff_time">Kickoff Time *</Label>
-                <Input 
-                  name="kickoff_time" 
-                  type="datetime-local" 
-                  required 
-                  value={formData.kickoff_time}
-                  onChange={(e) => setFormData({ ...formData, kickoff_time: e.target.value })}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="kickoff_date">Kickoff Date *</Label>
+                  <Input
+                    name="kickoff_date"
+                    type="date"
+                    required
+                    value={formData.kickoff_date}
+                    onChange={(e) => setFormData({ ...formData, kickoff_date: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="kickoff_time">Kickoff Time (24h format: HH:MM) *</Label>
+                  <Input
+                    name="kickoff_time"
+                    type="text"
+                    pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]"
+                    placeholder="14:30"
+                    required
+                    value={formData.kickoff_time}
+                    onChange={(e) => setFormData({ ...formData, kickoff_time: e.target.value })}
+                    title="Enter time in 24-hour format (HH:MM), e.g., 14:30 or 19:45"
+                  />
+                  <p className="text-xs text-muted-foreground">Format: HH:MM (e.g., 14:30, 19:45)</p>
+                </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="admin_notes">Admin Notes (Optional)</Label>
-                <Textarea 
-                  name="admin_notes" 
-                  rows={4} 
+                <Textarea
+                  name="admin_notes"
+                  rows={4}
                   value={formData.admin_notes}
                   onChange={(e) => setFormData({ ...formData, admin_notes: e.target.value })}
                 />
