@@ -32,22 +32,9 @@ export default function LoginPage() {
 
       if (error) throw error
 
-      if (data.user) {
-        // Check if user is admin
-        const { data: profile } = await supabase
-          .from('users')
-          .select('is_admin')
-          .eq('id', data.user.id)
-          .single()
-
-        toast.success('Logged in successfully!')
-
-        if ((profile as any)?.is_admin) {
-          window.location.href = '/admin'
-        } else {
-          window.location.href = '/dashboard'
-        }
-      }
+      toast.success('Logged in successfully!')
+      // Redirect to dashboard after successful login
+      window.location.href = '/dashboard'
     } catch (error: any) {
       toast.error(error.message || 'Failed to login')
     } finally {
