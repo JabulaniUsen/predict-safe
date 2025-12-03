@@ -62,7 +62,7 @@ export function FreePredictionsSection() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [predictions, setPredictions] = useState<FreePrediction[]>([])
-  
+
   // Get initial filter from URL or default to 'free'
   const getInitialFilter = () => {
     const filterParam = searchParams.get('filter')
@@ -71,7 +71,7 @@ export function FreePredictionsSection() {
     }
     return 'free'
   }
-  
+
   const [selectedFilter, setSelectedFilter] = useState(getInitialFilter)
   const [dateType, setDateType] = useState<'previous' | 'today' | 'tomorrow' | 'custom'>('today')
   const [customDate, setCustomDate] = useState<string>('')
@@ -110,10 +110,10 @@ export function FreePredictionsSection() {
       setLoading(true)
       try {
         const { from, to } = getDateRange(dateType, customDate, daysBack)
-        
+
         // Fetch fixtures from API Football
         const fixtures = await getFixtures(from, undefined, to)
-        
+
         if (!Array.isArray(fixtures) || fixtures.length === 0) {
           setPredictions([])
           setLoading(false)
@@ -122,20 +122,20 @@ export function FreePredictionsSection() {
 
         // Convert fixtures to predictions
         const allPredictions: FreePrediction[] = []
-        
+
         // Determine max predictions based on filter
         // Only "free" (Safe Picks) should have 5, others should have more
         const maxPredictions = selectedFilter === 'free' ? 5 : 15
-        
+
         // Track which prediction types we've used to ensure variety
         const typeRotation = ['Home Win', 'Away Win', 'Over 2.5', 'Over 1.5', 'BTTS', 'Double Chance']
         let typeIndex = 0
-        
+
         // For "all" filter, we need to collect all predictions from all filters
         if (selectedFilter === 'all') {
-          // Limit fixtures to process (max 20 to avoid too many API calls)
-          const fixturesToProcess = fixtures.slice(0, 20)
-          
+          // Limit fixtures to process (increase to ensure we find enough matches with specific odds)
+          const fixturesToProcess = fixtures.slice(0, 30)
+
           // Fetch all odds in parallel
           const oddsPromises = fixturesToProcess.map(async (fixture) => {
             try {
@@ -146,10 +146,10 @@ export function FreePredictionsSection() {
               return { matchId: fixture.match_id, odds: null }
             }
           })
-          
+
           const oddsResults = await Promise.all(oddsPromises)
           const oddsMap = new Map(oddsResults.map(r => [r.matchId, r.odds]))
-          
+
           // Process all fixtures and create predictions for all available types
           for (const fixture of fixturesToProcess) {
             try {
@@ -157,31 +157,38 @@ export function FreePredictionsSection() {
               const oddsData = oddsMap.get(fixture.match_id) || null
 
               // Create predictions for all available types
-              const predictionTypes: Array<{type: string, odds: number}> = []
-              
+              const predictionTypes: Array<{ type: string, odds: number }> = []
+
               if (oddsData) {
-                if (oddsData.odd_1) predictionTypes.push({type: 'Home Win', odds: parseFloat(oddsData.odd_1)})
-                if (oddsData.odd_2) predictionTypes.push({type: 'Away Win', odds: parseFloat(oddsData.odd_2)})
-                if (oddsData['o+2.5']) predictionTypes.push({type: 'Over 2.5', odds: parseFloat(oddsData['o+2.5'])})
-                if (oddsData['o+1.5']) predictionTypes.push({type: 'Over 1.5', odds: parseFloat(oddsData['o+1.5'])})
-                if (oddsData.bts_yes) predictionTypes.push({type: 'BTTS', odds: parseFloat(oddsData.bts_yes)})
-                if (oddsData.odd_1x) predictionTypes.push({type: 'Double Chance', odds: parseFloat(oddsData.odd_1x)})
+                // Helper to check if odds are in range (1.30 - 1.50)
+                const isInRange = (odd: string | undefined) => {
+                  if (!odd) return false
+                  const val = parseFloat(odd)
+                  return val >= 1.30 && val <= 1.50
+                }
+
+                if (isInRange(oddsData.odd_1)) predictionTypes.push({ type: 'Home Win', odds: parseFloat(oddsData.odd_1!) })
+                if (isInRange(oddsData.odd_2)) predictionTypes.push({ type: 'Away Win', odds: parseFloat(oddsData.odd_2!) })
+                if (isInRange(oddsData['o+2.5'])) predictionTypes.push({ type: 'Over 2.5', odds: parseFloat(oddsData['o+2.5']!) })
+                if (isInRange(oddsData['o+1.5'])) predictionTypes.push({ type: 'Over 1.5', odds: parseFloat(oddsData['o+1.5']!) })
+                if (isInRange(oddsData.bts_yes)) predictionTypes.push({ type: 'BTTS', odds: parseFloat(oddsData.bts_yes!) })
+                if (isInRange(oddsData.odd_1x)) predictionTypes.push({ type: 'Double Chance', odds: parseFloat(oddsData.odd_1x!) })
               } else {
                 // Default predictions if no odds
                 predictionTypes.push(
-                  {type: 'Over 2.5', odds: 1.85},
-                  {type: 'Home Win', odds: 1.85},
-                  {type: 'BTTS', odds: 1.85},
-                  {type: 'Over 1.5', odds: 1.85},
-                  {type: 'Away Win', odds: 1.85},
-                  {type: 'Double Chance', odds: 1.85}
+                  { type: 'Over 2.5', odds: 1.85 },
+                  { type: 'Home Win', odds: 1.85 },
+                  { type: 'BTTS', odds: 1.85 },
+                  { type: 'Over 1.5', odds: 1.85 },
+                  { type: 'Away Win', odds: 1.85 },
+                  { type: 'Double Chance', odds: 1.85 }
                 )
               }
 
               // Create a prediction for each available type
-              for (const {type: predictionType, odds: typeOdds} of predictionTypes) {
+              for (const { type: predictionType, odds: typeOdds } of predictionTypes) {
                 const confidence = Math.min(95, Math.max(60, 100 - (typeOdds - 1) * 20))
-                
+
                 allPredictions.push({
                   id: `${fixture.match_id}-${predictionType}`,
                   home_team: fixture.match_hometeam_name || 'Home Team',
@@ -191,8 +198,8 @@ export function FreePredictionsSection() {
                   odds: typeOdds,
                   confidence: confidence,
                   kickoff_time: `${fixture.match_date} ${fixture.match_time || '00:00'}`,
-                  status: fixture.match_status === 'Finished' ? 'finished' : 
-                          fixture.match_live === '1' ? 'live' : 'not_started',
+                  status: fixture.match_status === 'Finished' ? 'finished' :
+                    fixture.match_live === '1' ? 'live' : 'not_started',
                   home_team_logo: fixture.team_home_badge,
                   away_team_logo: fixture.team_away_badge,
                   home_score: fixture.match_hometeam_score || undefined,
@@ -206,10 +213,10 @@ export function FreePredictionsSection() {
           }
         } else {
           // For other filters, process fixtures until we have enough predictions
-          // Limit fixtures based on filter: free needs only 5, others need more buffer
-          const buffer = selectedFilter === 'free' ? 3 : 5
+          // Increase buffer to find enough matches with the odds criteria
+          const buffer = selectedFilter === 'free' ? 15 : 10
           const fixturesToProcess = fixtures.slice(0, maxPredictions + buffer)
-          
+
           // Fetch all odds in parallel for the fixtures we need
           const oddsPromises = fixturesToProcess.map(async (fixture) => {
             try {
@@ -220,156 +227,174 @@ export function FreePredictionsSection() {
               return { matchId: fixture.match_id, odds: null }
             }
           })
-          
+
           const oddsResults = await Promise.all(oddsPromises)
           const oddsMap = new Map(oddsResults.map(r => [r.matchId, r.odds]))
-          
+
           for (const fixture of fixturesToProcess) {
-          // Stop if we have enough predictions
+            // Stop if we have enough predictions
             if (allPredictions.length >= maxPredictions) {
-            break
-          }
-          
-          try {
-            // Get odds from the map
-            const oddsData = oddsMap.get(fixture.match_id) || null
+              break
+            }
 
-            // Determine prediction types based on filter
-            const availableTypes: string[] = []
-            let predictionType: string
-            
-            if (selectedFilter === 'free') {
-              // Add multiple prediction types for free/all - get all available types
-              if (oddsData) {
-                if (oddsData.odd_1) availableTypes.push('Home Win')
-                if (oddsData.odd_2) availableTypes.push('Away Win')
-                if (oddsData['o+2.5']) availableTypes.push('Over 2.5')
-                if (oddsData['o+1.5']) availableTypes.push('Over 1.5')
-                if (oddsData.bts_yes) availableTypes.push('BTTS')
-                if (oddsData.odd_1x) availableTypes.push('Double Chance')
-              } else {
-                // Default predictions if no odds
-                availableTypes.push('Over 2.5', 'Home Win', 'BTTS', 'Over 1.5', 'Away Win', 'Double Chance')
-              }
-              
-              // Select prediction type from rotation to ensure variety
-              let selectedType: string | null = null
-              
-              // Try to find a type from rotation that's available
-              for (let i = 0; i < typeRotation.length; i++) {
-                const rotatedType = typeRotation[(typeIndex + i) % typeRotation.length]
-                if (availableTypes.includes(rotatedType)) {
-                  selectedType = rotatedType
-                  typeIndex = (typeIndex + i + 1) % typeRotation.length
-                  break
+            try {
+              // Get odds from the map
+              const oddsData = oddsMap.get(fixture.match_id) || null
+
+              // Determine prediction types based on filter
+              const availableTypes: string[] = []
+              let predictionType: string
+
+              if (selectedFilter === 'free') {
+                // Add multiple prediction types for free/all - get all available types
+                // Filter by odds range 1.30 - 1.50
+                const isInRange = (odd: string | undefined) => {
+                  if (!odd) return false
+                  const val = parseFloat(odd)
+                  return val >= 1.30 && val <= 1.50
                 }
-              }
-              
-              // If no match from rotation, use first available
-              if (!selectedType && availableTypes.length > 0) {
-                selectedType = availableTypes[0]
-              } else if (!selectedType) {
-                selectedType = 'Over 2.5'
-              }
-              
-              predictionType = selectedType
-            } else {
-              // Filter-specific predictions
-              if (selectedFilter === 'home_win' && oddsData?.odd_1) {
-                availableTypes.push('Home Win')
-              } else if (selectedFilter === 'away_win' && oddsData?.odd_2) {
-                availableTypes.push('Away Win')
-              } else if (selectedFilter === 'over_2_5' && oddsData?.['o+2.5']) {
-                availableTypes.push('Over 2.5')
-              } else if (selectedFilter === 'over_1_5' && oddsData?.['o+1.5']) {
-                availableTypes.push('Over 1.5')
-              } else if (selectedFilter === 'btts' && oddsData?.bts_yes) {
-                availableTypes.push('BTTS')
-              } else if (selectedFilter === 'double_chance' && oddsData?.odd_1x) {
-                availableTypes.push('Double Chance')
-              } else if (selectedFilter === 'super_single') {
-                // Super single - pick the best odds prediction
+
                 if (oddsData) {
-                  const bestOdds = Math.max(
-                    parseFloat(oddsData.odd_1 || '0'),
-                    parseFloat(oddsData.odd_2 || '0'),
-                    parseFloat(oddsData['o+2.5'] || '0')
-                  )
-                  if (bestOdds === parseFloat(oddsData.odd_1 || '0')) {
-                    availableTypes.push('Home Win')
-                  } else if (bestOdds === parseFloat(oddsData.odd_2 || '0')) {
-                    availableTypes.push('Away Win')
-                  } else {
-                    availableTypes.push('Over 2.5')
-                  }
+                  if (isInRange(oddsData.odd_1)) availableTypes.push('Home Win')
+                  if (isInRange(oddsData.odd_2)) availableTypes.push('Away Win')
+                  if (isInRange(oddsData['o+2.5'])) availableTypes.push('Over 2.5')
+                  if (isInRange(oddsData['o+1.5'])) availableTypes.push('Over 1.5')
+                  if (isInRange(oddsData.bts_yes)) availableTypes.push('BTTS')
+                  if (isInRange(oddsData.odd_1x)) availableTypes.push('Double Chance')
                 } else {
+                  // Default predictions if no odds
+                  availableTypes.push('Over 2.5', 'Home Win', 'BTTS', 'Over 1.5', 'Away Win', 'Double Chance')
+                }
+
+                // Select prediction type from rotation to ensure variety
+                let selectedType: string | null = null
+
+                // Try to find a type from rotation that's available
+                for (let i = 0; i < typeRotation.length; i++) {
+                  const rotatedType = typeRotation[(typeIndex + i) % typeRotation.length]
+                  if (availableTypes.includes(rotatedType)) {
+                    selectedType = rotatedType
+                    typeIndex = (typeIndex + i + 1) % typeRotation.length
+                    break
+                  }
+                }
+
+                // If no match from rotation, use first available
+                if (!selectedType && availableTypes.length > 0) {
+                  selectedType = availableTypes[0]
+                } else if (!selectedType) {
+                  selectedType = 'Over 2.5'
+                }
+
+                predictionType = selectedType
+              } else {
+                // Filter-specific predictions
+                // Apply odds filter 1.30-1.50 to all filters including super_single
+
+                const isInRange = (odd: string | undefined) => {
+                  if (!odd) return false
+                  const val = parseFloat(odd)
+                  return val >= 1.30 && val <= 1.50
+                }
+
+                if (selectedFilter === 'home_win' && isInRange(oddsData?.odd_1)) {
+                  availableTypes.push('Home Win')
+                } else if (selectedFilter === 'away_win' && isInRange(oddsData?.odd_2)) {
+                  availableTypes.push('Away Win')
+                } else if (selectedFilter === 'over_2_5' && isInRange(oddsData?.['o+2.5'])) {
                   availableTypes.push('Over 2.5')
+                } else if (selectedFilter === 'over_1_5' && isInRange(oddsData?.['o+1.5'])) {
+                  availableTypes.push('Over 1.5')
+                } else if (selectedFilter === 'btts' && isInRange(oddsData?.bts_yes)) {
+                  availableTypes.push('BTTS')
+                } else if (selectedFilter === 'double_chance' && isInRange(oddsData?.odd_1x)) {
+                  availableTypes.push('Double Chance')
+                } else if (selectedFilter === 'super_single') {
+                  // Super single - pick the best odds prediction within range
+                  if (oddsData) {
+                    // Find the highest odd that is still within our range (1.30-1.50)
+                    const validOptions = [
+                      { type: 'Home Win', odd: parseFloat(oddsData.odd_1 || '0') },
+                      { type: 'Away Win', odd: parseFloat(oddsData.odd_2 || '0') },
+                      { type: 'Over 2.5', odd: parseFloat(oddsData['o+2.5'] || '0') }
+                    ].filter(opt => opt.odd >= 1.30 && opt.odd <= 1.50)
+
+                    // Sort by odds descending to get the "super" single (highest valid odd)
+                    validOptions.sort((a, b) => b.odd - a.odd)
+
+                    if (validOptions.length > 0) {
+                      availableTypes.push(validOptions[0].type)
+                    }
+                  }
+                }
+
+                // If we found a valid type, use it
+                if (availableTypes.length > 0) {
+                  predictionType = availableTypes[0]
+                } else {
+                  // If no valid type found (e.g. odds not in range), skip this fixture
+                  continue
                 }
               }
-              
-              predictionType = availableTypes[0] || 'Over 2.5'
-            }
-            
-            let odds = 1.85
-            let confidence = 75
 
-            // Get odds for this prediction type
-            if (oddsData) {
-              if (predictionType === 'Home Win' && oddsData.odd_1) {
-                odds = parseFloat(oddsData.odd_1)
-                confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
-              } else if (predictionType === 'Away Win' && oddsData.odd_2) {
-                odds = parseFloat(oddsData.odd_2)
-                confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
-              } else if (predictionType === 'Over 2.5' && oddsData['o+2.5']) {
-                odds = parseFloat(oddsData['o+2.5'])
-                confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
-              } else if (predictionType === 'Over 1.5' && oddsData['o+1.5']) {
-                odds = parseFloat(oddsData['o+1.5'])
-                confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
-              } else if (predictionType === 'BTTS' && oddsData.bts_yes) {
-                odds = parseFloat(oddsData.bts_yes)
-                confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
-              } else if (predictionType === 'Double Chance' && oddsData.odd_1x) {
-                odds = parseFloat(oddsData.odd_1x)
-                confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
+              let odds = 1.85
+              let confidence = 75
+
+              // Get odds for this prediction type
+              if (oddsData) {
+                if (predictionType === 'Home Win' && oddsData.odd_1) {
+                  odds = parseFloat(oddsData.odd_1)
+                  confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
+                } else if (predictionType === 'Away Win' && oddsData.odd_2) {
+                  odds = parseFloat(oddsData.odd_2)
+                  confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
+                } else if (predictionType === 'Over 2.5' && oddsData['o+2.5']) {
+                  odds = parseFloat(oddsData['o+2.5'])
+                  confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
+                } else if (predictionType === 'Over 1.5' && oddsData['o+1.5']) {
+                  odds = parseFloat(oddsData['o+1.5'])
+                  confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
+                } else if (predictionType === 'BTTS' && oddsData.bts_yes) {
+                  odds = parseFloat(oddsData.bts_yes)
+                  confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
+                } else if (predictionType === 'Double Chance' && oddsData.odd_1x) {
+                  odds = parseFloat(oddsData.odd_1x)
+                  confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
+                }
               }
-            }
 
-            allPredictions.push({
-              id: `${fixture.match_id}-${predictionType}`,
-              home_team: fixture.match_hometeam_name || 'Home Team',
-              away_team: fixture.match_awayteam_name || 'Away Team',
-              league: fixture.league_name || 'Unknown League',
-              prediction_type: predictionType,
-              odds: odds,
-              confidence: confidence,
-              kickoff_time: `${fixture.match_date} ${fixture.match_time || '00:00'}`,
-              status: fixture.match_status === 'Finished' ? 'finished' : 
-                      fixture.match_live === '1' ? 'live' : 'not_started',
-              home_team_logo: fixture.team_home_badge,
-              away_team_logo: fixture.team_away_badge,
-              home_score: fixture.match_hometeam_score || undefined,
-              away_score: fixture.match_awayteam_score || undefined,
-              match_id: fixture.match_id,
-            })
-          } catch (error) {
-            console.error(`Error processing fixture ${fixture.match_id}:`, error)
+              allPredictions.push({
+                id: `${fixture.match_id}-${predictionType}`,
+                home_team: fixture.match_hometeam_name || 'Home Team',
+                away_team: fixture.match_awayteam_name || 'Away Team',
+                league: fixture.league_name || 'Unknown League',
+                prediction_type: predictionType,
+                odds: odds,
+                confidence: confidence,
+                kickoff_time: `${fixture.match_date} ${fixture.match_time || '00:00'}`,
+                status: fixture.match_status === 'Finished' ? 'finished' :
+                  fixture.match_live === '1' ? 'live' : 'not_started',
+                home_team_logo: fixture.team_home_badge,
+                away_team_logo: fixture.team_away_badge,
+                home_score: fixture.match_hometeam_score || undefined,
+                away_score: fixture.match_awayteam_score || undefined,
+                match_id: fixture.match_id,
+              })
+            } catch (error) {
+              console.error(`Error processing fixture ${fixture.match_id}:`, error)
+            }
           }
         }
-        }
 
-        // Filter predictions based on odds range for free filter (1.2 to 1.6)
-        let filteredPredictions = allPredictions
-        if (selectedFilter === 'free') {
-          filteredPredictions = allPredictions.filter(pred => {
-            const odds = pred.odds
-            return odds >= 1.2 && odds <= 1.6
-          })
-        }
-        
+        // Filter predictions based on odds range for all filters (1.30 to 1.50)
+        // Note: We already filtered during generation, but this is a safety check
+        let filteredPredictions = allPredictions.filter(pred => {
+          const odds = pred.odds
+          return odds >= 1.30 && odds <= 1.50
+        })
+
         // For "free" filter, limit to 5. For others, use all collected predictions
-        const finalPredictions = selectedFilter === 'free' 
+        const finalPredictions = selectedFilter === 'free'
           ? filteredPredictions.slice(0, 5)
           : filteredPredictions
         setPredictions(finalPredictions)
@@ -457,18 +482,16 @@ export function FreePredictionsSection() {
                 } else if (index === 8) {
                   colSpan = 'col-span-3' // BTTS/GG spans all 3 columns
                 }
-                
+
                 return (
                   <button
                     key={filter.id}
                     onClick={() => handleFilterChange(filter.id)}
-                    className={`text-xs font-semibold rounded-md transition-all px-2 py-2.5 ${
-                      colSpan
-                    } ${
-                      isActive
+                    className={`text-xs font-semibold rounded-md transition-all px-2 py-2.5 ${colSpan
+                      } ${isActive
                         ? 'bg-[#1e40af] text-white'
                         : 'bg-white text-gray-600 hover:text-[#1e40af]'
-                    }`}
+                      }`}
                   >
                     {filter.label}
                   </button>
@@ -476,10 +499,10 @@ export function FreePredictionsSection() {
               })}
             </div>
           </div>
-          
+
           <h2 className="text-xl font-bold mb-2 text-gray-900">{getFilterLabel()}</h2>
           <p className="text-sm text-gray-600 mb-4">{getDateLabel()}</p>
-          
+
           {/* Mobile Navigation */}
           <div className="flex items-center justify-center gap-1 bg-gray-100 p-1 rounded-lg mb-4">
             <Popover>
@@ -517,11 +540,10 @@ export function FreePredictionsSection() {
                 setCustomDate('')
                 setDaysBack(0)
               }}
-              className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
-                dateType === 'today'
+              className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'today'
                   ? 'bg-[#1e40af] text-white shadow-sm'
                   : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
-              }`}
+                }`}
             >
               Today
             </button>
@@ -531,11 +553,10 @@ export function FreePredictionsSection() {
                 setCustomDate('')
                 setDaysBack(0)
               }}
-              className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
-                dateType === 'tomorrow'
+              className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'tomorrow'
                   ? 'bg-[#1e40af] text-white shadow-sm'
                   : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
-              }`}
+                }`}
             >
               Tomorrow
             </button>
@@ -550,9 +571,9 @@ export function FreePredictionsSection() {
               <div className="overflow-x-auto">
                 <TabsList className="grid w-full grid-cols-5 lg:grid-cols-9 bg-gray-100 p-1 rounded-lg min-w-[500px] lg:min-w-0">
                   {FILTERS.map((filter) => (
-                    <TabsTrigger 
-                      key={filter.id} 
-                      value={filter.id} 
+                    <TabsTrigger
+                      key={filter.id}
+                      value={filter.id}
                       className="text-xs sm:text-sm font-semibold data-[state=active]:bg-[#1e40af] data-[state=active]:text-white rounded-md transition-all px-2 lg:px-4"
                     >
                       {filter.label}
@@ -562,16 +583,16 @@ export function FreePredictionsSection() {
               </div>
             </Tabs>
           </div>
-          
-          
+
+
         </div>
 
         <div className="mb-4 lg:mb-8 hidden lg:flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1 lg:mb-2 text-[#1e40af]">{getFilterLabel()}</h2>
-          <p className="text-sm lg:text-base text-gray-600">
-            Get expert predictions for {getCurrentDate().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}'s matches
-          </p>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1 lg:mb-2 text-[#1e40af]">{getFilterLabel()}</h2>
+            <p className="text-sm lg:text-base text-gray-600">
+              Get expert predictions for {getCurrentDate().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}'s matches
+            </p>
           </div>
           <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
             <Popover>
@@ -609,11 +630,10 @@ export function FreePredictionsSection() {
                 setCustomDate('')
                 setDaysBack(0)
               }}
-              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
-                dateType === 'today'
+              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'today'
                   ? 'bg-[#1e40af] text-white shadow-sm'
                   : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
-              }`}
+                }`}
             >
               Today
             </button>
@@ -623,11 +643,10 @@ export function FreePredictionsSection() {
                 setCustomDate('')
                 setDaysBack(0)
               }}
-              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
-                dateType === 'tomorrow'
+              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'tomorrow'
                   ? 'bg-[#1e40af] text-white shadow-sm'
                   : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
-              }`}
+                }`}
             >
               Tomorrow
             </button>
@@ -677,42 +696,42 @@ export function FreePredictionsSection() {
 
             {/* Desktop Loading State */}
             <div className="hidden lg:block space-y-0 border rounded-lg overflow-hidden bg-white">
-            <div className="bg-blue-600 text-white px-6 py-3 grid grid-cols-12 gap-4 items-center font-semibold text-sm">
-              <div className="col-span-2">Time & League</div>
-              <div className="col-span-5">Teams</div>
-              <div className="col-span-1 text-center">Score</div>
-              <div className="col-span-1 text-center">Tip</div>
-              <div className="col-span-1 text-center">Odd</div>
-              <div className="col-span-2 text-center">Confidence</div>
-            </div>
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="px-6 py-4 grid grid-cols-12 gap-4 items-center border-t animate-pulse">
-                <div className="col-span-2">
-                  <div className="h-4 w-16 bg-gray-200 rounded" />
-                  <div className="h-3 w-24 bg-gray-200 rounded mt-2" />
-                </div>
-                <div className="col-span-5 flex items-center gap-3">
-                  <div className="h-6 w-6 bg-gray-200 rounded-full" />
-                  <div className="h-4 w-32 bg-gray-200 rounded" />
-                  <span className="text-gray-400">vs</span>
-                  <div className="h-6 w-6 bg-gray-200 rounded-full" />
-                  <div className="h-4 w-32 bg-gray-200 rounded" />
-                </div>
-                <div className="col-span-1">
-                  <div className="h-4 w-12 bg-gray-200 rounded mx-auto" />
-                </div>
-                <div className="col-span-1">
-                  <div className="h-6 w-16 bg-gray-200 rounded mx-auto" />
-                </div>
-                <div className="col-span-1">
-                  <div className="h-4 w-12 bg-gray-200 rounded mx-auto" />
-                </div>
-                <div className="col-span-2 flex justify-center">
-                  <div className="h-12 w-12 bg-gray-200 rounded-full" />
-                </div>
+              <div className="bg-blue-600 text-white px-6 py-3 grid grid-cols-12 gap-4 items-center font-semibold text-sm">
+                <div className="col-span-2">Time & League</div>
+                <div className="col-span-5">Teams</div>
+                <div className="col-span-1 text-center">Score</div>
+                <div className="col-span-1 text-center">Tip</div>
+                <div className="col-span-1 text-center">Odd</div>
+                <div className="col-span-2 text-center">Confidence</div>
               </div>
-            ))}
-          </div>
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="px-6 py-4 grid grid-cols-12 gap-4 items-center border-t animate-pulse">
+                  <div className="col-span-2">
+                    <div className="h-4 w-16 bg-gray-200 rounded" />
+                    <div className="h-3 w-24 bg-gray-200 rounded mt-2" />
+                  </div>
+                  <div className="col-span-5 flex items-center gap-3">
+                    <div className="h-6 w-6 bg-gray-200 rounded-full" />
+                    <div className="h-4 w-32 bg-gray-200 rounded" />
+                    <span className="text-gray-400">vs</span>
+                    <div className="h-6 w-6 bg-gray-200 rounded-full" />
+                    <div className="h-4 w-32 bg-gray-200 rounded" />
+                  </div>
+                  <div className="col-span-1">
+                    <div className="h-4 w-12 bg-gray-200 rounded mx-auto" />
+                  </div>
+                  <div className="col-span-1">
+                    <div className="h-6 w-16 bg-gray-200 rounded mx-auto" />
+                  </div>
+                  <div className="col-span-1">
+                    <div className="h-4 w-12 bg-gray-200 rounded mx-auto" />
+                  </div>
+                  <div className="col-span-2 flex justify-center">
+                    <div className="h-12 w-12 bg-gray-200 rounded-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
           </>
         ) : predictions.length === 0 ? (
           <Card>
@@ -796,8 +815,8 @@ export function FreePredictionsSection() {
                         {prediction.home_score !== undefined && prediction.away_score !== undefined
                           ? `${prediction.home_score} - ${prediction.away_score}`
                           : prediction.status === 'finished'
-                          ? 'FT'
-                          : '-'}
+                            ? 'FT'
+                            : '-'}
                       </span>
                     </div>
                   )}
@@ -823,18 +842,18 @@ export function FreePredictionsSection() {
                     </div>
                     <div className="text-[10px] sm:text-xs font-medium text-gray-900 text-center truncate">
                       {prediction.prediction_type === 'Over 1.5' ? 'Ov 1.5' :
-                       prediction.prediction_type === 'Over 2.5' ? 'Ov 2.5' :
-                       prediction.prediction_type === 'Home Win' ? '1' :
-                       prediction.prediction_type === 'Away Win' ? '2' :
-                       prediction.prediction_type === 'Double Chance' ? '12' :
-                       prediction.prediction_type}
+                        prediction.prediction_type === 'Over 2.5' ? 'Ov 2.5' :
+                          prediction.prediction_type === 'Home Win' ? '1' :
+                            prediction.prediction_type === 'Away Win' ? '2' :
+                              prediction.prediction_type === 'Double Chance' ? '12' :
+                                prediction.prediction_type}
                     </div>
                     <div className="text-[10px] sm:text-xs font-semibold text-gray-900 text-center">
                       {prediction.status === 'finished' && prediction.home_score !== undefined && prediction.away_score !== undefined
                         ? `${prediction.home_score}-${prediction.away_score}`
                         : prediction.status === 'finished'
-                        ? 'FT'
-                        : '-'}
+                          ? 'FT'
+                          : '-'}
                     </div>
                     <div className="text-[10px] sm:text-[5px] font-semibold text-gray-900 text-center">
                       {prediction.odds.toFixed(2)}
@@ -849,143 +868,143 @@ export function FreePredictionsSection() {
 
             {/* Desktop View */}
             <div className="hidden lg:block space-y-0 border-2 border-gray-200 rounded-xl overflow-hidden bg-white shadow-lg">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white px-3 sm:px-4 lg:px-6 py-3 lg:py-4 grid grid-cols-12 gap-2 lg:gap-4 items-center font-bold text-xs sm:text-sm shadow-md">
-              <div className="col-span-2 lg:col-span-2">Time & League</div>
-              <div className="col-span-4">Teams</div>
-              <div className="col-span-1 text-center hidden sm:block">Score</div>
-              <div className="col-span-1 text-center">Status</div>
-              <div className="col-span-1 text-center">Tip</div>
-              <div className="col-span-1 text-center hidden md:block">Odd</div>
-              <div className="col-span-2 text-center hidden lg:block">Confidence</div>
-            </div>
-
-            {/* Predictions */}
-            {predictions.map((prediction, index) => (
-                    <div
-                      key={prediction.id}
-                      onClick={() => {
-                        const matchId = `${prediction.match_id}-${prediction.prediction_type}`
-                        window.location.href = `/match/${encodeURIComponent(matchId)}`
-                      }}
-                      className={cn(
-                        'px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 grid grid-cols-12 gap-2 lg:gap-4 items-center border-b border-gray-100 bg-white hover:bg-gradient-to-r hover:from-blue-50 hover:to-green-50 hover:shadow-md transition-all duration-300 cursor-pointer transform hover:scale-[1.01] hover:border-l-4 hover:border-l-[#22c55e]',
-                        index === predictions.length - 1 && 'border-b-0',
-                        index % 2 === 0 && 'bg-gray-50/50'
-                      )}
-                    >
-                      {/* Time & League */}
-                      <div className="col-span-2 lg:col-span-2">
-                        <div className="text-xs sm:text-sm font-medium text-gray-900">
-                          {formatTime(prediction.kickoff_time)}
-                        </div>
-                        <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5 lg:mt-1 truncate">{prediction.league}</div>
-                      </div>
-
-                {/* Teams */}
-                <div className="col-span-4 flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                    {prediction.home_team_logo ? (
-                      <div className="relative w-6 h-6 flex-shrink-0">
-                        <Image
-                          src={prediction.home_team_logo}
-                          alt={prediction.home_team}
-                          width={24}
-                          height={24}
-                          className="object-contain"
-                          unoptimized
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none'
-                            const parent = e.currentTarget.parentElement
-                            if (parent) {
-                              parent.innerHTML = `<div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">${prediction.home_team.charAt(0)}</div>`
-                            }
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                        {prediction.home_team.charAt(0)}
-                      </div>
-                    )}
-                    <span className="text-sm font-medium text-gray-900 truncate">
-                      {prediction.home_team}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {prediction.away_team_logo ? (
-                      <div className="relative w-6 h-6 flex-shrink-0">
-                        <Image
-                          src={prediction.away_team_logo}
-                          alt={prediction.away_team}
-                          width={24}
-                          height={24}
-                          className="object-contain"
-                          unoptimized
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none'
-                            const parent = e.currentTarget.parentElement
-                            if (parent) {
-                              parent.innerHTML = `<div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">${prediction.away_team.charAt(0)}</div>`
-                            }
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                        {prediction.away_team.charAt(0)}
-                      </div>
-                    )}
-                    <span className="text-sm font-medium text-gray-900 truncate">
-                      {prediction.away_team}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Score */}
-                <div className="col-span-1 text-center">
-                  {prediction.status === 'finished' && prediction.home_score !== undefined && prediction.away_score !== undefined ? (
-                    <div className="text-sm font-semibold text-gray-900">
-                      {prediction.home_score} - {prediction.away_score}
-                    </div>
-                  ) : prediction.status === 'finished' ? (
-                    <div className="text-xs font-semibold text-gray-600">FT</div>
-                  ) : (
-                    <div className="text-xs text-gray-400">-</div>
-                  )}
-                </div>
-
-                {/* Status */}
-                <div className="col-span-1 text-center">
-                  <Badge
-                    variant={prediction.status === 'finished' ? 'default' : prediction.status === 'live' ? 'destructive' : 'outline'}
-                    className="text-xs"
-                  >
-                    {prediction.status === 'finished' ? 'Finished' : prediction.status === 'live' ? 'Live' : 'Not Started'}
-                  </Badge>
-                </div>
-
-                {/* Tip */}
-                <div className="col-span-1 text-center">
-                  <Badge variant="secondary" className="text-xs">
-                    {prediction.prediction_type === 'Over 1.5' ? 'Ov 1.5' :
-                     prediction.prediction_type === 'Over 2.5' ? 'Ov 2.5' :
-                     prediction.prediction_type}
-                  </Badge>
-                </div>
-
-                {/* Odd */}
-                <div className="col-span-1 text-center">
-                  <span className="text-sm font-semibold text-gray-900">{prediction.odds.toFixed(2)}</span>
-                </div>
-
-                {/* Confidence */}
-                <div className="col-span-2 flex justify-center">
-                  <CircularProgress value={prediction.confidence} size={50} strokeWidth={5} />
-                </div>
+              {/* Header */}
+              <div className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white px-3 sm:px-4 lg:px-6 py-3 lg:py-4 grid grid-cols-12 gap-2 lg:gap-4 items-center font-bold text-xs sm:text-sm shadow-md">
+                <div className="col-span-2 lg:col-span-2">Time & League</div>
+                <div className="col-span-4">Teams</div>
+                <div className="col-span-1 text-center hidden sm:block">Score</div>
+                <div className="col-span-1 text-center">Status</div>
+                <div className="col-span-1 text-center">Tip</div>
+                <div className="col-span-1 text-center hidden md:block">Odd</div>
+                <div className="col-span-2 text-center hidden lg:block">Confidence</div>
               </div>
-            ))}
-          </div>
+
+              {/* Predictions */}
+              {predictions.map((prediction, index) => (
+                <div
+                  key={prediction.id}
+                  onClick={() => {
+                    const matchId = `${prediction.match_id}-${prediction.prediction_type}`
+                    window.location.href = `/match/${encodeURIComponent(matchId)}`
+                  }}
+                  className={cn(
+                    'px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 grid grid-cols-12 gap-2 lg:gap-4 items-center border-b border-gray-100 bg-white hover:bg-gradient-to-r hover:from-blue-50 hover:to-green-50 hover:shadow-md transition-all duration-300 cursor-pointer transform hover:scale-[1.01] hover:border-l-4 hover:border-l-[#22c55e]',
+                    index === predictions.length - 1 && 'border-b-0',
+                    index % 2 === 0 && 'bg-gray-50/50'
+                  )}
+                >
+                  {/* Time & League */}
+                  <div className="col-span-2 lg:col-span-2">
+                    <div className="text-xs sm:text-sm font-medium text-gray-900">
+                      {formatTime(prediction.kickoff_time)}
+                    </div>
+                    <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5 lg:mt-1 truncate">{prediction.league}</div>
+                  </div>
+
+                  {/* Teams */}
+                  <div className="col-span-4 flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      {prediction.home_team_logo ? (
+                        <div className="relative w-6 h-6 flex-shrink-0">
+                          <Image
+                            src={prediction.home_team_logo}
+                            alt={prediction.home_team}
+                            width={24}
+                            height={24}
+                            className="object-contain"
+                            unoptimized
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none'
+                              const parent = e.currentTarget.parentElement
+                              if (parent) {
+                                parent.innerHTML = `<div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">${prediction.home_team.charAt(0)}</div>`
+                              }
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                          {prediction.home_team.charAt(0)}
+                        </div>
+                      )}
+                      <span className="text-sm font-medium text-gray-900 truncate">
+                        {prediction.home_team}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {prediction.away_team_logo ? (
+                        <div className="relative w-6 h-6 flex-shrink-0">
+                          <Image
+                            src={prediction.away_team_logo}
+                            alt={prediction.away_team}
+                            width={24}
+                            height={24}
+                            className="object-contain"
+                            unoptimized
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none'
+                              const parent = e.currentTarget.parentElement
+                              if (parent) {
+                                parent.innerHTML = `<div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">${prediction.away_team.charAt(0)}</div>`
+                              }
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                          {prediction.away_team.charAt(0)}
+                        </div>
+                      )}
+                      <span className="text-sm font-medium text-gray-900 truncate">
+                        {prediction.away_team}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Score */}
+                  <div className="col-span-1 text-center">
+                    {prediction.status === 'finished' && prediction.home_score !== undefined && prediction.away_score !== undefined ? (
+                      <div className="text-sm font-semibold text-gray-900">
+                        {prediction.home_score} - {prediction.away_score}
+                      </div>
+                    ) : prediction.status === 'finished' ? (
+                      <div className="text-xs font-semibold text-gray-600">FT</div>
+                    ) : (
+                      <div className="text-xs text-gray-400">-</div>
+                    )}
+                  </div>
+
+                  {/* Status */}
+                  <div className="col-span-1 text-center">
+                    <Badge
+                      variant={prediction.status === 'finished' ? 'default' : prediction.status === 'live' ? 'destructive' : 'outline'}
+                      className="text-xs"
+                    >
+                      {prediction.status === 'finished' ? 'Finished' : prediction.status === 'live' ? 'Live' : 'Not Started'}
+                    </Badge>
+                  </div>
+
+                  {/* Tip */}
+                  <div className="col-span-1 text-center">
+                    <Badge variant="secondary" className="text-xs">
+                      {prediction.prediction_type === 'Over 1.5' ? 'Ov 1.5' :
+                        prediction.prediction_type === 'Over 2.5' ? 'Ov 2.5' :
+                          prediction.prediction_type}
+                    </Badge>
+                  </div>
+
+                  {/* Odd */}
+                  <div className="col-span-1 text-center">
+                    <span className="text-sm font-semibold text-gray-900">{prediction.odds.toFixed(2)}</span>
+                  </div>
+
+                  {/* Confidence */}
+                  <div className="col-span-2 flex justify-center">
+                    <CircularProgress value={prediction.confidence} size={50} strokeWidth={5} />
+                  </div>
+                </div>
+              ))}
+            </div>
           </>
         )}
       </div>
