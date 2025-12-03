@@ -23,7 +23,7 @@ interface UsersManagerProps {
 export function UsersManager({ users, plans }: UsersManagerProps) {
   const [selectedUser, setSelectedUser] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeTab, setActiveTab] = useState<'subscribers' | 'normal'>('subscribers')
+  const [activeTab, setActiveTab] = useState<'all' | 'subscribers' | 'normal'>('all')
   const [addSubscriptionDialogOpen, setAddSubscriptionDialogOpen] = useState(false)
   const [selectedUserForSubscription, setSelectedUserForSubscription] = useState<any>(null)
   const [selectedPlan, setSelectedPlan] = useState<string>('')
@@ -41,7 +41,7 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
     users.forEach((user) => {
       const subscriptions = user.user_subscriptions || []
       const hasActiveSubscription = subscriptions.some((sub: any) => sub.plan_status === 'active')
-      
+
       if (hasActiveSubscription) {
         subs.push(user)
       } else {
@@ -54,8 +54,10 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
 
   // Filter users based on search query and active tab
   const filteredUsers = useMemo(() => {
-    const usersToFilter = activeTab === 'subscribers' ? subscribers : normalUsers
-    
+    let usersToFilter = users
+    if (activeTab === 'subscribers') usersToFilter = subscribers
+    if (activeTab === 'normal') usersToFilter = normalUsers
+
     if (!searchQuery.trim()) {
       return usersToFilter
     }
@@ -65,7 +67,7 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
       const name = (user.full_name || '').toLowerCase()
       const email = (user.email || '').toLowerCase()
       const country = (user.country || '').toLowerCase()
-      
+
       return name.includes(query) || email.includes(query) || country.includes(query)
     })
   }, [subscribers, normalUsers, searchQuery, activeTab])
@@ -238,414 +240,617 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
         </div>
       </CardHeader>
       <CardContent>
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'subscribers' | 'normal')}>
-          <TabsList className="grid w-full grid-cols-2 mb-6">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'all' | 'subscribers' | 'normal')}>
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="all">
+              All Users ({users.length})
+            </TabsTrigger>
             <TabsTrigger value="subscribers">
-              Subscribers (Premium Users) ({subscribers.length})
+              Subscribers ({subscribers.length})
             </TabsTrigger>
             <TabsTrigger value="normal">
               Normal Users ({normalUsers.length})
             </TabsTrigger>
           </TabsList>
-          
+
+          <TabsContent value="all" className="mt-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Country</TableHead>
+                    <TableHead>Subscriptions</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredUsers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        No users found matching your search.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredUsers.map((user) => {
+                      const subscriptions = user.user_subscriptions || []
+                      const pendingActivation = subscriptions.find(
+                        (s: any) => s.plan_status === 'pending_activation'
+                      )
+
+                      return (
+                        <TableRow key={user.id}>
+                          <TableCell>{user.full_name || 'N/A'}</TableCell>
+                          <TableCell>{user.email}</TableCell>
+                          <TableCell>
+                            {user.country || 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {subscriptions.map((sub: any) => (
+                                <Badge
+                                  key={sub.id}
+                                  variant={
+                                    sub.plan_status === 'active'
+                                      ? 'default'
+                                      : sub.plan_status === 'pending_activation'
+                                        ? 'outline'
+                                        : sub.plan_status === 'inactive'
+                                          ? 'secondary'
+                                          : 'secondary'
+                                  }
+                                >
+                                  {sub.plan?.name} ({sub.plan_status})
+                                </Badge>
+                              ))}
+                              {subscriptions.length === 0 && (
+                                <span className="text-sm text-muted-foreground">No subscriptions</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Dialog open={addSubscriptionDialogOpen} onOpenChange={setAddSubscriptionDialogOpen}>
+                                <DialogTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedUserForSubscription(user)
+                                      setSelectedPlan('')
+                                      setSelectedDuration(30)
+                                    }}
+                                  >
+                                    <Plus className="h-4 w-4 mr-1" />
+                                    Add
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                  <DialogHeader>
+                                    <DialogTitle>Add Subscription</DialogTitle>
+                                    <DialogDescription>
+                                      Add a new subscription for {user.full_name || user.email}
+                                    </DialogDescription>
+                                  </DialogHeader>
+                                  <div className="space-y-4">
+                                    <div className="space-y-2">
+                                      <Label htmlFor="plan">Select Plan *</Label>
+                                      <Select value={selectedPlan} onValueChange={setSelectedPlan}>
+                                        <SelectTrigger id="plan">
+                                          <SelectValue placeholder="Choose a plan" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {plans.map((plan) => (
+                                            <SelectItem key={plan.id} value={plan.id}>
+                                              {plan.name}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label htmlFor="duration">Duration *</Label>
+                                      <Select
+                                        value={selectedDuration.toString()}
+                                        onValueChange={(value) => setSelectedDuration(parseInt(value))}
+                                      >
+                                        <SelectTrigger id="duration">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="7">1 Week (7 days)</SelectItem>
+                                          <SelectItem value="30">1 Month (30 days)</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <Button
+                                      onClick={handleAddSubscription}
+                                      className="w-full"
+                                      disabled={isProcessing || !selectedPlan}
+                                    >
+                                      {isProcessing ? 'Adding...' : 'Add Subscription'}
+                                    </Button>
+                                  </div>
+                                </DialogContent>
+                              </Dialog>
+                              {subscriptions.length > 0 && (
+                                <>
+                                  {subscriptions.some((sub: any) => sub.plan_status === 'active') && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setSelectedUserForDeactivation(user)
+                                        setSelectedSubscriptionToDeactivate('')
+                                        setDeactivateDialogOpen(true)
+                                      }}
+                                      className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                    >
+                                      <PowerOff className="h-4 w-4 mr-1" />
+                                      Deactivate
+                                    </Button>
+                                  )}
+                                  {subscriptions.map((sub: any) => (
+                                    sub.plan_status === 'inactive' && (
+                                      <Button
+                                        key={`reactivate-${sub.id}`}
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleReactivateSubscription(sub.id)}
+                                        className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                      >
+                                        <Power className="h-4 w-4 mr-1" />
+                                        Reactivate {sub.plan?.name}
+                                      </Button>
+                                    )
+                                  ))}
+                                </>
+                              )}
+                              {pendingActivation && (
+                                <Dialog>
+                                  <DialogTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setSelectedUser({ user, subscription: pendingActivation })}
+                                    >
+                                      Activate
+                                    </Button>
+                                  </DialogTrigger>
+                                  <DialogContent>
+                                    <DialogHeader>
+                                      <DialogTitle>Activate Correct Score Access</DialogTitle>
+                                      <DialogDescription>
+                                        Activate Correct Score subscription for {user.full_name || user.email}
+                                      </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="space-y-4">
+                                      <p className="text-sm text-muted-foreground">
+                                        This will activate the Correct Score subscription and start the countdown timer.
+                                      </p>
+                                      <Button
+                                        onClick={() =>
+                                          handleActivateCorrectScore(user.id, pendingActivation.id)
+                                        }
+                                        className="w-full"
+                                      >
+                                        Activate Now
+                                      </Button>
+                                    </div>
+                                  </DialogContent>
+                                </Dialog>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+
           <TabsContent value="subscribers" className="mt-0">
             <div className="overflow-x-auto">
               <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Country</TableHead>
-                <TableHead>Subscriptions</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredUsers.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                    No users found matching your search.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredUsers.map((user) => {
-                const subscriptions = user.user_subscriptions || []
-                const pendingActivation = subscriptions.find(
-                  (s: any) => s.plan_status === 'pending_activation'
-                )
-
-                return (
-                  <TableRow key={user.id}>
-                    <TableCell>{user.full_name || 'N/A'}</TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>
-                      {user.country || 'N/A'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {subscriptions.map((sub: any) => (
-                          <Badge
-                            key={sub.id}
-                            variant={
-                              sub.plan_status === 'active'
-                                ? 'default'
-                                : sub.plan_status === 'pending_activation'
-                                ? 'outline'
-                                : sub.plan_status === 'inactive'
-                                ? 'secondary'
-                                : 'secondary'
-                            }
-                          >
-                            {sub.plan?.name} ({sub.plan_status})
-                          </Badge>
-                        ))}
-                        {subscriptions.length === 0 && (
-                          <span className="text-sm text-muted-foreground">No subscriptions</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Dialog open={addSubscriptionDialogOpen} onOpenChange={setAddSubscriptionDialogOpen}>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedUserForSubscription(user)
-                                setSelectedPlan('')
-                                setSelectedDuration(30)
-                              }}
-                            >
-                              <Plus className="h-4 w-4 mr-1" />
-                              Add
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Add Subscription</DialogTitle>
-                              <DialogDescription>
-                                Add a new subscription for {user.full_name || user.email}
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="plan">Select Plan *</Label>
-                                <Select value={selectedPlan} onValueChange={setSelectedPlan}>
-                                  <SelectTrigger id="plan">
-                                    <SelectValue placeholder="Choose a plan" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {plans.map((plan) => (
-                                      <SelectItem key={plan.id} value={plan.id}>
-                                        {plan.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="duration">Duration *</Label>
-                                <Select 
-                                  value={selectedDuration.toString()} 
-                                  onValueChange={(value) => setSelectedDuration(parseInt(value))}
-                                >
-                                  <SelectTrigger id="duration">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="7">1 Week (7 days)</SelectItem>
-                                    <SelectItem value="30">1 Month (30 days)</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <Button
-                                onClick={handleAddSubscription}
-                                className="w-full"
-                                disabled={isProcessing || !selectedPlan}
-                              >
-                                {isProcessing ? 'Adding...' : 'Add Subscription'}
-                              </Button>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-                        {subscriptions.length > 0 && (
-                          <>
-                            {subscriptions.some((sub: any) => sub.plan_status === 'active') && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedUserForDeactivation(user)
-                                  setSelectedSubscriptionToDeactivate('')
-                                  setDeactivateDialogOpen(true)
-                                }}
-                                className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                              >
-                                <PowerOff className="h-4 w-4 mr-1" />
-                                Deactivate
-                              </Button>
-                            )}
-                            {subscriptions.map((sub: any) => (
-                              sub.plan_status === 'inactive' && (
-                                <Button
-                                  key={`reactivate-${sub.id}`}
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleReactivateSubscription(sub.id)}
-                                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                                >
-                                  <Power className="h-4 w-4 mr-1" />
-                                  Reactivate {sub.plan?.name}
-                                </Button>
-                              )
-                            ))}
-                          </>
-                        )}
-                        {pendingActivation && (
-                          <Dialog>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setSelectedUser({ user, subscription: pendingActivation })}
-                            >
-                              Activate
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Activate Correct Score Access</DialogTitle>
-                              <DialogDescription>
-                                Activate Correct Score subscription for {user.full_name || user.email}
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <p className="text-sm text-muted-foreground">
-                                This will activate the Correct Score subscription and start the countdown timer.
-                              </p>
-                              <Button
-                                onClick={() =>
-                                  handleActivateCorrectScore(user.id, pendingActivation.id)
-                                }
-                                className="w-full"
-                              >
-                                Activate Now
-                              </Button>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-                      )}
-                      </div>
-                    </TableCell>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Country</TableHead>
+                    <TableHead>Subscriptions</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
-                )
-              }))}
-            </TableBody>
-          </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredUsers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        No users found matching your search.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredUsers.map((user) => {
+                      const subscriptions = user.user_subscriptions || []
+                      const pendingActivation = subscriptions.find(
+                        (s: any) => s.plan_status === 'pending_activation'
+                      )
+
+                      return (
+                        <TableRow key={user.id}>
+                          <TableCell>{user.full_name || 'N/A'}</TableCell>
+                          <TableCell>{user.email}</TableCell>
+                          <TableCell>
+                            {user.country || 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {subscriptions.map((sub: any) => (
+                                <Badge
+                                  key={sub.id}
+                                  variant={
+                                    sub.plan_status === 'active'
+                                      ? 'default'
+                                      : sub.plan_status === 'pending_activation'
+                                        ? 'outline'
+                                        : sub.plan_status === 'inactive'
+                                          ? 'secondary'
+                                          : 'secondary'
+                                  }
+                                >
+                                  {sub.plan?.name} ({sub.plan_status})
+                                </Badge>
+                              ))}
+                              {subscriptions.length === 0 && (
+                                <span className="text-sm text-muted-foreground">No subscriptions</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Dialog open={addSubscriptionDialogOpen} onOpenChange={setAddSubscriptionDialogOpen}>
+                                <DialogTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedUserForSubscription(user)
+                                      setSelectedPlan('')
+                                      setSelectedDuration(30)
+                                    }}
+                                  >
+                                    <Plus className="h-4 w-4 mr-1" />
+                                    Add
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                  <DialogHeader>
+                                    <DialogTitle>Add Subscription</DialogTitle>
+                                    <DialogDescription>
+                                      Add a new subscription for {user.full_name || user.email}
+                                    </DialogDescription>
+                                  </DialogHeader>
+                                  <div className="space-y-4">
+                                    <div className="space-y-2">
+                                      <Label htmlFor="plan">Select Plan *</Label>
+                                      <Select value={selectedPlan} onValueChange={setSelectedPlan}>
+                                        <SelectTrigger id="plan">
+                                          <SelectValue placeholder="Choose a plan" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {plans.map((plan) => (
+                                            <SelectItem key={plan.id} value={plan.id}>
+                                              {plan.name}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label htmlFor="duration">Duration *</Label>
+                                      <Select
+                                        value={selectedDuration.toString()}
+                                        onValueChange={(value) => setSelectedDuration(parseInt(value))}
+                                      >
+                                        <SelectTrigger id="duration">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="7">1 Week (7 days)</SelectItem>
+                                          <SelectItem value="30">1 Month (30 days)</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <Button
+                                      onClick={handleAddSubscription}
+                                      className="w-full"
+                                      disabled={isProcessing || !selectedPlan}
+                                    >
+                                      {isProcessing ? 'Adding...' : 'Add Subscription'}
+                                    </Button>
+                                  </div>
+                                </DialogContent>
+                              </Dialog>
+                              {subscriptions.length > 0 && (
+                                <>
+                                  {subscriptions.some((sub: any) => sub.plan_status === 'active') && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setSelectedUserForDeactivation(user)
+                                        setSelectedSubscriptionToDeactivate('')
+                                        setDeactivateDialogOpen(true)
+                                      }}
+                                      className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                    >
+                                      <PowerOff className="h-4 w-4 mr-1" />
+                                      Deactivate
+                                    </Button>
+                                  )}
+                                  {subscriptions.map((sub: any) => (
+                                    sub.plan_status === 'inactive' && (
+                                      <Button
+                                        key={`reactivate-${sub.id}`}
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleReactivateSubscription(sub.id)}
+                                        className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                      >
+                                        <Power className="h-4 w-4 mr-1" />
+                                        Reactivate {sub.plan?.name}
+                                      </Button>
+                                    )
+                                  ))}
+                                </>
+                              )}
+                              {pendingActivation && (
+                                <Dialog>
+                                  <DialogTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setSelectedUser({ user, subscription: pendingActivation })}
+                                    >
+                                      Activate
+                                    </Button>
+                                  </DialogTrigger>
+                                  <DialogContent>
+                                    <DialogHeader>
+                                      <DialogTitle>Activate Correct Score Access</DialogTitle>
+                                      <DialogDescription>
+                                        Activate Correct Score subscription for {user.full_name || user.email}
+                                      </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="space-y-4">
+                                      <p className="text-sm text-muted-foreground">
+                                        This will activate the Correct Score subscription and start the countdown timer.
+                                      </p>
+                                      <Button
+                                        onClick={() =>
+                                          handleActivateCorrectScore(user.id, pendingActivation.id)
+                                        }
+                                        className="w-full"
+                                      >
+                                        Activate Now
+                                      </Button>
+                                    </div>
+                                  </DialogContent>
+                                </Dialog>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })
+                  )}
+                </TableBody>
+              </Table>
             </div>
           </TabsContent>
-          
-          <TabsContent value="normal" className="mt-0">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Country</TableHead>
-                <TableHead>Subscriptions</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredUsers.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                    No users found matching your search.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredUsers.map((user) => {
-                const subscriptions = user.user_subscriptions || []
-                const pendingActivation = subscriptions.find(
-                  (s: any) => s.plan_status === 'pending_activation'
-                )
 
-                return (
-                  <TableRow key={user.id}>
-                    <TableCell>{user.full_name || 'N/A'}</TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>
-                      {user.country || 'N/A'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {subscriptions.map((sub: any) => (
-                          <Badge
-                            key={sub.id}
-                            variant={
-                              sub.plan_status === 'active'
-                                ? 'default'
-                                : sub.plan_status === 'pending_activation'
-                                ? 'outline'
-                                : sub.plan_status === 'inactive'
-                                ? 'secondary'
-                                : 'secondary'
-                            }
-                          >
-                            {sub.plan?.name} ({sub.plan_status})
-                          </Badge>
-                        ))}
-                        {subscriptions.length === 0 && (
-                          <span className="text-sm text-muted-foreground">No subscriptions</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Dialog open={addSubscriptionDialogOpen} onOpenChange={setAddSubscriptionDialogOpen}>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedUserForSubscription(user)
-                                setSelectedPlan('')
-                                setSelectedDuration(30)
-                              }}
-                            >
-                              <Plus className="h-4 w-4 mr-1" />
-                              Add
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Add Subscription</DialogTitle>
-                              <DialogDescription>
-                                Add a new subscription for {user.full_name || user.email}
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="plan">Select Plan *</Label>
-                                <Select value={selectedPlan} onValueChange={setSelectedPlan}>
-                                  <SelectTrigger id="plan">
-                                    <SelectValue placeholder="Choose a plan" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {plans.map((plan) => (
-                                      <SelectItem key={plan.id} value={plan.id}>
-                                        {plan.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="duration">Duration *</Label>
-                                <Select 
-                                  value={selectedDuration.toString()} 
-                                  onValueChange={(value) => setSelectedDuration(parseInt(value))}
-                                >
-                                  <SelectTrigger id="duration">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="7">1 Week (7 days)</SelectItem>
-                                    <SelectItem value="30">1 Month (30 days)</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <Button
-                                onClick={handleAddSubscription}
-                                className="w-full"
-                                disabled={isProcessing || !selectedPlan}
-                              >
-                                {isProcessing ? 'Adding...' : 'Add Subscription'}
-                              </Button>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-                        {subscriptions.length > 0 && (
-                          <>
-                            {subscriptions.some((sub: any) => sub.plan_status === 'active') && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedUserForDeactivation(user)
-                                  setSelectedSubscriptionToDeactivate('')
-                                  setDeactivateDialogOpen(true)
-                                }}
-                                className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                              >
-                                <PowerOff className="h-4 w-4 mr-1" />
-                                Deactivate
-                              </Button>
-                            )}
-                            {subscriptions.map((sub: any) => (
-                              sub.plan_status === 'inactive' && (
-                                <Button
-                                  key={`reactivate-${sub.id}`}
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleReactivateSubscription(sub.id)}
-                                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                                >
-                                  <Power className="h-4 w-4 mr-1" />
-                                  Reactivate {sub.plan?.name}
-                                </Button>
-                              )
-                            ))}
-                          </>
-                        )}
-                        {pendingActivation && (
-                          <Dialog>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setSelectedUser({ user, subscription: pendingActivation })}
-                            >
-                              Activate
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Activate Correct Score Access</DialogTitle>
-                              <DialogDescription>
-                                Activate Correct Score subscription for {user.full_name || user.email}
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <p className="text-sm text-muted-foreground">
-                                This will activate the Correct Score subscription and start the countdown timer.
-                              </p>
-                              <Button
-                                onClick={() =>
-                                  handleActivateCorrectScore(user.id, pendingActivation.id)
-                                }
-                                className="w-full"
-                              >
-                                Activate Now
-                              </Button>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-                      )}
-                      </div>
-                    </TableCell>
+          <TabsContent value="normal" className="mt-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Country</TableHead>
+                    <TableHead>Subscriptions</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
-                )
-              }))}
-            </TableBody>
-          </Table>
-        </div>
+                </TableHeader>
+                <TableBody>
+                  {filteredUsers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        No users found matching your search.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredUsers.map((user) => {
+                      const subscriptions = user.user_subscriptions || []
+                      const pendingActivation = subscriptions.find(
+                        (s: any) => s.plan_status === 'pending_activation'
+                      )
+
+                      return (
+                        <TableRow key={user.id}>
+                          <TableCell>{user.full_name || 'N/A'}</TableCell>
+                          <TableCell>{user.email}</TableCell>
+                          <TableCell>
+                            {user.country || 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {subscriptions.map((sub: any) => (
+                                <Badge
+                                  key={sub.id}
+                                  variant={
+                                    sub.plan_status === 'active'
+                                      ? 'default'
+                                      : sub.plan_status === 'pending_activation'
+                                        ? 'outline'
+                                        : sub.plan_status === 'inactive'
+                                          ? 'secondary'
+                                          : 'secondary'
+                                  }
+                                >
+                                  {sub.plan?.name} ({sub.plan_status})
+                                </Badge>
+                              ))}
+                              {subscriptions.length === 0 && (
+                                <span className="text-sm text-muted-foreground">No subscriptions</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Dialog open={addSubscriptionDialogOpen} onOpenChange={setAddSubscriptionDialogOpen}>
+                                <DialogTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedUserForSubscription(user)
+                                      setSelectedPlan('')
+                                      setSelectedDuration(30)
+                                    }}
+                                  >
+                                    <Plus className="h-4 w-4 mr-1" />
+                                    Add
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                  <DialogHeader>
+                                    <DialogTitle>Add Subscription</DialogTitle>
+                                    <DialogDescription>
+                                      Add a new subscription for {user.full_name || user.email}
+                                    </DialogDescription>
+                                  </DialogHeader>
+                                  <div className="space-y-4">
+                                    <div className="space-y-2">
+                                      <Label htmlFor="plan">Select Plan *</Label>
+                                      <Select value={selectedPlan} onValueChange={setSelectedPlan}>
+                                        <SelectTrigger id="plan">
+                                          <SelectValue placeholder="Choose a plan" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {plans.map((plan) => (
+                                            <SelectItem key={plan.id} value={plan.id}>
+                                              {plan.name}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label htmlFor="duration">Duration *</Label>
+                                      <Select
+                                        value={selectedDuration.toString()}
+                                        onValueChange={(value) => setSelectedDuration(parseInt(value))}
+                                      >
+                                        <SelectTrigger id="duration">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="7">1 Week (7 days)</SelectItem>
+                                          <SelectItem value="30">1 Month (30 days)</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <Button
+                                      onClick={handleAddSubscription}
+                                      className="w-full"
+                                      disabled={isProcessing || !selectedPlan}
+                                    >
+                                      {isProcessing ? 'Adding...' : 'Add Subscription'}
+                                    </Button>
+                                  </div>
+                                </DialogContent>
+                              </Dialog>
+                              {subscriptions.length > 0 && (
+                                <>
+                                  {subscriptions.some((sub: any) => sub.plan_status === 'active') && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setSelectedUserForDeactivation(user)
+                                        setSelectedSubscriptionToDeactivate('')
+                                        setDeactivateDialogOpen(true)
+                                      }}
+                                      className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                    >
+                                      <PowerOff className="h-4 w-4 mr-1" />
+                                      Deactivate
+                                    </Button>
+                                  )}
+                                  {subscriptions.map((sub: any) => (
+                                    sub.plan_status === 'inactive' && (
+                                      <Button
+                                        key={`reactivate-${sub.id}`}
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleReactivateSubscription(sub.id)}
+                                        className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                      >
+                                        <Power className="h-4 w-4 mr-1" />
+                                        Reactivate {sub.plan?.name}
+                                      </Button>
+                                    )
+                                  ))}
+                                </>
+                              )}
+                              {pendingActivation && (
+                                <Dialog>
+                                  <DialogTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setSelectedUser({ user, subscription: pendingActivation })}
+                                    >
+                                      Activate
+                                    </Button>
+                                  </DialogTrigger>
+                                  <DialogContent>
+                                    <DialogHeader>
+                                      <DialogTitle>Activate Correct Score Access</DialogTitle>
+                                      <DialogDescription>
+                                        Activate Correct Score subscription for {user.full_name || user.email}
+                                      </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="space-y-4">
+                                      <p className="text-sm text-muted-foreground">
+                                        This will activate the Correct Score subscription and start the countdown timer.
+                                      </p>
+                                      <Button
+                                        onClick={() =>
+                                          handleActivateCorrectScore(user.id, pendingActivation.id)
+                                        }
+                                        className="w-full"
+                                      >
+                                        Activate Now
+                                      </Button>
+                                    </div>
+                                  </DialogContent>
+                                </Dialog>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    }))}
+                </TableBody>
+              </Table>
+            </div>
           </TabsContent>
         </Tabs>
       </CardContent>
-      
+
       {/* Deactivate Subscription Dialog */}
       <Dialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}>
         <DialogContent>
