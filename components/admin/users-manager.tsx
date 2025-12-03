@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 import { Search, Plus, Power, PowerOff } from 'lucide-react'
 import { Database } from '@/types/database'
+import { format } from 'date-fns'
 
 interface UsersManagerProps {
   users: any[]
@@ -261,6 +262,7 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Country</TableHead>
+                    <TableHead>Joined Date</TableHead>
                     <TableHead>Subscriptions</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -268,7 +270,7 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
                 <TableBody>
                   {filteredUsers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         No users found matching your search.
                       </TableCell>
                     </TableRow>
@@ -285,6 +287,9 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
                           <TableCell>{user.email}</TableCell>
                           <TableCell>
                             {user.country || 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            {user.created_at ? format(new Date(user.created_at), 'MMM dd, yyyy') : 'N/A'}
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
@@ -460,6 +465,7 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Country</TableHead>
+                    <TableHead>Joined Date</TableHead>
                     <TableHead>Subscriptions</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -467,7 +473,7 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
                 <TableBody>
                   {filteredUsers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         No users found matching your search.
                       </TableCell>
                     </TableRow>
@@ -484,6 +490,9 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
                           <TableCell>{user.email}</TableCell>
                           <TableCell>
                             {user.country || 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            {user.created_at ? format(new Date(user.created_at), 'MMM dd, yyyy') : 'N/A'}
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
@@ -659,6 +668,7 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Country</TableHead>
+                    <TableHead>Joined Date</TableHead>
                     <TableHead>Subscriptions</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -666,7 +676,7 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
                 <TableBody>
                   {filteredUsers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         No users found matching your search.
                       </TableCell>
                     </TableRow>
@@ -683,6 +693,9 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
                           <TableCell>{user.email}</TableCell>
                           <TableCell>
                             {user.country || 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            {user.created_at ? format(new Date(user.created_at), 'MMM dd, yyyy') : 'N/A'}
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
