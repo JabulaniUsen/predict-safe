@@ -45,7 +45,6 @@ export async function sendEmail({ to, subject, html, text }: EmailOptions) {
 }
 
 // Email templates
-const LOGO_URL = 'https://wxomppvvpwjvjxvttsog.supabase.co/storage/v1/object/public/logo/ChatGPT%20Image%20Nov%2021,%202025,%2009_18_17%20PM.png'
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
 const BRAND_COLORS = {
   primary: '#1e40af',
@@ -87,11 +86,6 @@ const getEmailStyles = (headerColor: string, headerColorDark: string, buttonColo
       color: white; 
       padding: 40px 30px; 
       text-align: center;
-    }
-    .logo { 
-      max-width: 180px; 
-      height: auto; 
-      margin-bottom: 20px;
     }
     .header h1 { 
       margin: 0; 
@@ -176,7 +170,6 @@ export const emailTemplates = {
           <div style="padding: 20px;">
             <div class="email-wrapper">
             <div class="header">
-                <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
                 <h1>👋 Welcome${fullName ? `, ${fullName}` : ''}!</h1>
             </div>
             <div class="content">
@@ -212,7 +205,6 @@ export const emailTemplates = {
           <div style="padding: 20px;">
             <div class="email-wrapper">
             <div class="header">
-                <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
               <h1>📦 Subscription Created</h1>
             </div>
             <div class="content">
@@ -245,7 +237,6 @@ export const emailTemplates = {
           <div style="padding: 20px;">
             <div class="email-wrapper">
             <div class="header">
-                <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
               <h1>🎯 New Predictions Available!</h1>
             </div>
             <div class="content">
@@ -281,7 +272,6 @@ export const emailTemplates = {
           <div style="padding: 20px;">
             <div class="email-wrapper">
             <div class="header">
-                <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
               <h1>✅ Subscription Confirmed!</h1>
             </div>
             <div class="content">
@@ -317,7 +307,6 @@ export const emailTemplates = {
           <div style="padding: 20px;">
             <div class="email-wrapper">
             <div class="header">
-                <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
               <h1>⏰ Subscription Expired</h1>
             </div>
             <div class="content">
@@ -353,7 +342,6 @@ export const emailTemplates = {
           <div style="padding: 20px;">
             <div class="email-wrapper">
             <div class="header">
-                <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
               <h1>⚠️ Subscription Removed</h1>
             </div>
             <div class="content">
@@ -392,7 +380,6 @@ export const emailTemplates = {
           <div style="padding: 20px;">
             <div class="email-wrapper">
             <div class="header">
-                <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
               <h1>🎉 New Subscription!</h1>
             </div>
             <div class="content">
@@ -429,7 +416,6 @@ export const emailTemplates = {
           <div style="padding: 20px;">
             <div class="email-wrapper">
             <div class="header">
-                <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
               <h1>✅ Payment Approved!</h1>
             </div>
             <div class="content">
@@ -465,7 +451,6 @@ export const emailTemplates = {
           <div style="padding: 20px;">
             <div class="email-wrapper">
             <div class="header">
-                <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
               <h1>💰 New Payment Submitted!</h1>
             </div>
             <div class="content">
@@ -510,7 +495,6 @@ export const emailTemplates = {
           <div style="padding: 20px;">
             <div class="email-wrapper">
             <div class="header">
-                <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
               <h1>❌ Payment Rejected</h1>
             </div>
             <div class="content">
