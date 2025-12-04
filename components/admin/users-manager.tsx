@@ -114,6 +114,14 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
 
     try {
       const supabase = createClient()
+      
+      // Get subscription details before deactivating
+      const { data: subscriptionData } = await supabase
+        .from('user_subscriptions')
+        .select('*, plans(name), users(email, full_name)')
+        .eq('id', selectedSubscriptionToDeactivate)
+        .single()
+
       const updateData: Database['public']['Tables']['user_subscriptions']['Update'] = {
         plan_status: 'inactive',
       }
@@ -126,7 +134,51 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
 
       if (error) throw error
 
-      toast.success('Subscription deactivated successfully!')
+      // Send rejection email to user
+      if (subscriptionData) {
+        const planName = (subscriptionData.plans as any)?.name || 'Subscription'
+        const userEmail = (subscriptionData.users as any)?.email
+        const userName = (subscriptionData.users as any)?.full_name
+
+        try {
+          await fetch('/api/notifications/send-email', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              type: 'payment_rejected',
+              userId: subscriptionData.user_id,
+              planName,
+              userEmail,
+              userName,
+              reason: 'Subscription has been deactivated by admin',
+            }),
+          })
+        } catch (emailError) {
+          console.error('Error sending rejection email:', emailError)
+          // Don't throw - subscription is already deactivated
+        }
+
+        // Create notification for user
+        try {
+          await supabase
+            .from('notifications')
+            // @ts-expect-error - Supabase type inference issue
+            .insert({
+              user_id: subscriptionData.user_id,
+              type: 'payment_rejected',
+              title: 'Subscription Rejected',
+              message: `Your subscription for ${planName} has been rejected and deactivated. Please contact support if you have any questions.`,
+              read: false,
+            })
+        } catch (notifError) {
+          console.error('Error creating notification:', notifError)
+          // Don't throw - subscription is already deactivated
+        }
+      }
+
+      toast.success('Subscription deactivated successfully and user has been notified!')
       setDeactivateDialogOpen(false)
       setSelectedUserForDeactivation(null)
       setSelectedSubscriptionToDeactivate('')
