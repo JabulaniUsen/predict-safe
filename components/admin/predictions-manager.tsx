@@ -1132,7 +1132,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                       <div className="col-span-3">Teams</div>
                       <div className="col-span-1 text-center">Predicted</div>
                       <div className="col-span-1 text-center hidden md:block">Odds</div>
-                      <div className="col-span-1 text-center hidden lg:block">Confidence</div>
+                        <div className="col-span-1 text-center hidden lg:block">Confidence</div>
                       <div className="col-span-1 text-center hidden md:block">Actual Score</div>
                       <div className="col-span-1 text-center hidden sm:block">Status</div>
                       <div className="col-span-1 text-right">Actions</div>

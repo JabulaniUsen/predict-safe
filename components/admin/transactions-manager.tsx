@@ -39,6 +39,9 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
     try {
       const supabase = createClient()
 
+      // Check if this is an activation fee payment
+      const isActivationFee = selectedTransaction.payment_type === 'activation'
+
       // Update transaction status to completed
       const updateData: TransactionUpdate = {
         status: 'completed',
@@ -53,6 +56,117 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
 
       if (txError) throw txError
 
+      // For activation fees, just set activation_fee_paid to true (plan is already active)
+      if (isActivationFee) {
+        // Find the subscription (should already be active)
+        let subscription: any = null
+        let subscriptionId: string | null = null
+
+        if (selectedTransaction.subscription_id) {
+          const subResultById = await supabase
+            .from('user_subscriptions')
+            .select('*')
+            .eq('id', selectedTransaction.subscription_id)
+            .maybeSingle()
+          
+          if (!subResultById.error && subResultById.data) {
+            subscription = subResultById.data
+            subscriptionId = subscription?.id || null
+          }
+        }
+
+        if (!subscription && selectedTransaction.user_id && selectedTransaction.plan_id) {
+          const subResult = await supabase
+            .from('user_subscriptions')
+            .select('*')
+            .eq('user_id', selectedTransaction.user_id)
+            .eq('plan_id', selectedTransaction.plan_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          
+          if (!subResult.error && subResult.data) {
+            subscription = subResult.data
+            subscriptionId = subscription?.id || null
+          }
+        }
+
+        if (subscription && subscriptionId) {
+          // Only set activation_fee_paid to true - don't change plan status or dates
+          const updateSubData: UserSubscriptionUpdate = {
+            activation_fee_paid: true,
+            updated_at: new Date().toISOString(),
+          }
+
+          const subResult: any = await supabase
+            .from('user_subscriptions')
+            // @ts-expect-error - Supabase type inference issue
+            .update(updateSubData)
+            .eq('id', subscriptionId)
+            .select()
+          
+          const { data: updatedSub, error: subError } = subResult
+
+          if (subError) {
+            console.error('Error updating subscription:', subError)
+            throw subError
+          }
+
+          if (!updatedSub || updatedSub.length === 0) {
+            throw new Error(`Subscription update failed - no rows updated. Subscription ID: ${subscriptionId}`)
+          }
+
+          toast.success('Activation fee approved! User can now access correct score predictions.')
+          
+          // Notify user
+          try {
+            const planName = (selectedTransaction.plans as any)?.name || 'Subscription'
+            const userEmail = (selectedTransaction.users as any)?.email
+            const userName = (selectedTransaction.users as any)?.full_name
+
+            await supabase
+              .from('notifications')
+              // @ts-expect-error - Supabase type inference issue
+              .insert({
+                user_id: selectedTransaction.user_id,
+                type: 'payment_approved',
+                title: 'Activation Fee Approved',
+                message: `Your activation fee for ${planName} has been approved! You can now access all premium features including correct score predictions.`,
+                read: false,
+              })
+
+            try {
+              await fetch('/api/notifications/send-email', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  type: 'payment_approved',
+                  userId: selectedTransaction.user_id,
+                  planName,
+                  userEmail,
+                  userName,
+                }),
+              })
+            } catch (emailError) {
+              console.error('Error sending approval email:', emailError)
+            }
+          } catch (notifError) {
+            console.error('Error creating approval notification:', notifError)
+          }
+
+          setShowConfirmDialog(false)
+          window.location.reload()
+          return
+        } else {
+          toast.error('Subscription not found for this transaction.')
+          setShowConfirmDialog(false)
+          return
+        }
+      }
+
+      // For subscription payments, show activate dialog
       toast.success('Payment confirmed successfully! You can now activate the subscription.')
       setShowConfirmDialog(false)
       
@@ -498,7 +612,7 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
 
   // Get pending transactions for subscription payments
   // Filter out transactions where subscription is already active, rejected, or failed
-  const pendingTransactions = transactions.filter((tx: any) => {
+  const pendingSubscriptionPayments = transactions.filter((tx: any) => {
     // Only show pending transactions, exclude failed/rejected
     if (tx.status !== 'pending' || tx.payment_type !== 'subscription') return false
     
@@ -512,7 +626,7 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
   })
   
   // Get pending activation fee payments
-  // Filter out transactions that are rejected/failed
+  // Filter out transactions that are rejected/failed or already approved
   const pendingActivationFees = transactions.filter((tx: any) => {
     // Only show pending transactions, exclude failed/rejected
     if (tx.status !== 'pending' || tx.payment_type !== 'activation') return false
@@ -522,8 +636,12 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
       (sub: any) => sub.user_id === tx.user_id && sub.plan_id === tx.plan_id
     )
     
+    // Include if subscription doesn't exist or activation_fee_paid is false
     return !subscription || !subscription.activation_fee_paid
   })
+
+  // Combine both subscription and activation fee payments for the "Pending Subscription Payments" tab
+  const pendingTransactions = [...pendingSubscriptionPayments, ...pendingActivationFees]
   
   // Get completed transactions that haven't been activated yet
   const completedNotActivated = transactions.filter((tx: any) => {
@@ -570,7 +688,7 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>Pending Subscription Payments</CardTitle>
-                  <CardDescription>Review and confirm payment proofs for subscription payments</CardDescription>
+                  <CardDescription>Review and confirm payment proofs for subscription payments and activation fees</CardDescription>
                 </div>
                 <Badge variant="outline" className="text-lg px-3 py-1 bg-yellow-50 text-yellow-700 border-yellow-200">
                   {pendingTransactions.length}
@@ -599,7 +717,11 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
                       const subscription = subscriptions.find(
                         (sub: any) => sub.user_id === tx.user_id && sub.plan_id === tx.plan_id
                       )
-                      const isAlreadyActivated = subscription?.plan_status === 'active' && subscription?.subscription_fee_paid === true
+                      // For subscription payments, check if already activated
+                      // For activation fees, check if activation_fee_paid is already true
+                      const isAlreadyActivated = tx.payment_type === 'subscription' 
+                        ? (subscription?.plan_status === 'active' && subscription?.subscription_fee_paid === true)
+                        : (subscription?.activation_fee_paid === true)
 
                       return (
                         <TableRow key={tx.id}>
@@ -608,7 +730,14 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
                           </TableCell>
                           <TableCell>{(tx.plans as any)?.name || 'N/A'}</TableCell>
                           <TableCell>
-                            {tx.currency} {tx.amount}
+                            <div className="flex items-center gap-2">
+                              <span>{tx.currency} {tx.amount}</span>
+                              {tx.payment_type === 'activation' && (
+                                <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                                  Activation Fee
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>{tx.payment_gateway || 'N/A'}</TableCell>
                           <TableCell>
@@ -636,10 +765,13 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
                                 variant="outline"
                                 size="sm"
                                 onClick={() => openConfirmDialog(tx)}
-                                className="bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
+                                className={tx.payment_type === 'activation' 
+                                  ? "bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+                                  : "bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
+                                }
                               >
                                 <CheckCircle2 className="h-4 w-4 mr-1" />
-                                Confirm
+                                {tx.payment_type === 'activation' ? 'Approve' : 'Confirm'}
                               </Button>
                               <Button
                                 variant="outline"
@@ -653,7 +785,7 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
                             </div>
                           ) : (
                             <Badge variant="outline" className="text-green-700 border-green-200">
-                              Already Activated
+                              {tx.payment_type === 'activation' ? 'Approved' : 'Already Activated'}
                             </Badge>
                           )}
                             </div>

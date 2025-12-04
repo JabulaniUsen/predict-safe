@@ -69,8 +69,6 @@ export function ConfigManager({ config }: ConfigManagerProps) {
     
     return ''
   }
-  
-  const [whatsappNumber, setWhatsappNumber] = useState<string>(getWhatsAppNumber())
 
   const handleUpdateConfig = async (key: string, value: any) => {
     setLoading(true)
@@ -125,35 +123,6 @@ export function ConfigManager({ config }: ConfigManagerProps) {
     }
   }
 
-  const handleUpdateWhatsAppNumber = async () => {
-    if (!whatsappNumber.trim()) {
-      toast.error('WhatsApp number cannot be empty')
-      return
-    }
-
-    setLoading(true)
-    try {
-      const supabase = createClient()
-      
-      const upsertData: Database['public']['Tables']['site_config']['Insert'] = {
-        key: 'whatsapp_number',
-        value: whatsappNumber.trim(),
-      }
-      
-      const { error } = await supabase
-        .from('site_config')
-        // @ts-expect-error - Supabase type inference issue
-        .upsert(upsertData, { onConflict: 'key' })
-
-      if (error) throw error
-
-      toast.success('WhatsApp number updated!')
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to update WhatsApp number')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   return (
     <div className="space-y-6">
@@ -248,9 +217,8 @@ export function ConfigManager({ config }: ConfigManagerProps) {
               <Label htmlFor="whatsapp_number">WhatsApp Number</Label>
               <Input
                 id="whatsapp_number"
-                value={whatsappNumber}
-                onChange={(e) => setWhatsappNumber(e.target.value)}
-                onBlur={handleUpdateWhatsAppNumber}
+                defaultValue={getWhatsAppNumber()}
+                onBlur={(e) => handleUpdateConfig('whatsapp_number', e.target.value.trim())}
                 placeholder="+234 704 532 1193"
               />
               <p className="text-xs text-muted-foreground">

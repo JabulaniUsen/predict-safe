@@ -19,6 +19,16 @@ import { PaymentMethod, PlanPrice } from '@/types'
 import { toast } from 'sonner'
 import Image from 'next/image'
 import { Combobox } from '@/components/ui/combobox'
+import { getCurrencyFromCountry, getCurrencySymbol as getCurrencySymbolUtil } from '@/lib/utils/currency'
+
+type CountryOption = 'Nigeria' | 'Ghana' | 'Kenya' | 'Other'
+
+const mapCountryToOption = (countryName: string): CountryOption => {
+  if (countryName === 'Nigeria') return 'Nigeria'
+  if (countryName === 'Ghana') return 'Ghana'
+  if (countryName === 'Kenya') return 'Kenya'
+  return 'Other'
+}
 
 interface ActivationFeeModalProps {
   open: boolean
@@ -48,6 +58,7 @@ export function ActivationFeeModal({
   const [selectedCountry, setSelectedCountry] = useState<string>(userCountry)
   const [countries, setCountries] = useState<Array<{ value: string; label: string }>>([])
   const [loadingCountries, setLoadingCountries] = useState(true)
+  const [durationDays, setDurationDays] = useState<number>(30)
 
   // Fetch countries from API
   useEffect(() => {
@@ -77,9 +88,39 @@ export function ActivationFeeModal({
   useEffect(() => {
     if (open) {
       setSelectedCountry(userCountry)
+      fetchSubscriptionDuration()
       fetchData()
     }
-  }, [open, planId, userCountry])
+  }, [open, planId, userCountry, subscriptionId])
+
+  // Fetch subscription to get duration
+  const fetchSubscriptionDuration = async () => {
+    const supabase = createClient()
+    try {
+      const { data: subscriptionData } = await supabase
+        .from('user_subscriptions')
+        .select('start_date, expiry_date')
+        .eq('id', subscriptionId)
+        .single()
+
+      const subscription = subscriptionData as { start_date: string | null; expiry_date: string | null } | null
+
+      if (subscription?.start_date && subscription?.expiry_date) {
+        const start = new Date(subscription.start_date)
+        const expiry = new Date(subscription.expiry_date)
+        const days = Math.ceil((expiry.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+        // Round to nearest valid duration (7 or 30)
+        setDurationDays(days <= 14 ? 7 : 30)
+      } else {
+        // Default to 30 days if dates not available
+        setDurationDays(30)
+      }
+    } catch (error) {
+      console.error('Error fetching subscription duration:', error)
+      // Default to 30 days on error
+      setDurationDays(30)
+    }
+  }
 
   // Fetch payment methods when country changes
   useEffect(() => {
@@ -88,12 +129,12 @@ export function ActivationFeeModal({
     }
   }, [selectedCountry, open])
 
-  // Update activation price when country changes
+  // Update activation price when country or duration changes
   useEffect(() => {
     if (open) {
       fetchActivationPrice()
     }
-  }, [selectedCountry, planId, open])
+  }, [selectedCountry, planId, durationDays, open])
 
   // Ensure a payment method is selected when payment methods are loaded
   useEffect(() => {
@@ -168,19 +209,81 @@ export function ActivationFeeModal({
   const fetchActivationPrice = async () => {
     const supabase = createClient()
     try {
-      // Get activation fee price for selected country
-      const { data: priceData } = await supabase
+      if (!selectedCountry) {
+        setActivationPrice(null)
+        return
+      }
+
+      // Get all prices for this plan and duration
+      const { data: pricesData } = await supabase
         .from('plan_prices')
         .select('*')
         .eq('plan_id', planId)
-        .eq('country', selectedCountry)
-        .single()
+        .eq('duration_days', durationDays)
 
-      if (priceData && (priceData as PlanPrice).activation_fee) {
-        setActivationPrice(priceData as PlanPrice)
-      } else {
+      if (!pricesData || pricesData.length === 0) {
         setActivationPrice(null)
+        return
       }
+
+      // Filter prices that have activation fees
+      const pricesWithActivationFee = pricesData.filter((p: any) => p.activation_fee != null && p.activation_fee > 0)
+
+      if (pricesWithActivationFee.length === 0) {
+        setActivationPrice(null)
+        return
+      }
+
+      // First, try to find exact country match
+      const exactMatch = pricesWithActivationFee.find(
+        (p: any) => p.duration_days === durationDays && p.country === selectedCountry
+      )
+      if (exactMatch) {
+        setActivationPrice(exactMatch as PlanPrice)
+        return
+      }
+
+      // If Nigeria, look for Nigeria-specific price
+      if (selectedCountry === 'Nigeria') {
+        const nigeriaPrice = pricesWithActivationFee.find(
+          (p: any) => p.duration_days === durationDays && p.country === 'Nigeria'
+        )
+        if (nigeriaPrice) {
+          setActivationPrice(nigeriaPrice as PlanPrice)
+          return
+        }
+      }
+
+      // For all other countries, look for USD prices (country = 'Other' or currency = 'USD')
+      const usdPrice = pricesWithActivationFee.find(
+        (p: any) => p.duration_days === durationDays && (p.currency === 'USD' || p.country === 'Other')
+      )
+      if (usdPrice) {
+        setActivationPrice(usdPrice as PlanPrice)
+        return
+      }
+
+      // Fallback: try to find any price for this duration with matching currency
+      const matchingCurrency = selectedCountry === 'Nigeria' ? 'NGN' : 'USD'
+      const currencyPrice = pricesWithActivationFee.find(
+        (p: any) => p.duration_days === durationDays && p.currency === matchingCurrency
+      )
+      if (currencyPrice) {
+        setActivationPrice(currencyPrice as PlanPrice)
+        return
+      }
+
+      // Final fallback: any price with activation fee for this duration
+      const anyPrice = pricesWithActivationFee.find(
+        (p: any) => p.duration_days === durationDays
+      )
+      if (anyPrice) {
+        setActivationPrice(anyPrice as PlanPrice)
+        return
+      }
+
+      // No activation fee found
+      setActivationPrice(null)
     } catch (error) {
       console.error('Error fetching activation price:', error)
       setActivationPrice(null)
@@ -314,21 +417,46 @@ export function ActivationFeeModal({
     }
   }
 
-  const getCurrencySymbol = () => {
-    // Use currency from activation price if available
-    if (activationPrice?.currency) {
-      return activationPrice.currency
+  // Get currency symbol from the selected price's currency field in the database
+  // Same logic as subscriptions page
+  const getCurrencySymbol = (selectedPrice: any) => {
+    // First priority: Use currency code from database if available
+    if (selectedPrice?.currency && typeof selectedPrice.currency === 'string' && selectedPrice.currency.trim()) {
+      const symbol = getCurrencySymbolUtil(selectedPrice.currency.trim())
+      if (symbol && symbol !== selectedPrice.currency) {
+        return symbol
+      }
+      // If utility returns the code itself, it means it's not in the map, return it as-is
+      return symbol
     }
-    // Fallback to common currencies based on country
-    if (selectedCountry === 'Nigeria' || selectedCountry === 'Other') return '₦'
-    if (selectedCountry === 'Ghana') return '₵'
-    if (selectedCountry === 'Kenya') return 'KSh'
-    // Default to Naira for other countries
-    return '₦'
+
+    // Second priority: Infer currency from country name if currency not set
+    if (selectedPrice?.country && typeof selectedPrice.country === 'string' && selectedPrice.country.trim()) {
+      const countryCurrencyCode = getCurrencyFromCountry(selectedPrice.country.trim())
+      if (countryCurrencyCode) {
+        const symbol = getCurrencySymbolUtil(countryCurrencyCode)
+        return symbol
+      }
+    }
+
+    // Third priority: Use selected country to infer currency
+    if (selectedCountry && typeof selectedCountry === 'string' && selectedCountry.trim()) {
+      const userCountryCurrencyCode = getCurrencyFromCountry(selectedCountry.trim())
+      if (userCountryCurrencyCode) {
+        const symbol = getCurrencySymbolUtil(userCountryCurrencyCode)
+        return symbol
+      }
+    }
+
+    // Final fallback: Default to USD
+    return '$'
   }
 
-  const currency = getCurrencySymbol()
+  const currency = getCurrencySymbol(activationPrice)
   const amount = activationPrice?.activation_fee || 0
+  const formattedAmount = typeof amount === 'number' 
+    ? amount 
+    : parseFloat(String(amount || '0'))
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -364,10 +492,12 @@ export function ActivationFeeModal({
             {/* Amount Display */}
             <div className="bg-blue-50 rounded-lg p-4 text-center">
               <p className="text-sm text-gray-600 mb-1">Activation Fee</p>
-              <p className="text-3xl font-bold text-blue-600">
-                {currency}
-                {amount}
-              </p>
+              <div className="flex items-baseline justify-center gap-1">
+                <span className="text-3xl font-bold text-blue-600">{currency}</span>
+                <span className="text-4xl font-bold text-blue-600">
+                  {formattedAmount.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                </span>
+              </div>
             </div>
 
             {/* Payment Methods */}

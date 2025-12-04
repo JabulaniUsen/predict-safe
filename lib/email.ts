@@ -175,14 +175,14 @@ export const emailTemplates = {
         <body>
           <div style="padding: 20px;">
             <div class="email-wrapper">
-              <div class="header">
+            <div class="header">
                 <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
                 <h1>👋 Welcome${fullName ? `, ${fullName}` : ''}!</h1>
-              </div>
-              <div class="content">
-                <p>Hello${fullName ? ` ${fullName}` : ''},</p>
+            </div>
+            <div class="content">
+              <p>Hello${fullName ? ` ${fullName}` : ''},</p>
                 <p>Thank you for signing up to <strong style="color: ${BRAND_COLORS.primary};">PredictSafe</strong>.</p>
-                <p>You're all set to start exploring premium predictions, VIP plans, and tools to help you win more consistently.</p>
+              <p>You're all set to start exploring premium predictions, VIP plans, and tools to help you win more consistently.</p>
                 <div style="text-align: center;">
                   <a href="${SITE_URL}/dashboard" class="button">Go to Dashboard</a>
                 </div>
@@ -211,14 +211,14 @@ export const emailTemplates = {
         <body>
           <div style="padding: 20px;">
             <div class="email-wrapper">
-              <div class="header">
+            <div class="header">
                 <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
-                <h1>📦 Subscription Created</h1>
-              </div>
-              <div class="content">
-                <p>Hello,</p>
+              <h1>📦 Subscription Created</h1>
+            </div>
+            <div class="content">
+              <p>Hello,</p>
                 <p>Your subscription request for <strong style="color: ${BRAND_COLORS.primary};">${planName}</strong> has been received.</p>
-                <p>Your payment proof has been submitted and is <strong>pending admin approval</strong>. You'll receive another email once your payment is approved and your plan is active.</p>
+              <p>Your payment proof has been submitted and is <strong>pending admin approval</strong>. You'll receive another email once your payment is approved and your plan is active.</p>
               </div>
               <div class="footer">
                 <p><strong>Best regards,</strong></p>
@@ -244,14 +244,14 @@ export const emailTemplates = {
         <body>
           <div style="padding: 20px;">
             <div class="email-wrapper">
-              <div class="header">
+            <div class="header">
                 <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
-                <h1>🎯 New Predictions Available!</h1>
-              </div>
-              <div class="content">
-                <p>Hello,</p>
+              <h1>🎯 New Predictions Available!</h1>
+            </div>
+            <div class="content">
+              <p>Hello,</p>
                 <p>Great news! Predictions for <strong style="color: ${BRAND_COLORS.primary};">${planName}</strong> have just been dropped!</p>
-                <p>Don't miss out on these opportunities. Log in to your dashboard to view all the latest predictions.</p>
+              <p>Don't miss out on these opportunities. Log in to your dashboard to view all the latest predictions.</p>
                 <div style="text-align: center;">
                   <a href="${SITE_URL}/dashboard/predictions" class="button">View Predictions</a>
                 </div>
@@ -280,14 +280,14 @@ export const emailTemplates = {
         <body>
           <div style="padding: 20px;">
             <div class="email-wrapper">
-              <div class="header">
+            <div class="header">
                 <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
-                <h1>✅ Subscription Confirmed!</h1>
-              </div>
-              <div class="content">
-                <p>Hello,</p>
+              <h1>✅ Subscription Confirmed!</h1>
+            </div>
+            <div class="content">
+              <p>Hello,</p>
                 <p>Your subscription for <strong style="color: ${BRAND_COLORS.green};">${planName}</strong> has been confirmed and is now active!</p>
-                <p>You can now access all the premium features and predictions for your plan.</p>
+              <p>You can now access all the premium features and predictions for your plan.</p>
                 <div style="text-align: center;">
                   <a href="${SITE_URL}/dashboard" class="button">Go to Dashboard</a>
                 </div>
@@ -316,14 +316,14 @@ export const emailTemplates = {
         <body>
           <div style="padding: 20px;">
             <div class="email-wrapper">
-              <div class="header">
+            <div class="header">
                 <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
-                <h1>⏰ Subscription Expired</h1>
-              </div>
-              <div class="content">
-                <p>Hello,</p>
+              <h1>⏰ Subscription Expired</h1>
+            </div>
+            <div class="content">
+              <p>Hello,</p>
                 <p>Your subscription for <strong style="color: ${BRAND_COLORS.orange};">${planName}</strong> has expired.</p>
-                <p>To continue enjoying our premium predictions and features, please renew your subscription.</p>
+              <p>To continue enjoying our premium predictions and features, please renew your subscription.</p>
                 <div style="text-align: center;">
                   <a href="${SITE_URL}/subscribe" class="button">Renew Subscription</a>
                 </div>
@@ -352,14 +352,14 @@ export const emailTemplates = {
         <body>
           <div style="padding: 20px;">
             <div class="email-wrapper">
-              <div class="header">
+            <div class="header">
                 <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
-                <h1>⚠️ Subscription Removed</h1>
-              </div>
-              <div class="content">
-                <p>Hello,</p>
+              <h1>⚠️ Subscription Removed</h1>
+            </div>
+            <div class="content">
+              <p>Hello,</p>
                 <p>Your subscription for <strong style="color: ${BRAND_COLORS.red};">${planName}</strong> has been removed.</p>
-                <p>Please renew your subscription to get back on track and continue accessing premium predictions.</p>
+              <p>Please renew your subscription to get back on track and continue accessing premium predictions.</p>
                 <div style="text-align: center;">
                   <a href="${SITE_URL}/subscribe" class="button">Renew Subscription</a>
                 </div>
@@ -391,18 +391,18 @@ export const emailTemplates = {
         <body>
           <div style="padding: 20px;">
             <div class="email-wrapper">
-              <div class="header">
+            <div class="header">
                 <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
-                <h1>🎉 New Subscription!</h1>
+              <h1>🎉 New Subscription!</h1>
+            </div>
+            <div class="content">
+              <p>Hello Admin,</p>
+              <p>A new subscription has been created:</p>
+              <div class="info-box">
+                <p><strong>User:</strong> ${userName || userEmail}</p>
+                <p><strong>Email:</strong> ${userEmail}</p>
+                <p><strong>Plan:</strong> ${planName}</p>
               </div>
-              <div class="content">
-                <p>Hello Admin,</p>
-                <p>A new subscription has been created:</p>
-                <div class="info-box">
-                  <p><strong>User:</strong> ${userName || userEmail}</p>
-                  <p><strong>Email:</strong> ${userEmail}</p>
-                  <p><strong>Plan:</strong> ${planName}</p>
-                </div>
               </div>
               <div class="footer">
                 <p><strong>Best regards,</strong></p>
@@ -428,14 +428,14 @@ export const emailTemplates = {
         <body>
           <div style="padding: 20px;">
             <div class="email-wrapper">
-              <div class="header">
+            <div class="header">
                 <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
-                <h1>✅ Payment Approved!</h1>
-              </div>
-              <div class="content">
-                <p>Hello,</p>
+              <h1>✅ Payment Approved!</h1>
+            </div>
+            <div class="content">
+              <p>Hello,</p>
                 <p>Great news! Your payment for <strong style="color: ${BRAND_COLORS.green};">${planName}</strong> has been approved and your subscription is now active!</p>
-                <p>You can now access all premium features and predictions for your plan.</p>
+              <p>You can now access all premium features and predictions for your plan.</p>
                 <div style="text-align: center;">
                   <a href="${SITE_URL}/dashboard" class="button">Go to Dashboard</a>
                 </div>
@@ -464,20 +464,20 @@ export const emailTemplates = {
         <body>
           <div style="padding: 20px;">
             <div class="email-wrapper">
-              <div class="header">
+            <div class="header">
                 <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
-                <h1>💰 New Payment Submitted!</h1>
+              <h1>💰 New Payment Submitted!</h1>
+            </div>
+            <div class="content">
+              <p>Hello Admin,</p>
+              <p>A new payment has been submitted and requires your review:</p>
+              <div class="info-box">
+                <p><strong>User:</strong> ${userName || userEmail}</p>
+                <p><strong>Email:</strong> ${userEmail}</p>
+                <p><strong>Plan:</strong> ${planName}</p>
+                <p><strong>Amount:</strong> ${currency} ${amount}</p>
               </div>
-              <div class="content">
-                <p>Hello Admin,</p>
-                <p>A new payment has been submitted and requires your review:</p>
-                <div class="info-box">
-                  <p><strong>User:</strong> ${userName || userEmail}</p>
-                  <p><strong>Email:</strong> ${userEmail}</p>
-                  <p><strong>Plan:</strong> ${planName}</p>
-                  <p><strong>Amount:</strong> ${currency} ${amount}</p>
-                </div>
-                <p>Please review the payment proof and activate the subscription if payment is confirmed.</p>
+              <p>Please review the payment proof and activate the subscription if payment is confirmed.</p>
                 <div style="text-align: center;">
                   <a href="${SITE_URL}/admin/transactions" class="button">Review Payment</a>
                 </div>
@@ -509,21 +509,21 @@ export const emailTemplates = {
         <body>
           <div style="padding: 20px;">
             <div class="email-wrapper">
-              <div class="header">
+            <div class="header">
                 <img src="${LOGO_URL}" alt="PredictSafe Logo" class="logo" />
-                <h1>❌ Payment Rejected</h1>
-              </div>
-              <div class="content">
-                <p>Hello,</p>
+              <h1>❌ Payment Rejected</h1>
+            </div>
+            <div class="content">
+              <p>Hello,</p>
                 <p>We regret to inform you that your payment for <strong style="color: ${BRAND_COLORS.red};">${planName}</strong> has been rejected.</p>
-                ${reason ? `
-                <div class="alert-box">
-                  <p><strong>Reason:</strong></p>
-                  <p>${reason}</p>
-                </div>
-                ` : ''}
-                <p>If you believe this is an error, please contact our support team with your payment proof for review.</p>
-                <p>You can resubmit your payment with a valid proof of payment.</p>
+              ${reason ? `
+              <div class="alert-box">
+                <p><strong>Reason:</strong></p>
+                <p>${reason}</p>
+              </div>
+              ` : ''}
+              <p>If you believe this is an error, please contact our support team with your payment proof for review.</p>
+              <p>You can resubmit your payment with a valid proof of payment.</p>
                 <div style="text-align: center;">
                   <a href="${SITE_URL}/subscribe" class="button">Try Again</a>
                 </div>

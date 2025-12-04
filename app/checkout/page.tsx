@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Combobox } from '@/components/ui/combobox'
-import { Upload, X, Check, Copy, Globe } from 'lucide-react'
+import { Upload, X, Check, Copy, Globe, MessageCircle } from 'lucide-react'
 import { Plan, PlanPrice, PaymentMethod } from '@/types'
 import { Database } from '@/types/database'
 import { toast } from 'sonner'
@@ -55,6 +55,7 @@ function CheckoutContent() {
   const [uploading, setUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [whatsappNumber, setWhatsappNumber] = useState<string>('')
 
   // Fetch countries from API
   useEffect(() => {
@@ -110,6 +111,38 @@ function CheckoutContent() {
         setUserCountry(countryName)
         setSelectedCountry(countryName)
         setTempCountry(countryName)
+      }
+
+      // Fetch WhatsApp number from site config
+      const { data: configData } = await supabase
+        .from('site_config')
+        .select('key, value')
+        .in('key', ['whatsapp_number', 'whatsapp_numbers'])
+
+      if (configData && Array.isArray(configData)) {
+        let whatsappNum = ''
+        configData.forEach((item: { key: string; value: any }) => {
+          if (item.key === 'whatsapp_number') {
+            whatsappNum = typeof item.value === 'string' ? item.value : String(item.value || '')
+          } else if (item.key === 'whatsapp_numbers' && !whatsappNum) {
+            // Legacy support: if whatsapp_number doesn't exist, try whatsapp_numbers (array)
+            try {
+              const parsed = typeof item.value === 'string' 
+                ? JSON.parse(item.value) 
+                : item.value
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                whatsappNum = parsed[0] // Use first number from legacy array
+              }
+            } catch {
+              if (Array.isArray(item.value) && item.value.length > 0) {
+                whatsappNum = item.value[0]
+              }
+            }
+          }
+        })
+        if (whatsappNum) {
+          setWhatsappNumber(whatsappNum)
+        }
       }
 
       // Get plan
@@ -1044,14 +1077,22 @@ function CheckoutContent() {
         </Dialog>
 
         {/* Support Link */}
-        <div className="text-center mt-8 text-sm text-gray-600">
-          <p>
-            Can't find your suitable payment method? Contact support team on{' '}
-            <a href="https://wa.me/your-number" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-              WhatsApp
-            </a>
-          </p>
-        </div>
+        {whatsappNumber && (
+          <div className="text-center mt-8 text-sm text-gray-600">
+            <p className="flex items-center justify-center gap-2">
+              Can't find your suitable payment method? Contact support team on{' '}
+              <a 
+                href={`https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}`} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="text-blue-600 hover:underline inline-flex items-center gap-1"
+              >
+                <MessageCircle className="h-4 w-4" />
+                WhatsApp
+              </a>
+            </p>
+          </div>
+        )}
       </div>
     </PageLayout>
   )

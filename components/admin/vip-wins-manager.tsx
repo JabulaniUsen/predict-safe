@@ -270,19 +270,19 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
       <Card className="border-2 border-gray-200 shadow-sm">
         <CardHeader className="p-5 border-b border-gray-200">
           <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg font-semibold">VIP Previous Wins</CardTitle>
-                <CardDescription className="text-sm mt-1">
-                  Manage VIP winning records for each plan type
-                </CardDescription>
-              </div>
-              <Button asChild className="bg-red-600 hover:bg-red-700 text-white">
-                <Link href="/admin/vip-wins/add">
-                <Plus className="h-4 w-4 mr-2" />
-                Add VIP Win
-                </Link>
-              </Button>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg font-semibold">VIP Previous Wins</CardTitle>
+              <CardDescription className="text-sm mt-1">
+                Manage VIP winning records for each plan type
+              </CardDescription>
+            </div>
+            <Button asChild className="bg-red-600 hover:bg-red-700 text-white">
+              <Link href="/admin/vip-wins/add">
+              <Plus className="h-4 w-4 mr-2" />
+              Add VIP Win
+              </Link>
+            </Button>
             </div>
             
             {/* Date Filters */}
@@ -384,11 +384,11 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
                 }
               </p>
               {winnings.length === 0 && (
-                <Button asChild className="mt-4 bg-red-600 hover:bg-red-700 text-white">
-                  <Link href="/admin/vip-wins/add">
-                  Add First VIP Win
-                  </Link>
-                </Button>
+              <Button asChild className="mt-4 bg-red-600 hover:bg-red-700 text-white">
+                <Link href="/admin/vip-wins/add">
+                Add First VIP Win
+                </Link>
+              </Button>
               )}
             </div>
           ) : (

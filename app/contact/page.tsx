@@ -91,8 +91,8 @@ export default async function ContactPage() {
                       </a>
                     </div>
                     {whatsappNumber && (
-                      <div className="flex items-center gap-3">
-                        <Phone className="h-4 w-4" />
+                    <div className="flex items-center gap-3">
+                      <Phone className="h-4 w-4" />
                         <a
                           href={`https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}`}
                           target="_blank"
@@ -101,20 +101,20 @@ export default async function ContactPage() {
                         >
                           WhatsApp support: {whatsappNumber}
                         </a>
-                      </div>
+                    </div>
                     )}
                     {telegramLink && (
-                      <div className="flex items-center gap-3">
-                        <Send className="h-4 w-4" />
-                        <Link
+                    <div className="flex items-center gap-3">
+                      <Send className="h-4 w-4" />
+                      <Link
                           href={telegramLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:underline"
-                        >
-                          Join our Telegram channel
-                        </Link>
-                      </div>
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:underline"
+                      >
+                        Join our Telegram channel
+                      </Link>
+                    </div>
                     )}
                   </div>
 

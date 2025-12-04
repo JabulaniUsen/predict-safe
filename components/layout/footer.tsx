@@ -267,13 +267,13 @@ export function Footer() {
             {/* Contact Info */}
             {(config.contact_email || config.whatsapp_number) && (
               <div className="mt-6 pt-6 border-t border-gray-700 space-y-2">
-                {config.contact_email && (
+            {config.contact_email && (
                   <div className="flex items-center gap-2 text-gray-300 text-sm">
-                    <Mail className="h-4 w-4" />
-                    <a href={`mailto:${config.contact_email}`} className="hover:text-white transition-colors">
-                      {config.contact_email}
-                    </a>
-                  </div>
+                  <Mail className="h-4 w-4" />
+                  <a href={`mailto:${config.contact_email}`} className="hover:text-white transition-colors">
+                    {config.contact_email}
+                  </a>
+                </div>
                 )}
                 {config.whatsapp_number && (
                   <div className="flex items-center gap-2 text-gray-300 text-sm">
