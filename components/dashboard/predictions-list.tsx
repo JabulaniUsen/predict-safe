@@ -8,13 +8,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Lock } from 'lucide-react'
+import { Lock, CalendarIcon } from 'lucide-react'
 import { Prediction, CorrectScorePrediction, UserSubscriptionWithPlan, Plan } from '@/types'
 import { formatTime, getDateRange } from '@/lib/utils/date'
 import { toast } from 'sonner'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import { cn } from '@/lib/utils'
 import { ActivationFeeModal } from './activation-fee-modal'
+import { Calendar } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { format } from 'date-fns'
 
 interface PredictionsListProps {
   allPlans: Plan[]
@@ -29,7 +32,8 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
   const router = useRouter()
   const searchParams = useSearchParams()
   const [selectedPlanSlug, setSelectedPlanSlug] = useState<string>('')
-  const [dateType, setDateType] = useState<'previous' | 'today' | 'tomorrow'>('today')
+  const [dateType, setDateType] = useState<'previous' | 'today' | 'tomorrow' | 'custom'>('today')
+  const [customDate, setCustomDate] = useState<Date | undefined>(undefined)
   const [predictions, setPredictions] = useState<Prediction[]>([])
   const [correctScorePredictions, setCorrectScorePredictions] = useState<CorrectScorePrediction[]>([])
   const [loading, setLoading] = useState(false)
@@ -220,7 +224,7 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
     if (selectedPlanSlug) {
       fetchPredictions()
     }
-  }, [selectedPlanSlug, dateType])
+  }, [selectedPlanSlug, dateType, customDate])
 
   const fetchPredictions = async () => {
     setLoading(true)
@@ -232,7 +236,8 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
       return
     }
 
-    const { from, to } = getDateRange(dateType)
+    const customDateStr = customDate ? format(customDate, 'yyyy-MM-dd') : undefined
+    const { from, to } = getDateRange(dateType, customDateStr)
     const fromTimestamp = `${from}T00:00:00.000Z`
     const toTimestamp = `${to}T23:59:59.999Z`
 
@@ -449,7 +454,10 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
             variant={dateType === 'previous' ? 'default' : 'outline'}
             size="sm"
             className="text-xs lg:text-sm px-2 lg:px-3"
-            onClick={() => setDateType('previous')}
+            onClick={() => {
+              setDateType('previous')
+              setCustomDate(undefined)
+            }}
           >
             Previous
           </Button>
@@ -457,7 +465,10 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
             variant={dateType === 'today' ? 'default' : 'outline'}
             size="sm"
             className="text-xs lg:text-sm px-2 lg:px-3"
-            onClick={() => setDateType('today')}
+            onClick={() => {
+              setDateType('today')
+              setCustomDate(undefined)
+            }}
           >
             Today
           </Button>
@@ -465,10 +476,38 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
             variant={dateType === 'tomorrow' ? 'default' : 'outline'}
             size="sm"
             className="text-xs lg:text-sm px-2 lg:px-3"
-            onClick={() => setDateType('tomorrow')}
+            onClick={() => {
+              setDateType('tomorrow')
+              setCustomDate(undefined)
+            }}
           >
             Tomorrow
           </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={dateType === 'custom' ? 'default' : 'outline'}
+                size="sm"
+                className="text-xs lg:text-sm px-2 lg:px-3"
+              >
+                <CalendarIcon className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2" />
+                Custom
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                mode="single"
+                selected={customDate}
+                onSelect={(date) => {
+                  setCustomDate(date)
+                  if (date) {
+                    setDateType('custom')
+                  }
+                }}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
