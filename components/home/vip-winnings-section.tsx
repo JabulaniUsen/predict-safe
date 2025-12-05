@@ -22,14 +22,14 @@ interface VIPWinningsSectionProps {
 export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSectionProps) {
   const [winnings, setWinnings] = useState<VIPWinning[]>([])
   const [loading, setLoading] = useState(true)
-  const [offset, setOffset] = useState(0)
   const [teamLogos, setTeamLogos] = useState<Record<string, string | null>>({})
+  const [leagueNames, setLeagueNames] = useState<Record<string, string>>({}) // winning.id -> league_name
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
-  const limit = 6
+  const limitPerPlan = 6 // Number of winnings to show per plan
 
   useEffect(() => {
     fetchWinnings()
-  }, [offset, planIds, showAll, selectedDate])
+  }, [planIds, showAll, selectedDate])
 
   useEffect(() => {
     if (winnings.length > 0) {
@@ -59,11 +59,12 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
       query = query.gte('date', startOfDay).lte('date', endOfDay)
     }
     
-    const { data, error } = await query
-      .range(offset, offset + limit - 1)
+    // Fetch more winnings to ensure we have enough for each plan
+    const { data, error } = await query.limit(100)
 
     if (error) {
       console.error('Error fetching winnings:', error)
+      setWinnings([])
     } else {
       setWinnings(data || [])
     }
@@ -73,24 +74,28 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
 
   const handleTodayClick = () => {
     setSelectedDate(new Date())
-    setOffset(0) // Reset pagination when changing date
   }
 
   const handleDateSelect = (date: Date | undefined) => {
     setSelectedDate(date)
-    setOffset(0) // Reset pagination when changing date
   }
 
   const handleClearDate = () => {
     setSelectedDate(undefined)
-    setOffset(0) // Reset pagination when clearing date
   }
 
-  const handlePrevious = () => {
-    if (offset > 0) {
-      setOffset((prev) => Math.max(0, prev - limit))
+  // Group winnings by plan name
+  const groupedWinnings = winnings.reduce((acc, winning) => {
+    const planName = winning.plan_name || 'Other'
+    if (!acc[planName]) {
+      acc[planName] = []
     }
-  }
+    acc[planName].push(winning)
+    return acc
+  }, {} as Record<string, VIPWinning[]>)
+
+  // Get unique plan names sorted
+  const planNames = Object.keys(groupedWinnings).sort()
 
   const fetchTeamLogos = async () => {
     if (winnings.length === 0) return
@@ -131,7 +136,9 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
         fixturesByDate.set(date, fixtures)
       })
       
-      // Match winnings to fixtures and extract logos
+      // Match winnings to fixtures and extract logos and league names
+      const newLeagueNames: Record<string, string> = {}
+      
       for (const [date, dateWinnings] of winningsByDate.entries()) {
         const fixtures = fixturesByDate.get(date) || []
         
@@ -149,7 +156,7 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
             return homeMatch && awayMatch
           })
           
-          // Extract team logos from fixture
+          // Extract team logos and league name from fixture
           if (fixture) {
             if (fixture.team_home_badge && !teamLogos[winning.home_team]) {
               newLogos[winning.home_team] = fixture.team_home_badge
@@ -157,13 +164,20 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
             if (fixture.team_away_badge && !teamLogos[winning.away_team]) {
               newLogos[winning.away_team] = fixture.team_away_badge
             }
+            // Extract league name if winning doesn't have one
+            if (!winning.league && fixture.league_name && !leagueNames[winning.id]) {
+              newLeagueNames[winning.id] = fixture.league_name
+            }
           }
         })
       }
       
-      // Update state with new logos
+      // Update state with new logos and league names
       if (Object.keys(newLogos).length > 0) {
         setTeamLogos((prev) => ({ ...prev, ...newLogos }))
+      }
+      if (Object.keys(newLeagueNames).length > 0) {
+        setLeagueNames((prev) => ({ ...prev, ...newLeagueNames }))
       }
     } catch (error) {
       console.error('Error fetching team logos:', error)
@@ -172,6 +186,19 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
 
   const getTeamLogo = (teamName: string): string | null => {
     return teamLogos[teamName] || null
+  }
+
+  const getLeagueName = (winning: VIPWinning): string => {
+    // First check if we fetched it from fixtures
+    if (leagueNames[winning.id]) {
+      return leagueNames[winning.id]
+    }
+    // Then check if it's in the database
+    if (winning.league) {
+      return winning.league
+    }
+    // Default fallback
+    return '-'
   }
 
   return (
@@ -228,18 +255,6 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
                 Clear
               </Button>
             )}
-            <Button 
-              variant="outline" 
-              onClick={handlePrevious} 
-              disabled={offset === 0}
-              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
-                offset === 0
-                  ? 'text-gray-400 cursor-not-allowed'
-                  : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
-              }`}
-            >
-              Previous
-            </Button>
           </div>
         </div>
         
@@ -251,15 +266,13 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
                 <div key={i} className="bg-gray-100 rounded-lg p-3 space-y-2 animate-pulse">
                   <div className="h-4 w-16 bg-gray-300 rounded" />
                   <div className="h-3 w-20 bg-gray-300 rounded" />
-                  <div className="bg-[#1e40af] text-white px-3 py-2 rounded grid grid-cols-4 gap-2 text-xs font-semibold">
+                  <div className="bg-[#1e40af] text-white px-3 py-2 rounded grid grid-cols-3 gap-2 text-xs font-semibold">
                     <div>Result</div>
-                    <div>Teams</div>
                     <div>Tip</div>
-                    <div>Plan</div>
+                    <div>League</div>
                   </div>
-                  <div className="bg-gray-200 px-3 py-2 rounded grid grid-cols-4 gap-2">
+                  <div className="bg-gray-200 px-3 py-2 rounded grid grid-cols-3 gap-2">
                     <div className="h-4 w-12 bg-gray-300 rounded" />
-                    <div className="h-4 w-24 bg-gray-300 rounded" />
                     <div className="h-4 w-16 bg-gray-300 rounded" />
                     <div className="h-4 w-20 bg-gray-300 rounded" />
                   </div>
@@ -268,46 +281,65 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
             </div>
 
             {/* Desktop Loading State */}
-            <div className="hidden lg:block space-y-0 border rounded-lg overflow-hidden bg-white">
-              <div className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white px-6 py-3 grid grid-cols-12 gap-4 items-center font-semibold text-sm">
-                <div className="col-span-2">Date</div>
-                <div className="col-span-5">Teams</div>
-                <div className="col-span-1 text-center">Result</div>
-                <div className="col-span-2 text-center">Tip</div>
-                <div className="col-span-2 text-center">Plan</div>
-              </div>
-            {[1, 2, 3].map((i) => (
-                <div key={i} className="px-6 py-4 grid grid-cols-12 gap-4 items-center border-t animate-pulse">
-                  <div className="col-span-2">
-                    <div className="h-4 w-20 bg-gray-200 rounded" />
-                  </div>
-                  <div className="col-span-5">
-                    <div className="h-4 w-32 bg-gray-200 rounded" />
-                  </div>
-                  <div className="col-span-1">
-                    <div className="h-6 w-12 bg-gray-200 rounded mx-auto" />
-                  </div>
-                  <div className="col-span-2">
-                    <div className="h-4 w-16 bg-gray-200 rounded mx-auto" />
-                  </div>
-                  <div className="col-span-2">
-                    <div className="h-4 w-20 bg-gray-200 rounded mx-auto" />
+            <div className="hidden lg:block space-y-8">
+              {[1, 2].map((planIndex) => (
+                <div key={planIndex} className="space-y-4">
+                  <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
+                  <div className="space-y-0 border rounded-lg overflow-hidden bg-white">
+                    <div className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white px-6 py-3 grid grid-cols-12 gap-4 items-center font-semibold text-sm">
+                      <div className="col-span-2">Date</div>
+                      <div className="col-span-5">Teams</div>
+                      <div className="col-span-1 text-center">Result</div>
+                      <div className="col-span-2 text-center">Tip</div>
+                      <div className="col-span-2 text-center">League</div>
+                    </div>
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="px-6 py-4 grid grid-cols-12 gap-4 items-center border-t animate-pulse">
+                        <div className="col-span-2">
+                          <div className="h-4 w-20 bg-gray-200 rounded" />
+                        </div>
+                        <div className="col-span-5">
+                          <div className="h-4 w-32 bg-gray-200 rounded" />
+                        </div>
+                        <div className="col-span-1">
+                          <div className="h-6 w-12 bg-gray-200 rounded mx-auto" />
+                        </div>
+                        <div className="col-span-2">
+                          <div className="h-4 w-16 bg-gray-200 rounded mx-auto" />
+                        </div>
+                        <div className="col-span-2">
+                          <div className="h-4 w-20 bg-gray-200 rounded mx-auto" />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-            ))}
-          </div>
+              ))}
+            </div>
           </>
-        ) : winnings.length === 0 ? (
+        ) : planNames.length === 0 ? (
           <Card className="border-2 border-gray-200">
             <CardContent className="py-12 text-center">
               <p className="text-muted-foreground">No winnings records available.</p>
             </CardContent>
           </Card>
         ) : (
-          <>
-            {/* Mobile View */}
-            <div className="lg:hidden space-y-3">
-              {winnings.map((winning) => (
+          <div className="space-y-8">
+            {planNames.map((planName) => {
+              const planWinnings = groupedWinnings[planName].slice(0, limitPerPlan)
+              
+              return (
+                <div key={planName} className="space-y-4">
+                  {/* Plan Header */}
+                  <div className="flex items-center justify-between border-b-2 border-[#1e40af] pb-2">
+                    <div>
+                      <h3 className="text-xl sm:text-2xl font-bold text-[#1e40af]">{planName}</h3>
+                    </div>
+                  </div>
+
+                  {/* Mobile View */}
+                  <div className="lg:hidden space-y-3">
+                    {planWinnings.map((winning) => (
                 <div
                   key={winning.id}
                   className="bg-gray-100 rounded-lg p-3 space-y-2"
@@ -369,15 +401,14 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
                   </div>
 
                   {/* Header Bar */}
-                  <div className="bg-[#1e40af] text-white px-2 py-2 rounded grid grid-cols-4 gap-1 text-[10px] sm:text-xs font-semibold">
+                  <div className="bg-[#1e40af] text-white px-2 py-2 rounded grid grid-cols-3 gap-1 text-[10px] sm:text-xs font-semibold">
                     <div className="text-center">Result</div>
                     <div className="text-center">Tip</div>
-                    <div className="text-center">Plan</div>
-                    <div className="text-center">Status</div>
+                    <div className="text-center">League</div>
                   </div>
 
                   {/* Data Row */}
-                  <div className="bg-gray-200 px-2 py-2 rounded grid grid-cols-4 gap-1 items-center">
+                  <div className="bg-gray-200 px-2 py-2 rounded grid grid-cols-3 gap-1 items-center">
                     <div className="flex items-center justify-center">
                       <Badge
                         className={`text-[10px] sm:text-xs px-1.5 py-0.5 ${winning.result === 'win' ? 'bg-[#22c55e] text-white font-bold' : 'bg-red-500 text-white font-bold'}`}
@@ -389,29 +420,26 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
                       {winning.prediction_type}
                     </div>
                     <div className="text-[10px] sm:text-xs font-medium text-gray-600 text-center truncate">
-                      {winning.plan_name}
-                    </div>
-                    <div className="text-[10px] sm:text-xs font-medium text-gray-700 text-center">
-                      {winning.result === 'win' ? '✓' : '✗'}
+                      {getLeagueName(winning)}
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                    </div>
+                    ))}
+                  </div>
 
-            {/* Desktop View */}
-            <div className="hidden lg:block space-y-0 border-2 border-gray-200 rounded-xl overflow-hidden bg-white shadow-lg">
-              {/* Header */}
-              <div className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white px-6 py-4 grid grid-cols-12 gap-4 items-center font-bold text-sm shadow-md">
-                <div className="col-span-2">Date</div>
-                <div className="col-span-5">Teams</div>
-                <div className="col-span-1 text-center">Result</div>
-                <div className="col-span-2 text-center">Tip</div>
-                <div className="col-span-2 text-center">Plan</div>
-              </div>
+                  {/* Desktop View */}
+                  <div className="hidden lg:block space-y-0 border-2 border-gray-200 rounded-xl overflow-hidden bg-white shadow-lg">
+                    {/* Header */}
+                    <div className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white px-6 py-4 grid grid-cols-12 gap-4 items-center font-bold text-sm shadow-md">
+                      <div className="col-span-2">Date</div>
+                      <div className="col-span-5">Teams</div>
+                      <div className="col-span-1 text-center">Result</div>
+                      <div className="col-span-2 text-center">Tip</div>
+                      <div className="col-span-2 text-center">League</div>
+                    </div>
 
-              {/* Winnings */}
-              {winnings.map((winning, index) => (
+                    {/* Winnings */}
+                    {planWinnings.map((winning, index) => (
                 <div
                   key={winning.id}
                   className={cn(
@@ -505,16 +533,19 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
                     </span>
                   </div>
 
-                  {/* Plan */}
+                  {/* League */}
                   <div className="col-span-2 text-center">
-                    <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded">
-                      {winning.plan_name}
+                    <span className="text-xs font-medium text-gray-600">
+                      {getLeagueName(winning)}
                     </span>
                   </div>
                 </div>
-              ))}
-            </div>
-          </>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
     </section>

@@ -73,38 +73,38 @@ export async function POST(request: NextRequest) {
               const matchOdds = oddsData[0]
               
               // Extract all available odds for all prediction types (including correct score)
-              if (matchOdds.odd_1) {
-                const oddValue = parseFloat(matchOdds.odd_1)
-                foundOdds.push({ type: 'Home Win', odds: oddValue })
-              }
-              if (matchOdds.odd_2) {
-                const oddValue = parseFloat(matchOdds.odd_2)
-                foundOdds.push({ type: 'Away Win', odds: oddValue })
-              }
-              if (matchOdds.odd_x) {
-                const oddValue = parseFloat(matchOdds.odd_x)
-                foundOdds.push({ type: 'Draw', odds: oddValue })
-              }
-              if (matchOdds['o+2.5']) {
-                const oddValue = parseFloat(matchOdds['o+2.5'])
-                foundOdds.push({ type: 'Over 2.5', odds: oddValue })
-              }
-              if (matchOdds['o+1.5']) {
-                const oddValue = parseFloat(matchOdds['o+1.5'])
-                foundOdds.push({ type: 'Over 1.5', odds: oddValue })
-              }
-              if (matchOdds['u+2.5']) {
-                const oddValue = parseFloat(matchOdds['u+2.5'])
-                foundOdds.push({ type: 'Under 2.5', odds: oddValue })
-              }
-              if (matchOdds.bts_yes) {
-                const oddValue = parseFloat(matchOdds.bts_yes)
-                foundOdds.push({ type: 'BTTS', odds: oddValue })
-              }
-              
-              // Set default odds from first available
-              if (foundOdds.length > 0) {
-                odds = foundOdds[0].odds
+                if (matchOdds.odd_1) {
+                  const oddValue = parseFloat(matchOdds.odd_1)
+                  foundOdds.push({ type: 'Home Win', odds: oddValue })
+                }
+                if (matchOdds.odd_2) {
+                  const oddValue = parseFloat(matchOdds.odd_2)
+                  foundOdds.push({ type: 'Away Win', odds: oddValue })
+                }
+                if (matchOdds.odd_x) {
+                  const oddValue = parseFloat(matchOdds.odd_x)
+                  foundOdds.push({ type: 'Draw', odds: oddValue })
+                }
+                if (matchOdds['o+2.5']) {
+                  const oddValue = parseFloat(matchOdds['o+2.5'])
+                  foundOdds.push({ type: 'Over 2.5', odds: oddValue })
+                }
+                if (matchOdds['o+1.5']) {
+                  const oddValue = parseFloat(matchOdds['o+1.5'])
+                  foundOdds.push({ type: 'Over 1.5', odds: oddValue })
+                }
+                if (matchOdds['u+2.5']) {
+                  const oddValue = parseFloat(matchOdds['u+2.5'])
+                  foundOdds.push({ type: 'Under 2.5', odds: oddValue })
+                }
+                if (matchOdds.bts_yes) {
+                  const oddValue = parseFloat(matchOdds.bts_yes)
+                  foundOdds.push({ type: 'BTTS', odds: oddValue })
+                }
+                
+                // Set default odds from first available
+                if (foundOdds.length > 0) {
+                  odds = foundOdds[0].odds
               }
             }
           }
@@ -127,31 +127,31 @@ export async function POST(request: NextRequest) {
           }
           
           // Only filter by odds range
-          if (minOddsValue !== null && option.odds < minOddsValue) {
-            filteredCount++
-            continue
-          }
-          if (maxOddsValue !== null && option.odds > maxOddsValue) {
-            filteredCount++
-            continue
-          }
-          
-          predictions.push({
-            plan_type: planType,
-            home_team: fixture.match_hometeam_name || 'Home Team',
-            away_team: fixture.match_awayteam_name || 'Away Team',
-            league: fixture.league_name || 'Unknown League',
-            prediction_type: option.type,
-            odds: option.odds,
-            confidence: confidence,
-            kickoff_time: `${fixture.match_date} ${fixture.match_time || '00:00'}:00`,
-            status: fixture.match_status === 'Finished' ? 'finished' : 
-                    fixture.match_live === '1' ? 'live' : 'not_started',
-            match_id: fixture.match_id,
-            league_id: fixture.league_id,
-            home_team_id: fixture.match_hometeam_id,
-            away_team_id: fixture.match_awayteam_id,
-          })
+            if (minOddsValue !== null && option.odds < minOddsValue) {
+              filteredCount++
+              continue
+            }
+            if (maxOddsValue !== null && option.odds > maxOddsValue) {
+              filteredCount++
+              continue
+            }
+            
+              predictions.push({
+                plan_type: planType,
+                home_team: fixture.match_hometeam_name || 'Home Team',
+                away_team: fixture.match_awayteam_name || 'Away Team',
+                league: fixture.league_name || 'Unknown League',
+                prediction_type: option.type,
+                odds: option.odds,
+                confidence: confidence,
+                kickoff_time: `${fixture.match_date} ${fixture.match_time || '00:00'}:00`,
+                status: fixture.match_status === 'Finished' ? 'finished' : 
+                        fixture.match_live === '1' ? 'live' : 'not_started',
+                match_id: fixture.match_id,
+                league_id: fixture.league_id,
+                home_team_id: fixture.match_hometeam_id,
+                away_team_id: fixture.match_awayteam_id,
+              })
         }
       } catch (error) {
         console.error(`Error processing fixture ${fixture.match_id}:`, error)
