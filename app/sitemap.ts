@@ -76,18 +76,29 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ]
 
   try {
+    // Check if required environment variables are available
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.warn('Supabase environment variables not set, returning static pages only')
+      return staticPages
+    }
+
     // Create a simple Supabase client without cookies for static generation
-    const supabase = createClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
     
     // Get published blog posts
-    const { data: blogPosts } = await supabase
+    const { data: blogPosts, error } = await supabase
       .from('blog_posts')
       .select('id, updated_at, published_at')
       .eq('published', true)
       .not('published_at', 'is', null)
+
+    if (error) {
+      console.error('Error fetching blog posts for sitemap:', error)
+      return staticPages
+    }
 
     const blogPages: MetadataRoute.Sitemap = (blogPosts || []).map((post: { id: string; updated_at: string | null; published_at: string | null }) => ({
       url: `${baseUrl}/blog/${post.id}`,
@@ -99,6 +110,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return [...staticPages, ...blogPages]
   } catch (error) {
     console.error('Error generating sitemap:', error)
+    // Always return static pages even if blog posts fail
     return staticPages
   }
 }
