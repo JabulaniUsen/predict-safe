@@ -191,37 +191,50 @@ export const emailTemplates = {
     `,
   }),
 
-  subscriptionCreated: (planName: string) => ({
-    subject: `Subscription Created - ${planName}`,
-    html: `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <style>${baseStyles}</style>
-        </head>
-        <body>
-          <div style="padding: 20px;">
-            <div class="email-wrapper">
-            <div class="header">
-              <h1>📦 Subscription Created</h1>
-            </div>
-            <div class="content">
-              <p>Hello,</p>
-                <p>Your subscription request for <strong style="color: ${BRAND_COLORS.primary};">${planName}</strong> has been received.</p>
-              <p>Your payment proof has been submitted and is <strong>pending admin approval</strong>. You'll receive another email once your payment is approved and your plan is active.</p>
+  subscriptionCreated: (planName: string, userName?: string, planType?: string, currency?: string, amount?: string | number, duration?: number) => {
+    const currencySymbol = currency ? (currency === 'ZAR' ? 'R' : currency === 'NGN' ? '₦' : currency === 'GHS' ? '₵' : currency === 'KES' ? 'KSh' : currency === 'USD' ? '$' : currency) : ''
+    const formattedAmount = amount ? (typeof amount === 'number' ? amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : amount) : ''
+    const durationText = duration === 7 ? 'Weekly' : duration === 30 ? 'Monthly' : duration ? `${duration} days` : ''
+    const planTypeText = planType ? planType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : ''
+    
+    return {
+      subject: `Subscription Created - ${planName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>${baseStyles}</style>
+          </head>
+          <body>
+            <div style="padding: 20px;">
+              <div class="email-wrapper">
+              <div class="header">
+                <h1>📦 Subscription Created</h1>
               </div>
-              <div class="footer">
-                <p><strong>Best regards,</strong></p>
-                <p>The PredictSafe Team</p>
+              <div class="content">
+                <p>Hello${userName ? ` ${userName}` : ''},</p>
+                <p>Your subscription request has been received and is <strong>pending admin approval</strong>.</p>
+                <div class="info-box">
+                  <p><strong>Plan Name:</strong> ${planName}</p>
+                  ${planTypeText ? `<p><strong>Plan Type:</strong> ${planTypeText}</p>` : ''}
+                  ${durationText ? `<p><strong>Duration:</strong> ${durationText}</p>` : ''}
+                  ${amount && currency ? `<p><strong>Amount:</strong> ${currencySymbol}${formattedAmount} ${currency}</p>` : ''}
+                </div>
+                <p>Your payment proof has been submitted and is being reviewed. You'll receive another email once your payment is approved and your plan is active.</p>
+                </div>
+                <div class="footer">
+                  <p><strong>Best regards,</strong></p>
+                  <p>The PredictSafe Team</p>
+                </div>
               </div>
             </div>
-          </div>
-        </body>
-      </html>
-    `,
-  }),
+          </body>
+        </html>
+      `,
+    }
+  },
 
   predictionDropped: (planName: string) => ({
     subject: `New Predictions Available for ${planName}!`,
@@ -437,46 +450,55 @@ export const emailTemplates = {
     `,
   }),
 
-  adminNewPayment: (userEmail: string, userName: string, planName: string, amount: string, currency: string) => ({
-    subject: `New Payment Submitted - ${planName}`,
-    html: `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <style>${getEmailStyles(BRAND_COLORS.purple, BRAND_COLORS.purpleDark, BRAND_COLORS.purple, BRAND_COLORS.purpleDark, BRAND_COLORS.purple)}</style>
-        </head>
-        <body>
-          <div style="padding: 20px;">
-            <div class="email-wrapper">
-            <div class="header">
-              <h1>💰 New Payment Submitted!</h1>
-            </div>
-            <div class="content">
-              <p>Hello Admin,</p>
-              <p>A new payment has been submitted and requires your review:</p>
-              <div class="info-box">
-                <p><strong>User:</strong> ${userName || userEmail}</p>
-                <p><strong>Email:</strong> ${userEmail}</p>
-                <p><strong>Plan:</strong> ${planName}</p>
-                <p><strong>Amount:</strong> ${currency} ${amount}</p>
+  adminNewPayment: (userEmail: string, userName: string, planName: string, amount: string | number, currency: string, planType?: string, duration?: number) => {
+    const currencySymbol = currency === 'ZAR' ? 'R' : currency === 'NGN' ? '₦' : currency === 'GHS' ? '₵' : currency === 'KES' ? 'KSh' : currency === 'USD' ? '$' : currency
+    const formattedAmount = typeof amount === 'number' ? amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : amount
+    const durationText = duration === 7 ? 'Weekly' : duration === 30 ? 'Monthly' : duration ? `${duration} days` : ''
+    const planTypeText = planType ? planType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : ''
+    
+    return {
+      subject: `New Payment Submitted - ${planName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>${getEmailStyles(BRAND_COLORS.purple, BRAND_COLORS.purpleDark, BRAND_COLORS.purple, BRAND_COLORS.purpleDark, BRAND_COLORS.purple)}</style>
+          </head>
+          <body>
+            <div style="padding: 20px;">
+              <div class="email-wrapper">
+              <div class="header">
+                <h1>💰 New Payment Submitted!</h1>
               </div>
-              <p>Please review the payment proof and activate the subscription if payment is confirmed.</p>
-                <div style="text-align: center;">
-                  <a href="${SITE_URL}/admin/transactions" class="button">Review Payment</a>
+              <div class="content">
+                <p>Hello Admin,</p>
+                <p>A new payment has been submitted and requires your review:</p>
+                <div class="info-box">
+                  <p><strong>User Name:</strong> ${userName || 'N/A'}</p>
+                  <p><strong>Email:</strong> ${userEmail}</p>
+                  <p><strong>Plan Name:</strong> ${planName}</p>
+                  ${planTypeText ? `<p><strong>Plan Type:</strong> ${planTypeText}</p>` : ''}
+                  ${durationText ? `<p><strong>Duration:</strong> ${durationText}</p>` : ''}
+                  <p><strong>Amount:</strong> ${currencySymbol}${formattedAmount} (${currency})</p>
+                </div>
+                <p>Please review the payment proof and activate the subscription if payment is confirmed.</p>
+                  <div style="text-align: center;">
+                    <a href="${SITE_URL}/admin/transactions" class="button">Review Payment</a>
+                  </div>
+                </div>
+                <div class="footer">
+                  <p><strong>Best regards,</strong></p>
+                  <p>PredictSafe System</p>
                 </div>
               </div>
-              <div class="footer">
-                <p><strong>Best regards,</strong></p>
-                <p>PredictSafe System</p>
-              </div>
             </div>
-          </div>
-        </body>
-      </html>
-    `,
-  }),
+          </body>
+        </html>
+      `,
+    }
+  },
 
   paymentRejected: (planName: string, reason?: string) => ({
     subject: `Payment Rejected - ${planName}`,

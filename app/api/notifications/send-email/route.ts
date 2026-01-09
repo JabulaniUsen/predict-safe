@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { type, userId, planName, userEmail, userName } = body
+    const { type, userId, planName, userEmail, userName, planType, currency, amount, duration } = body
 
     // Get user email if not provided
     let recipientEmail = userEmail
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
         if (!planName) {
           return NextResponse.json({ error: 'Plan name required' }, { status: 400 })
         }
-        emailData = emailTemplates.subscriptionCreated(planName)
+        emailData = emailTemplates.subscriptionCreated(planName, userName, planType, currency, amount, duration)
         break
       case 'prediction_dropped':
         if (!planName) {
@@ -80,6 +80,12 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Plan name required' }, { status: 400 })
         }
         emailData = emailTemplates.paymentApproved(planName)
+        break
+      case 'admin_new_payment':
+        if (!planName || !userEmail || !userName || !amount || !currency) {
+          return NextResponse.json({ error: 'Plan name, user email, user name, amount, and currency required' }, { status: 400 })
+        }
+        emailData = emailTemplates.adminNewPayment(userEmail, userName, planName, amount, currency, planType, duration)
         break
       default:
         return NextResponse.json({ error: 'Invalid notification type' }, { status: 400 })

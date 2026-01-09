@@ -157,7 +157,10 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
           }
 
           setShowConfirmDialog(false)
-          window.location.reload()
+          // Delay reload to allow toast to be visible
+          setTimeout(() => {
+            window.location.reload()
+          }, 1500)
           return
         } else {
           toast.error('Subscription not found for this transaction.')
@@ -461,7 +464,10 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
       }
 
       setShowActivateDialog(false)
-      window.location.reload()
+      // Delay reload to allow toast to be visible
+      setTimeout(() => {
+        window.location.reload()
+      }, 1500)
     } catch (error: any) {
       console.error('Error activating subscription:', error)
       toast.error(error.message || 'Failed to activate subscription')
@@ -596,7 +602,10 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
       toast.success('Payment rejected and user has been notified')
       setShowRejectDialog(false)
       setRejectionReason('')
-      window.location.reload()
+      // Delay reload to allow toast to be visible
+      setTimeout(() => {
+        window.location.reload()
+      }, 1500)
     } catch (error: any) {
       console.error('Error rejecting payment:', error)
       toast.error(error.message || 'Failed to reject payment')
@@ -988,25 +997,57 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
                 : 'Make this user a premium member by activating their subscription'}
             </DialogDescription>
           </DialogHeader>
-          {selectedTransaction && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <p className="text-sm">
-                  <span className="font-medium">User: </span>
-                  {(selectedTransaction.users as any)?.full_name || (selectedTransaction.users as any)?.email}
-                </p>
-                <p className="text-sm">
-                  <span className="font-medium">Plan: </span>
-                  {(selectedTransaction.plans as any)?.name}
-                </p>
-                <p className="text-sm">
-                  <span className="font-medium">Amount: </span>
-                  {selectedTransaction.currency} {selectedTransaction.amount}
-                </p>
-                <p className="text-sm">
-                  <span className="font-medium">Payment Type: </span>
-                  {selectedTransaction.payment_type === 'activation' ? 'Activation Fee' : 'Subscription'}
-                </p>
+          {selectedTransaction && (() => {
+            // Helper function to get plan type from plan slug
+            const getPlanTypeFromSlug = (slug: string): string | null => {
+              const mapping: Record<string, string> = {
+                'profit-multiplier': 'profit_multiplier',
+                'daily-2-odds': 'daily_2_odds',
+                'standard': 'standard',
+                'free': 'free',
+                'correct-score': 'correct_score',
+              }
+              return mapping[slug] || null
+            }
+
+            const planSlug = (selectedTransaction.plans as any)?.slug
+            const planType = planSlug ? getPlanTypeFromSlug(planSlug) : null
+            const planTypeText = planType ? planType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : null
+            const metadata = selectedTransaction.metadata as any
+            const durationDays = metadata?.duration_days
+            const durationText = durationDays === 7 ? 'Weekly' : durationDays === 30 ? 'Monthly' : durationDays ? `${durationDays} days` : null
+
+            return (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <p className="text-sm">
+                    <span className="font-medium">User: </span>
+                    {(selectedTransaction.users as any)?.full_name || (selectedTransaction.users as any)?.email}
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-medium">Plan Name: </span>
+                    {(selectedTransaction.plans as any)?.name}
+                  </p>
+                  {planTypeText && (
+                    <p className="text-sm">
+                      <span className="font-medium">Plan Type: </span>
+                      {planTypeText}
+                    </p>
+                  )}
+                  <p className="text-sm">
+                    <span className="font-medium">Amount: </span>
+                    {selectedTransaction.currency} {selectedTransaction.amount}
+                  </p>
+                  {durationText && (
+                    <p className="text-sm">
+                      <span className="font-medium">Duration: </span>
+                      {durationText}
+                    </p>
+                  )}
+                  <p className="text-sm">
+                    <span className="font-medium">Payment Type: </span>
+                    {selectedTransaction.payment_type === 'activation' ? 'Activation Fee' : 'Subscription'}
+                  </p>
                 <div className="rounded-lg bg-blue-50 p-3 text-blue-800 text-sm mt-4">
                   <p className="font-medium mb-1">This will:</p>
                   <ul className="list-disc list-inside space-y-1">
@@ -1029,7 +1070,8 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
                 </div>
               </div>
             </div>
-          )}
+            )
+          })()}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowActivateDialog(false)} disabled={loading}>
               Cancel

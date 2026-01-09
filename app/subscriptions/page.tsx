@@ -99,11 +99,14 @@ export default function SubscriptionsPage() {
 
 
   const handlePlanClick = (planSlug: string, durationDays: number) => {
+    // Include selected country in URL if available
+    const countryParam = selectedCountry ? `&country=${encodeURIComponent(selectedCountry)}` : ''
+    const checkoutUrl = `/checkout?plan=${planSlug}&duration=${durationDays}${countryParam}`
+    
     if (!user) {
-      const checkoutUrl = `/checkout?plan=${planSlug}&duration=${durationDays}`
       router.push(`/login?returnUrl=${encodeURIComponent(checkoutUrl)}`)
     } else {
-      router.push(`/checkout?plan=${planSlug}&duration=${durationDays}`)
+      router.push(checkoutUrl)
     }
   }
 

@@ -16,6 +16,7 @@ import { Upload, X, Check, Copy, Globe, MessageCircle } from 'lucide-react'
 import { Plan, PlanPrice, PaymentMethod } from '@/types'
 import { Database } from '@/types/database'
 import { toast } from 'sonner'
+import { getCurrencySymbol as getCurrencySymbolUtil, getCurrencyFromCountry } from '@/lib/utils/currency'
 
 type CountryOption = 'Nigeria' | 'Ghana' | 'Kenya' | 'Other'
 type UserProfile = Pick<Database['public']['Tables']['users']['Row'], 'country'>
@@ -31,11 +32,24 @@ const mapCountryToOption = (countryName: string): CountryOption => {
   return 'Other'
 }
 
+// Helper function to get plan type from plan slug
+const getPlanTypeFromSlug = (slug: string): string | null => {
+  const mapping: Record<string, string> = {
+    'profit-multiplier': 'profit_multiplier',
+    'daily-2-odds': 'daily_2_odds',
+    'standard': 'standard',
+    'free': 'free',
+    'correct-score': 'correct_score',
+  }
+  return mapping[slug] || null
+}
+
 function CheckoutContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const planSlug = searchParams.get('plan')
   const durationParam = searchParams.get('duration')
+  const countryParam = searchParams.get('country')
 
   const [plan, setPlan] = useState<Plan | null>(null)
   const [selectedPrice, setSelectedPrice] = useState<PlanPrice | null>(null)
@@ -102,16 +116,21 @@ function CheckoutContent() {
 
       const userProfile = result.data as UserProfile | null
 
-      if (userProfile?.country) {
-        // Map stored country option to full country name for display
-        // If it's one of our supported options, use it directly
-        // Otherwise default to Nigeria
+      // Priority: URL parameter > User profile country > Default
+      let initialCountry = 'Nigeria'
+      
+      if (countryParam) {
+        // Use country from URL parameter (from subscriptions page selection)
+        initialCountry = decodeURIComponent(countryParam)
+      } else if (userProfile?.country) {
+        // Fallback to user's stored country
         const countryOption = userProfile.country as CountryOption
-        const countryName = countryOption === 'Other' ? 'Nigeria' : countryOption
-        setUserCountry(countryName)
-        setSelectedCountry(countryName)
-        setTempCountry(countryName)
+        initialCountry = countryOption === 'Other' ? 'Nigeria' : countryOption
       }
+      
+      setUserCountry(initialCountry)
+      setSelectedCountry(initialCountry)
+      setTempCountry(initialCountry)
 
       // Fetch WhatsApp number from site config
       const { data: configData } = await supabase
@@ -160,8 +179,8 @@ function CheckoutContent() {
           setPlan(planData)
           
           // Get price for selected duration and country
-          // Map selected country to CountryOption for price lookup
-          const countryOption = mapCountryToOption(selectedCountry)
+          // Use initialCountry (from URL or user profile) for price lookup
+          const countryOption = mapCountryToOption(initialCountry)
           const { data: pricesData } = await supabase
             .from('plan_prices')
             .select('*')
@@ -169,30 +188,64 @@ function CheckoutContent() {
             .eq('duration_days', selectedDuration)
 
           if (pricesData && pricesData.length > 0) {
-            // First priority: Try to find exact country match
-            const countryPrice = pricesData.find((p: any) => p.country === countryOption)
-            if (countryPrice) {
-              setSelectedPrice(countryPrice)
+            // First priority: Try to find exact country match using full country name (case-insensitive)
+            const exactCountryPrice = pricesData.find(
+              (p: any) => p.duration_days === selectedDuration && 
+              p.country && 
+              p.country.toString().trim().toLowerCase() === initialCountry.trim().toLowerCase()
+            )
+            if (exactCountryPrice) {
+              setSelectedPrice(exactCountryPrice)
             } else {
-              // Second priority: If Nigeria, look for Nigeria-specific price
-              if (countryOption === 'Nigeria') {
-                const nigeriaPrice = pricesData.find((p: any) => p.country === 'Nigeria')
-                if (nigeriaPrice) {
-                  setSelectedPrice(nigeriaPrice)
-                } else {
-                  // Fallback to USD prices for Nigeria if no Nigeria price
-                  const usdPrice = pricesData.find((p: any) => p.duration_days === selectedDuration && (p.currency === 'USD' || p.country === 'Other'))
-                  setSelectedPrice(usdPrice || pricesData[0])
-                }
+              // Second priority: Try to find match using mapped CountryOption
+              const countryOptionPrice = pricesData.find(
+                (p: any) => p.duration_days === selectedDuration && p.country === countryOption
+              )
+              if (countryOptionPrice) {
+                setSelectedPrice(countryOptionPrice)
               } else {
-                // Third priority: For all other countries, look for USD prices (country = 'Other' or currency = 'USD')
-                const usdPrice = pricesData.find((p: any) => p.duration_days === selectedDuration && (p.currency === 'USD' || p.country === 'Other'))
-                if (usdPrice) {
-                  setSelectedPrice(usdPrice)
+                // Third priority: If Nigeria, look for Nigeria-specific price
+                if (initialCountry === 'Nigeria' || countryOption === 'Nigeria') {
+                  const nigeriaPrice = pricesData.find(
+                    (p: any) => p.duration_days === selectedDuration && p.country === 'Nigeria'
+                  )
+                  if (nigeriaPrice) {
+                    setSelectedPrice(nigeriaPrice)
+                  } else {
+                    // Fallback to USD prices for Nigeria if no Nigeria price
+                    const usdPrice = pricesData.find(
+                      (p: any) => p.duration_days === selectedDuration && (p.country === 'Other' || (p.currency === 'USD' && (p.country === 'Other' || !p.country || p.country === '')))
+                    )
+                    if (usdPrice) {
+                      setSelectedPrice(usdPrice)
+                    } else {
+                      setSelectedPrice(null)
+                    }
+                  }
                 } else {
-                  // Fallback: try to find any price with USD currency
-                  const currencyPrice = pricesData.find((p: any) => p.duration_days === selectedDuration && p.currency === 'USD')
-                  setSelectedPrice(currencyPrice || pricesData[0])
+                  // Fourth priority: For all other countries, look for USD prices (country = 'Other' or currency = 'USD')
+                  // Only use prices where country is explicitly 'Other' or currency is USD to avoid wrong country matches
+                  const usdPrice = pricesData.find(
+                    (p: any) => p.duration_days === selectedDuration && (p.country === 'Other' || (p.currency === 'USD' && (p.country === 'Other' || !p.country || p.country === '')))
+                  )
+                  if (usdPrice) {
+                    setSelectedPrice(usdPrice)
+                  } else {
+                    // Fifth priority: Try to find price with matching currency for the selected country
+                    const expectedCurrency = getCurrencyFromCountry(initialCountry)
+                    if (expectedCurrency) {
+                      const currencyPrice = pricesData.find(
+                        (p: any) => p.duration_days === selectedDuration && p.currency === expectedCurrency
+                      )
+                      if (currencyPrice) {
+                        setSelectedPrice(currencyPrice)
+                      } else {
+                        setSelectedPrice(null)
+                      }
+                    } else {
+                      setSelectedPrice(null)
+                    }
+                  }
                 }
               }
             }
@@ -271,32 +324,74 @@ function CheckoutContent() {
         .eq('duration_days', selectedDuration)
 
       if (pricesData && pricesData.length > 0) {
-        // First priority: Try to find exact country match
-        const countryPrice = pricesData.find((p: any) => p.country === countryOption)
-        if (countryPrice) {
-          setSelectedPrice(countryPrice)
-        } else {
-          // Second priority: If Nigeria, look for Nigeria-specific price
-          if (countryOption === 'Nigeria') {
-            const nigeriaPrice = pricesData.find((p: any) => p.country === 'Nigeria')
-            if (nigeriaPrice) {
-              setSelectedPrice(nigeriaPrice)
-            } else {
-              // Fallback to USD prices for Nigeria if no Nigeria price
-              const usdPrice = pricesData.find((p: any) => p.duration_days === selectedDuration && (p.currency === 'USD' || p.country === 'Other'))
-              setSelectedPrice(usdPrice || pricesData[0])
-            }
-          } else {
-            // Third priority: For all other countries, look for USD prices (country = 'Other' or currency = 'USD')
-            const usdPrice = pricesData.find((p: any) => p.duration_days === selectedDuration && (p.currency === 'USD' || p.country === 'Other'))
-            if (usdPrice) {
-              setSelectedPrice(usdPrice)
-            } else {
-              // Fallback: try to find any price with USD currency
-              const currencyPrice = pricesData.find((p: any) => p.duration_days === selectedDuration && p.currency === 'USD')
-              setSelectedPrice(currencyPrice || pricesData[0])
-            }
+        // First priority: Try to find exact country match using full country name (case-insensitive)
+        const exactCountryPrice = pricesData.find(
+          (p: any) => p.duration_days === selectedDuration && 
+          p.country && 
+          p.country.toString().trim().toLowerCase() === selectedCountry.trim().toLowerCase()
+        )
+        if (exactCountryPrice) {
+          setSelectedPrice(exactCountryPrice)
+          return
+        }
+
+        // Second priority: Try to find match using mapped CountryOption
+        const countryOptionPrice = pricesData.find(
+          (p: any) => p.duration_days === selectedDuration && p.country === countryOption
+        )
+        if (countryOptionPrice) {
+          setSelectedPrice(countryOptionPrice)
+          return
+        }
+
+        // Third priority: If Nigeria, look for Nigeria-specific price
+        if (selectedCountry === 'Nigeria' || countryOption === 'Nigeria') {
+          const nigeriaPrice = pricesData.find(
+            (p: any) => p.duration_days === selectedDuration && p.country === 'Nigeria'
+          )
+          if (nigeriaPrice) {
+            setSelectedPrice(nigeriaPrice)
+            return
           }
+        }
+
+        // Fourth priority: For all other countries, look for USD prices (country = 'Other' or currency = 'USD')
+        // Only use prices where country is explicitly 'Other' or currency is USD to avoid wrong country matches
+        const usdPrice = pricesData.find(
+          (p: any) => p.duration_days === selectedDuration && (p.country === 'Other' || (p.currency === 'USD' && (p.country === 'Other' || !p.country || p.country === '')))
+        )
+        if (usdPrice) {
+          setSelectedPrice(usdPrice)
+          return
+        }
+
+        // Fifth priority: Try to find price with matching currency for the selected country
+        const expectedCurrency = getCurrencyFromCountry(selectedCountry)
+        if (expectedCurrency) {
+          const currencyPrice = pricesData.find(
+            (p: any) => p.duration_days === selectedDuration && p.currency === expectedCurrency
+          )
+          if (currencyPrice) {
+            setSelectedPrice(currencyPrice)
+            return
+          }
+        }
+
+        // Final fallback: Only use USD prices or 'Other' country prices, never a random country's price
+        const safeFallback = pricesData.find(
+          (p: any) => p.duration_days === selectedDuration && (p.currency === 'USD' || p.country === 'Other')
+        )
+        if (safeFallback) {
+          setSelectedPrice(safeFallback)
+          return
+        }
+
+        // Last resort: any price for this duration (should rarely happen)
+        const anyPrice = pricesData.find((p: any) => p.duration_days === selectedDuration)
+        if (anyPrice) {
+          setSelectedPrice(anyPrice)
+        } else {
+          setSelectedPrice(null)
         }
       } else {
         // No price found
@@ -539,6 +634,21 @@ function CheckoutContent() {
           const planName = plan.name
           const userName = userProfile?.full_name || user.email?.split('@')[0] || 'User'
           const userEmail = userProfile?.email || user.email
+          const planType = getPlanTypeFromSlug(plan.slug)
+          const planTypeText = planType ? planType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : ''
+          const durationText = selectedDuration === 7 ? 'Weekly' : selectedDuration === 30 ? 'Monthly' : `${selectedDuration} days`
+          const currencySymbol = getCurrencySymbolUtil(selectedPrice.currency) || selectedPrice.currency
+          const formattedAmount = typeof selectedPrice.price === 'number' 
+            ? selectedPrice.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : selectedPrice.price
+
+          // Create detailed notification message for admin
+          let notificationMessage = `${userName} (${userEmail}) has submitted a payment proof for ${planName}.`
+          if (planTypeText) {
+            notificationMessage += ` Plan Type: ${planTypeText}.`
+          }
+          notificationMessage += ` Duration: ${durationText}.`
+          notificationMessage += ` Amount: ${currencySymbol}${formattedAmount} (${selectedPrice.currency}).`
 
           // Create notification for admin
           await supabase
@@ -548,11 +658,11 @@ function CheckoutContent() {
               user_id: adminUser.id,
               type: 'admin_new_payment',
               title: 'New Payment Submitted',
-              message: `${userName} (${userEmail}) has submitted a payment proof for ${planName}. Amount: ${selectedPrice.currency} ${selectedPrice.price}`,
+              message: notificationMessage,
               read: false,
             })
 
-          // Send email to admin
+          // Send email to admin with all details
           try {
             await fetch('/api/notifications/send-email', {
               method: 'POST',
@@ -565,8 +675,10 @@ function CheckoutContent() {
                 planName,
                 userEmail,
                 userName,
+                planType,
                 amount: selectedPrice.price,
                 currency: selectedPrice.currency,
+                duration: selectedDuration,
               }),
             })
           } catch (emailError) {
@@ -580,7 +692,10 @@ function CheckoutContent() {
       }
 
       toast.success('Payment proof submitted! Your subscription will be activated after admin confirmation.')
-      router.push('/dashboard')
+      // Delay navigation to allow toast to be visible
+      setTimeout(() => {
+        router.push('/dashboard')
+      }, 1500)
     } catch (error: any) {
       console.error('Error submitting payment:', error)
       toast.error(error.message || 'Failed to submit payment proof')
@@ -591,28 +706,38 @@ function CheckoutContent() {
 
   // Determine currency from the price's currency field, or fallback based on country
   const getCurrencySymbol = () => {
-    // Use currency from the price if available
-    if (selectedPrice?.currency) {
-      const currencyMap: Record<string, string> = {
-        'NGN': '₦',
-        'GHS': '₵',
-        'KES': 'KSh',
-        'USD': '$',
-        'EUR': '€',
+    // First priority: Use currency code from database if available
+    if (selectedPrice?.currency && typeof selectedPrice.currency === 'string' && selectedPrice.currency.trim()) {
+      const symbol = getCurrencySymbolUtil(selectedPrice.currency.trim())
+      // If utility returns the code itself, it means it's not in the map, but we should still use it
+      // Otherwise return the symbol
+      if (symbol && symbol !== selectedPrice.currency) {
+        return symbol
       }
-      return currencyMap[selectedPrice.currency] || selectedPrice.currency
+      // If symbol equals currency code, it means it wasn't found in map, but we'll use it anyway
+      return symbol
     }
-    
-    // Fallback to country-based currency
-    const countryOption = mapCountryToOption(selectedCountry)
-    if (countryOption === 'Nigeria') {
-      return '₦'
-    } else if (countryOption === 'Ghana') {
-      return '₵'
-    } else if (countryOption === 'Kenya') {
-      return 'KSh'
+
+    // Second priority: Infer currency from price's country field if available
+    if (selectedPrice?.country && typeof selectedPrice.country === 'string' && selectedPrice.country.trim()) {
+      const countryCurrencyCode = getCurrencyFromCountry(selectedPrice.country.trim())
+      if (countryCurrencyCode) {
+        const symbol = getCurrencySymbolUtil(countryCurrencyCode)
+        return symbol
+      }
     }
-    return '$' // Default to USD instead of Naira
+
+    // Third priority: Use selected country to infer currency
+    if (selectedCountry && typeof selectedCountry === 'string' && selectedCountry.trim()) {
+      const userCountryCurrencyCode = getCurrencyFromCountry(selectedCountry.trim())
+      if (userCountryCurrencyCode) {
+        const symbol = getCurrencySymbolUtil(userCountryCurrencyCode)
+        return symbol
+      }
+    }
+
+    // Final fallback: Default to USD
+    return '$'
   }
   const currency = getCurrencySymbol()
 
