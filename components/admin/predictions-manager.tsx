@@ -589,8 +589,8 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
       const supabase = createClient()
       
       // Update the prediction to move it to correct score plan
-      const { error } = await supabase
-        .from('predictions')
+      const { error } = await (supabase
+        .from('predictions') as any)
         .update({
           plan_type: 'correct_score',
           prediction_type: scorePrediction.trim(),

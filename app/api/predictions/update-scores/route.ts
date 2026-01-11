@@ -149,42 +149,42 @@ export async function POST(request: NextRequest) {
       // Original behavior: filter by date
       if (!date) {
         return NextResponse.json({ error: 'Date is required when predictionIds are not provided' }, { status: 400 })
-      }
+    }
 
-      // Parse date string (format: YYYY-MM-DD) and create UTC date range
-      // Treat the date as UTC date to match how date-fns formats dates in UTC
-      const dateParts = date.split('-')
-      if (dateParts.length !== 3) {
-        return NextResponse.json({ error: 'Invalid date format. Expected YYYY-MM-DD' }, { status: 400 })
-      }
+    // Parse date string (format: YYYY-MM-DD) and create UTC date range
+    // Treat the date as UTC date to match how date-fns formats dates in UTC
+    const dateParts = date.split('-')
+    if (dateParts.length !== 3) {
+      return NextResponse.json({ error: 'Invalid date format. Expected YYYY-MM-DD' }, { status: 400 })
+    }
 
-      const year = parseInt(dateParts[0], 10)
-      const month = parseInt(dateParts[1], 10) - 1 // Month is 0-indexed
-      const day = parseInt(dateParts[2], 10)
+    const year = parseInt(dateParts[0], 10)
+    const month = parseInt(dateParts[1], 10) - 1 // Month is 0-indexed
+    const day = parseInt(dateParts[2], 10)
 
-      // Create UTC date boundaries for the entire day
-      // This ensures we match all predictions for this date regardless of timezone
-      const startOfDayUTC = new Date(Date.UTC(year, month, day, 0, 0, 0, 0))
-      const endOfDayUTC = new Date(Date.UTC(year, month, day, 23, 59, 59, 999))
+    // Create UTC date boundaries for the entire day
+    // This ensures we match all predictions for this date regardless of timezone
+    const startOfDayUTC = new Date(Date.UTC(year, month, day, 0, 0, 0, 0))
+    const endOfDayUTC = new Date(Date.UTC(year, month, day, 23, 59, 59, 999))
 
-      console.log('📅 Date filtering for update:', {
-        inputDate: date,
-        utcStart: startOfDayUTC.toISOString(),
-        utcEnd: endOfDayUTC.toISOString(),
-        year,
-        month: month + 1,
-        day,
-      })
+    console.log('📅 Date filtering for update:', {
+      inputDate: date,
+      utcStart: startOfDayUTC.toISOString(),
+      utcEnd: endOfDayUTC.toISOString(),
+      year,
+      month: month + 1,
+      day,
+    })
 
       const { data, error: predictionsError } = await supabase
-        .from('predictions')
-        .select('*')
-        .gte('kickoff_time', startOfDayUTC.toISOString())
-        .lte('kickoff_time', endOfDayUTC.toISOString())
+      .from('predictions')
+      .select('*')
+      .gte('kickoff_time', startOfDayUTC.toISOString())
+      .lte('kickoff_time', endOfDayUTC.toISOString())
 
-      if (predictionsError) {
-        throw predictionsError
-      }
+    if (predictionsError) {
+      throw predictionsError
+    }
 
       predictions = data as Prediction[]
     }
@@ -215,11 +215,15 @@ export async function POST(request: NextRequest) {
         let fixtureArray: Fixture[] = []
         if (Array.isArray(fixtures)) {
           fixtureArray = fixtures
-        } else if (fixtures && typeof fixtures === 'object' && 'data' in fixtures && Array.isArray(fixtures.data)) {
-          fixtureArray = fixtures.data
         } else if (fixtures && typeof fixtures === 'object' && !Array.isArray(fixtures)) {
-          // Single fixture object
-          fixtureArray = [fixtures as Fixture]
+          // Check if it has a 'data' property that is an array
+          const fixturesObj = fixtures as any
+          if ('data' in fixturesObj && Array.isArray(fixturesObj.data)) {
+            fixtureArray = fixturesObj.data
+          } else {
+            // Single fixture object
+            fixtureArray = [fixtures as Fixture]
+          }
         }
         
         if (fixtureArray.length > 0) {
@@ -328,6 +332,8 @@ export async function POST(request: NextRequest) {
 
       // Check match status - expanded to include more statuses
       const matchStatus = String(fixture.match_status || '').trim()
+      const matchLive = String(fixture.match_live || '')
+      
       const isFinished = matchStatus === 'FT' || 
                         matchStatus === 'AET' || 
                         matchStatus === 'PEN' ||
@@ -343,7 +349,7 @@ export async function POST(request: NextRequest) {
                         matchStatus.includes('FT') ||
                         matchStatus.includes('Finished') ||
                         // If we have valid scores and match is not live, consider it finished
-                        (hasValidScores && fixture.match_live !== '1' && fixture.match_live !== 1)
+                        (hasValidScores && matchLive !== '1')
       
       const isLive = matchStatus === 'LIVE' || 
                     matchStatus === 'HT' ||
@@ -351,9 +357,7 @@ export async function POST(request: NextRequest) {
                     matchStatus === '2H' ||
                     matchStatus === 'ET' ||
                     matchStatus === 'PEN_LIVE' ||
-                    fixture.match_live === '1' ||
-                    fixture.match_live === 1 ||
-                    fixture.match_live === '1'
+                    matchLive === '1'
 
       // Update if match is finished or live, OR if we have valid scores (even if status is unclear)
       if (!isFinished && !isLive && !hasValidScores) {
