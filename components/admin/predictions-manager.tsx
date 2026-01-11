@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Prediction, Plan } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { Edit, Trash2, MoreVertical, Trophy, CalendarIcon } from 'lucide-react'
+import { Edit, Trash2, MoreVertical, Trophy, CalendarIcon, Target } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,6 +34,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 interface PredictionsManagerProps {
   plans: Plan[]
@@ -67,6 +69,10 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
   const [addingToVIP, setAddingToVIP] = useState<string | null>(null)
   const [isAutoUpdating, setIsAutoUpdating] = useState(false)
   const [updatingScores, setUpdatingScores] = useState<Record<string, boolean>>({})
+  const [moveToCorrectScoreDialogOpen, setMoveToCorrectScoreDialogOpen] = useState(false)
+  const [predictionToMove, setPredictionToMove] = useState<Prediction | null>(null)
+  const [scorePrediction, setScorePrediction] = useState('')
+  const [movingToCorrectScore, setMovingToCorrectScore] = useState(false)
   
   // Date filter state - separate for each plan tab
   const [dateFilters, setDateFilters] = useState<Record<string, {
@@ -559,6 +565,53 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
     }
   }
 
+  const handleMoveToCorrectScoreClick = (prediction: Prediction) => {
+    setPredictionToMove(prediction)
+    setScorePrediction('')
+    setMoveToCorrectScoreDialogOpen(true)
+  }
+
+  const handleMoveToCorrectScoreConfirm = async () => {
+    if (!predictionToMove || !scorePrediction.trim()) {
+      toast.error('Please enter a valid score prediction (e.g., 2-1)')
+      return
+    }
+
+    // Validate score format (should be like "2-1" or "0-0")
+    const scorePattern = /^\d+-\d+$/
+    if (!scorePattern.test(scorePrediction.trim())) {
+      toast.error('Invalid score format. Please use format like "2-1" or "0-0"')
+      return
+    }
+
+    setMovingToCorrectScore(true)
+    try {
+      const supabase = createClient()
+      
+      // Update the prediction to move it to correct score plan
+      const { error } = await supabase
+        .from('predictions')
+        .update({
+          plan_type: 'correct_score',
+          prediction_type: scorePrediction.trim(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', predictionToMove.id)
+
+      if (error) throw error
+
+      toast.success('Prediction moved to Correct Score successfully!')
+      setMoveToCorrectScoreDialogOpen(false)
+      setPredictionToMove(null)
+      setScorePrediction('')
+      router.refresh()
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to move prediction to Correct Score')
+    } finally {
+      setMovingToCorrectScore(false)
+    }
+  }
+
   return (
     <Tabs defaultValue={defaultTab} className="space-y-4" onValueChange={setActiveTab}>
       <div className="overflow-x-auto">
@@ -899,6 +952,12 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                                   <Trophy className="h-4 w-4 mr-2" />
                                   {addingToVIP === pred.id ? 'Adding...' : 'Add to VIP Wins'}
                                 </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleMoveToCorrectScoreClick(pred)}
+                                >
+                                  <Target className="h-4 w-4 mr-2" />
+                                  Move to Correct Score
+                                </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                               onClick={() => handleDeleteClick(pred.id, 'regular')}
@@ -1050,6 +1109,12 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                                   >
                                     <Trophy className="h-4 w-4 mr-2" />
                                     {addingToVIP === pred.id ? 'Adding...' : 'Add to VIP Wins'}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => handleMoveToCorrectScoreClick(pred)}
+                                  >
+                                    <Target className="h-4 w-4 mr-2" />
+                                    Move to Correct Score
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
@@ -1624,6 +1689,69 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
               disabled={deletingAll}
             >
               {deletingAll ? 'Deleting All...' : 'Delete All'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Move to Correct Score Dialog */}
+      <Dialog open={moveToCorrectScoreDialogOpen} onOpenChange={setMoveToCorrectScoreDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move to Correct Score</DialogTitle>
+            <DialogDescription>
+              Move this prediction to the Correct Score plan. Enter the predicted score (e.g., 2-1, 0-0).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {predictionToMove && (
+              <div className="space-y-2">
+                <div className="text-sm">
+                  <span className="font-medium">Match:</span> {predictionToMove.home_team} vs {predictionToMove.away_team}
+                </div>
+                <div className="text-sm">
+                  <span className="font-medium">Current Plan:</span> {predictionToMove.plan_type}
+                </div>
+                <div className="text-sm">
+                  <span className="font-medium">Current Prediction:</span> {predictionToMove.prediction_type}
+                </div>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="score-prediction">Score Prediction</Label>
+              <Input
+                id="score-prediction"
+                placeholder="e.g., 2-1"
+                value={scorePrediction}
+                onChange={(e) => setScorePrediction(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleMoveToCorrectScoreConfirm()
+                  }
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Enter the predicted score in format: home-away (e.g., 2-1, 0-0, 3-2)
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setMoveToCorrectScoreDialogOpen(false)
+                setPredictionToMove(null)
+                setScorePrediction('')
+              }}
+              disabled={movingToCorrectScore}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleMoveToCorrectScoreConfirm}
+              disabled={movingToCorrectScore || !scorePrediction.trim()}
+            >
+              {movingToCorrectScore ? 'Moving...' : 'Move to Correct Score'}
             </Button>
           </DialogFooter>
         </DialogContent>
