@@ -159,7 +159,7 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
           setShowConfirmDialog(false)
           // Delay reload to allow toast to be visible
           setTimeout(() => {
-            window.location.reload()
+          window.location.reload()
           }, 1500)
           return
         } else {
@@ -466,7 +466,7 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
       setShowActivateDialog(false)
       // Delay reload to allow toast to be visible
       setTimeout(() => {
-        window.location.reload()
+      window.location.reload()
       }, 1500)
     } catch (error: any) {
       console.error('Error activating subscription:', error)
@@ -604,7 +604,7 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
       setRejectionReason('')
       // Delay reload to allow toast to be visible
       setTimeout(() => {
-        window.location.reload()
+      window.location.reload()
       }, 1500)
     } catch (error: any) {
       console.error('Error rejecting payment:', error)
@@ -1018,36 +1018,36 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
             const durationText = durationDays === 7 ? 'Weekly' : durationDays === 30 ? 'Monthly' : durationDays ? `${durationDays} days` : null
 
             return (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <p className="text-sm">
-                    <span className="font-medium">User: </span>
-                    {(selectedTransaction.users as any)?.full_name || (selectedTransaction.users as any)?.email}
-                  </p>
-                  <p className="text-sm">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-sm">
+                  <span className="font-medium">User: </span>
+                  {(selectedTransaction.users as any)?.full_name || (selectedTransaction.users as any)?.email}
+                </p>
+                <p className="text-sm">
                     <span className="font-medium">Plan Name: </span>
-                    {(selectedTransaction.plans as any)?.name}
-                  </p>
+                  {(selectedTransaction.plans as any)?.name}
+                </p>
                   {planTypeText && (
                     <p className="text-sm">
                       <span className="font-medium">Plan Type: </span>
                       {planTypeText}
                     </p>
                   )}
-                  <p className="text-sm">
-                    <span className="font-medium">Amount: </span>
-                    {selectedTransaction.currency} {selectedTransaction.amount}
-                  </p>
+                <p className="text-sm">
+                  <span className="font-medium">Amount: </span>
+                  {selectedTransaction.currency} {selectedTransaction.amount}
+                </p>
                   {durationText && (
                     <p className="text-sm">
                       <span className="font-medium">Duration: </span>
                       {durationText}
                     </p>
                   )}
-                  <p className="text-sm">
-                    <span className="font-medium">Payment Type: </span>
-                    {selectedTransaction.payment_type === 'activation' ? 'Activation Fee' : 'Subscription'}
-                  </p>
+                <p className="text-sm">
+                  <span className="font-medium">Payment Type: </span>
+                  {selectedTransaction.payment_type === 'activation' ? 'Activation Fee' : 'Subscription'}
+                </p>
                 <div className="rounded-lg bg-blue-50 p-3 text-blue-800 text-sm mt-4">
                   <p className="font-medium mb-1">This will:</p>
                   <ul className="list-disc list-inside space-y-1">

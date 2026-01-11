@@ -209,10 +209,10 @@ function CheckoutContent() {
                   const nigeriaPrice = pricesData.find(
                     (p: any) => p.duration_days === selectedDuration && p.country === 'Nigeria'
                   )
-                  if (nigeriaPrice) {
-                    setSelectedPrice(nigeriaPrice)
-                  } else {
-                    // Fallback to USD prices for Nigeria if no Nigeria price
+                if (nigeriaPrice) {
+                  setSelectedPrice(nigeriaPrice)
+                } else {
+                  // Fallback to USD prices for Nigeria if no Nigeria price
                     const usdPrice = pricesData.find(
                       (p: any) => p.duration_days === selectedDuration && (p.country === 'Other' || (p.currency === 'USD' && (p.country === 'Other' || !p.country || p.country === '')))
                     )
@@ -221,16 +221,16 @@ function CheckoutContent() {
                     } else {
                       setSelectedPrice(null)
                     }
-                  }
-                } else {
+                }
+              } else {
                   // Fourth priority: For all other countries, look for USD prices (country = 'Other' or currency = 'USD')
                   // Only use prices where country is explicitly 'Other' or currency is USD to avoid wrong country matches
                   const usdPrice = pricesData.find(
                     (p: any) => p.duration_days === selectedDuration && (p.country === 'Other' || (p.currency === 'USD' && (p.country === 'Other' || !p.country || p.country === '')))
                   )
-                  if (usdPrice) {
-                    setSelectedPrice(usdPrice)
-                  } else {
+                if (usdPrice) {
+                  setSelectedPrice(usdPrice)
+                } else {
                     // Fifth priority: Try to find price with matching currency for the selected country
                     const expectedCurrency = getCurrencyFromCountry(initialCountry)
                     if (expectedCurrency) {
@@ -349,8 +349,8 @@ function CheckoutContent() {
           const nigeriaPrice = pricesData.find(
             (p: any) => p.duration_days === selectedDuration && p.country === 'Nigeria'
           )
-          if (nigeriaPrice) {
-            setSelectedPrice(nigeriaPrice)
+            if (nigeriaPrice) {
+              setSelectedPrice(nigeriaPrice)
             return
           }
         }
@@ -360,8 +360,8 @@ function CheckoutContent() {
         const usdPrice = pricesData.find(
           (p: any) => p.duration_days === selectedDuration && (p.country === 'Other' || (p.currency === 'USD' && (p.country === 'Other' || !p.country || p.country === '')))
         )
-        if (usdPrice) {
-          setSelectedPrice(usdPrice)
+            if (usdPrice) {
+              setSelectedPrice(usdPrice)
           return
         }
 
@@ -694,7 +694,7 @@ function CheckoutContent() {
       toast.success('Payment proof submitted! Your subscription will be activated after admin confirmation.')
       // Delay navigation to allow toast to be visible
       setTimeout(() => {
-        router.push('/dashboard')
+      router.push('/dashboard')
       }, 1500)
     } catch (error: any) {
       console.error('Error submitting payment:', error)

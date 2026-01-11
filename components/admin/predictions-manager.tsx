@@ -65,6 +65,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
   const [planToDeleteAll, setPlanToDeleteAll] = useState<{ slug: string; name: string } | null>(null)
   const [teamLogos, setTeamLogos] = useState<TeamLogoCache>({})
   const [addingToVIP, setAddingToVIP] = useState<string | null>(null)
+  const [isAutoUpdating, setIsAutoUpdating] = useState(false)
   const [updatingScores, setUpdatingScores] = useState<Record<string, boolean>>({})
   
   // Date filter state - separate for each plan tab
@@ -121,12 +122,23 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
     // Normalize the target date to YYYY-MM-DD format for comparison
     const targetDateStr = from // from and to should be the same for single day filters
     
+    // Parse target date to UTC for consistent comparison
+    const targetDateParts = targetDateStr.split('-')
+    const targetYear = parseInt(targetDateParts[0], 10)
+    const targetMonth = parseInt(targetDateParts[1], 10) - 1
+    const targetDay = parseInt(targetDateParts[2], 10)
+    
     filtered = filtered.filter(pred => {
       const kickoffTime = new Date(pred.kickoff_time)
-      // Get the date part in YYYY-MM-DD format for comparison
-      const kickoffDateStr = format(kickoffTime, 'yyyy-MM-dd')
-      // Compare date strings to avoid timezone issues
-      return kickoffDateStr === targetDateStr
+      
+      // Extract UTC date components to avoid timezone issues
+      // This ensures we compare dates correctly regardless of timezone
+      const utcYear = kickoffTime.getUTCFullYear()
+      const utcMonth = kickoffTime.getUTCMonth()
+      const utcDay = kickoffTime.getUTCDate()
+      
+      // Compare UTC date components with target date
+      return utcYear === targetYear && utcMonth === targetMonth && utcDay === targetDay
     })
 
     return filtered
@@ -293,7 +305,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
 
-  // Manual update scores for a specific date
+  // Manual update scores for a specific date/plan
   const updateScoresForDate = async (date: string, planSlug: string) => {
     const key = `${planSlug}-${date}`
     setUpdatingScores(prev => ({ ...prev, [key]: true }))
@@ -315,10 +327,21 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
 
       if (data.updated > 0) {
         toast.success(`Updated ${data.updated} prediction(s) with actual scores`)
-        // Refresh the page to show updated data
         router.refresh()
       } else {
-        toast.info('No predictions were updated. They may already be up to date or no matches found.')
+        const details = data.details || {}
+        let message = data.message || 'No predictions were updated. They may already be up to date or no matches found.'
+        
+        if (details.skippedNoFixture > 0) {
+          message = `${message} ${details.skippedNoFixture} prediction(s) had no matching fixtures.`
+        }
+        if (details.skippedNotFinished > 0) {
+          message = `${message} ${details.skippedNotFinished} match(es) not finished/live yet.`
+        }
+        
+        toast.info(message, {
+          duration: 5000,
+        })
       }
     } catch (error: any) {
       console.error('Error updating scores:', error)
@@ -331,6 +354,89 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
       })
     }
   }
+
+  // Automatic update scores for all visible predictions
+  const autoUpdateScores = async () => {
+    if (isAutoUpdating) return
+    
+    setIsAutoUpdating(true)
+    try {
+      // Get all unique dates from all visible predictions across all tabs
+      const allDates = new Set<string>()
+      
+      // Get dates from regular plans
+      regularPlans.forEach(plan => {
+        const planPreds = getPredictionsForPlan(plan.slug)
+        planPreds.forEach(pred => {
+          const kickoffDate = new Date(pred.kickoff_time).toISOString().split('T')[0]
+          allDates.add(kickoffDate)
+        })
+      })
+      
+      // Get dates from correct score plan
+      if (correctScorePlan) {
+        const correctScorePreds = getPredictionsForPlan('correct-score')
+        correctScorePreds.forEach(pred => {
+          const kickoffDate = new Date(pred.kickoff_time).toISOString().split('T')[0]
+          allDates.add(kickoffDate)
+        })
+      }
+
+      if (allDates.size === 0) {
+        return
+      }
+
+      // Update predictions for each date
+      let hasUpdates = false
+      for (const date of allDates) {
+        try {
+          const response = await fetch('/api/predictions/update-scores', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ date }),
+          })
+
+          const data = await response.json()
+
+          if (response.ok && data.updated > 0) {
+            hasUpdates = true
+          }
+        } catch (error) {
+          console.error(`Error updating scores for date ${date}:`, error)
+        }
+      }
+      
+      // Refresh the page if any updates occurred
+      if (hasUpdates) {
+        router.refresh()
+      }
+    } catch (error: any) {
+      console.error('Error in auto-update:', error)
+    } finally {
+      setIsAutoUpdating(false)
+    }
+  }
+
+  // Auto-update scores periodically and when date filters change
+  useEffect(() => {
+    // Initial update after a short delay to let the component mount
+    const initialTimeout = setTimeout(() => {
+      autoUpdateScores()
+    }, 2000) // Wait 2 seconds before first update
+
+    // Set up periodic updates every 60 seconds
+    const interval = setInterval(() => {
+      autoUpdateScores()
+    }, 60000) // Update every 60 seconds
+
+    return () => {
+      clearTimeout(initialTimeout)
+      clearInterval(interval)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateFilters, activeTab])
 
 
   // Helper to get team logo
@@ -595,11 +701,6 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                       )
                       const key = `${plan.slug}-${from}`
                       const isUpdating = updatingScores[key]
-                      const today = new Date()
-                      today.setHours(0, 0, 0, 0)
-                      const targetDate = new Date(from)
-                      targetDate.setHours(0, 0, 0, 0)
-                      const isPastDate = targetDate < today
                       
                       return (
                         <Button
@@ -615,7 +716,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                               Updating...
                             </>
                           ) : (
-                            'Update'
+                            'Update Scores'
                           )}
                         </Button>
                       )
@@ -655,7 +756,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                           )}
                         >
                           {/* Time & League */}
-                          <div className="col-span-3 lg:col-span-2">
+                          <div className="col-span-2 lg:col-span-2">
                             <div className="text-xs sm:text-sm font-medium text-gray-900">
                               {formatTime(pred.kickoff_time)}
                             </div>
@@ -1089,18 +1190,13 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                       )
                       const key = `correct-score-${from}`
                       const isUpdating = updatingScores[key]
-                      const today = new Date()
-                      today.setHours(0, 0, 0, 0)
-                      const targetDate = new Date(from)
-                      targetDate.setHours(0, 0, 0, 0)
-                      const isPastDate = targetDate < today
                       
                       return (
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => updateScoresForDate(from, 'correct-score')}
-                          disabled={isUpdating || !isPastDate}
+                          disabled={isUpdating}
                           className="px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium"
                         >
                           {isUpdating ? (
@@ -1109,7 +1205,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                               Updating...
                             </>
                           ) : (
-                            'Update'
+                            'Update Scores'
                           )}
                         </Button>
                       )
