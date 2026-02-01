@@ -89,6 +89,23 @@ export default function RootLayout({
           {...({ nordankey: "drsQsq8VSVOimI" } as any)}
         /> */}
         <PWAHead />
+        {/* Google Analytics */}
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-7KDF121W18"
+          strategy="afterInteractive"
+        />
+        <Script
+          id="google-analytics"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', 'G-7KDF121W18');
+            `,
+          }}
+        />
         {children}
         <Toaster />
         <InstallPrompt />
