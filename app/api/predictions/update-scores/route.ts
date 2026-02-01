@@ -128,27 +128,20 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { date, predictionIds } = body
+    const { date } = body
 
-    // If predictionIds are provided, use them directly. Otherwise, require date.
-    let predictions: Prediction[] | null = null
+    if (!date) {
+      return NextResponse.json({ error: 'Date is required' }, { status: 400 })
+    }
 
-    if (predictionIds && Array.isArray(predictionIds) && predictionIds.length > 0) {
-      // Fetch specific predictions by IDs
-      const { data, error: predictionsError } = await supabase
-        .from('predictions')
-        .select('*')
-        .in('id', predictionIds)
-
-      if (predictionsError) {
-        throw predictionsError
-      }
-
-      predictions = data as Prediction[]
-    } else {
-      // Original behavior: filter by date
-      if (!date) {
-        return NextResponse.json({ error: 'Date is required when predictionIds are not provided' }, { status: 400 })
+    // Fetch fixtures from API for the given date
+    const fixtures = await getFixtures(date, undefined, date)
+    
+    if (!Array.isArray(fixtures) || fixtures.length === 0) {
+      return NextResponse.json({ 
+        message: 'No fixtures found for this date',
+        updated: 0 
+      })
     }
 
     // Parse date string (format: YYYY-MM-DD) and create UTC date range
@@ -176,7 +169,7 @@ export async function POST(request: NextRequest) {
       day,
     })
 
-      const { data, error: predictionsError } = await supabase
+    const { data: predictions, error: predictionsError } = await supabase
       .from('predictions')
       .select('*')
       .gte('kickoff_time', startOfDayUTC.toISOString())
@@ -186,92 +179,10 @@ export async function POST(request: NextRequest) {
       throw predictionsError
     }
 
-      predictions = data as Prediction[]
-    }
-
-    if (!predictions || predictions.length === 0) {
-      return NextResponse.json({ 
-        message: 'No predictions found',
-        updated: 0 
-      })
-    }
-
-    // Fetch fixtures from API - we need to get fixtures for all dates that the predictions span
-    // Get unique dates from predictions
-    const predictionDates = new Set<string>()
-    predictions.forEach(pred => {
-      const kickoffDate = new Date(pred.kickoff_time).toISOString().split('T')[0]
-      predictionDates.add(kickoffDate)
-    })
-
-    // Fetch fixtures for all dates
-    const allFixtures: Fixture[] = []
-    for (const predDate of predictionDates) {
-      try {
-        console.log(`🔍 Fetching fixtures for date: ${predDate}`)
-        const fixtures = await getFixtures(predDate, undefined, predDate)
-        
-        // Handle different response formats
-        let fixtureArray: Fixture[] = []
-        if (Array.isArray(fixtures)) {
-          fixtureArray = fixtures
-        } else if (fixtures && typeof fixtures === 'object' && !Array.isArray(fixtures)) {
-          // Check if it has a 'data' property that is an array
-          const fixturesObj = fixtures as any
-          if ('data' in fixturesObj && Array.isArray(fixturesObj.data)) {
-            fixtureArray = fixturesObj.data
-          } else {
-            // Single fixture object
-            fixtureArray = [fixtures as Fixture]
-          }
-        }
-        
-        if (fixtureArray.length > 0) {
-          console.log(`📅 Found ${fixtureArray.length} fixtures for date ${predDate}`)
-          // Log sample fixtures for debugging
-          if (fixtureArray.length <= 5) {
-            fixtureArray.forEach(f => {
-              console.log(`   - ${f.match_hometeam_name} vs ${f.match_awayteam_name} (${f.match_status}) - ${f.match_hometeam_score}-${f.match_awayteam_score}`)
-            })
-          } else {
-            console.log(`   Sample: ${fixtureArray[0].match_hometeam_name} vs ${fixtureArray[0].match_awayteam_name} (${fixtureArray[0].match_status})`)
-          }
-          allFixtures.push(...fixtureArray)
-        } else {
-          console.log(`⚠️ No fixtures found for date ${predDate}. Response type: ${typeof fixtures}, isArray: ${Array.isArray(fixtures)}`)
-          if (fixtures) {
-            console.log(`   Response preview:`, JSON.stringify(fixtures).substring(0, 200))
-          }
-        }
-      } catch (error: any) {
-        console.error(`❌ Error fetching fixtures for date ${predDate}:`, error.message)
-        console.error(`   Stack:`, error.stack)
-      }
-    }
-    
-    console.log(`📊 Total fixtures fetched: ${allFixtures.length} for dates: ${Array.from(predictionDates).join(', ')}`)
-    
-    if (allFixtures.length === 0) {
-      return NextResponse.json({ 
-        message: `No fixtures found for the prediction dates: ${Array.from(predictionDates).join(', ')}. The API may not have data for these dates.`,
-        updated: 0,
-        details: {
-          predictionDates: Array.from(predictionDates),
-          totalPredictions: predictions.length,
-          skippedNoFixture: 0,
-          skippedNotFinished: 0,
-          skippedNoScores: 0
-        }
-      })
-    }
-
-    const fixtures = allFixtures
-
     console.log('📊 Predictions retrieved from DB:', {
       date,
-      predictionIds,
       count: predictions?.length || 0,
-      predictions: predictions?.map(p => ({
+      predictions: (predictions as Prediction[])?.map(p => ({
         id: p.id,
         home_team: p.home_team,
         away_team: p.away_team,
@@ -284,15 +195,17 @@ export async function POST(request: NextRequest) {
       }))
     })
 
-    let updatedCount = 0
-    let skippedNoFixture = 0
-    let skippedNotFinished = 0
-    let skippedNoScores = 0
+    if (!predictions || predictions.length === 0) {
+      return NextResponse.json({ 
+        message: 'No predictions found for this date',
+        updated: 0 
+      })
+    }
 
-    console.log(`🔍 Processing ${predictions.length} predictions against ${fixtures.length} fixtures`)
+    let updatedCount = 0
 
     // Match predictions to fixtures and update scores
-    for (const prediction of predictions) {
+    for (const prediction of predictions as Prediction[]) {
       // Find matching fixture
       const fixture = fixtures.find((f: Fixture) => 
         matchTeams(
@@ -304,88 +217,41 @@ export async function POST(request: NextRequest) {
       )
 
       if (!fixture) {
-        skippedNoFixture++
-        console.log(`⚠️ No fixture found for: ${prediction.home_team} vs ${prediction.away_team} (ID: ${prediction.id})`)
-        // Log available fixtures for debugging
-        if (fixtures.length > 0 && fixtures.length <= 20) {
-          console.log(`   Available fixtures (${fixtures.length} total):`)
-          fixtures.forEach(f => {
-            console.log(`     - ${f.match_hometeam_name} vs ${f.match_awayteam_name}`)
-          })
-        } else if (fixtures.length > 20) {
-          console.log(`   Available fixtures (${fixtures.length} total, showing first 5):`)
-          fixtures.slice(0, 5).forEach(f => {
-            console.log(`     - ${f.match_hometeam_name} vs ${f.match_awayteam_name}`)
-          })
-        }
         continue
       }
 
-      console.log(`✅ Found fixture for ${prediction.home_team} vs ${prediction.away_team}: status=${fixture.match_status}, score=${fixture.match_hometeam_score}-${fixture.match_awayteam_score}, live=${fixture.match_live}`)
-
-      // Parse scores - handle empty strings, null, undefined
-      const homeScoreStr = String(fixture.match_hometeam_score || '').trim()
-      const awayScoreStr = String(fixture.match_awayteam_score || '').trim()
-      const homeScore = homeScoreStr ? parseInt(homeScoreStr, 10) : null
-      const awayScore = awayScoreStr ? parseInt(awayScoreStr, 10) : null
-      const hasValidScores = homeScore !== null && !isNaN(homeScore) && awayScore !== null && !isNaN(awayScore)
-
-      // Check match status - expanded to include more statuses
-      const matchStatus = String(fixture.match_status || '').trim()
-      const matchLive = String(fixture.match_live || '')
+      // Check match status
+      const isFinished = fixture.match_status === 'FT' || 
+                        fixture.match_status === 'AET' || 
+                        fixture.match_status === 'PEN' ||
+                        fixture.match_status === 'Finished' ||
+                        fixture.match_status === 'FT_PEN'
       
-      const isFinished = matchStatus === 'FT' || 
-                        matchStatus === 'AET' || 
-                        matchStatus === 'PEN' ||
-                        matchStatus === 'Finished' ||
-                        matchStatus === 'FT_PEN' ||
-                        matchStatus === 'CANC' ||
-                        matchStatus === 'POSTP' ||
-                        matchStatus === 'SUSP' ||
-                        matchStatus === 'INT' ||
-                        matchStatus === 'ABAN' ||
-                        matchStatus === 'AWARDED' ||
-                        matchStatus === 'WO' ||
-                        matchStatus.includes('FT') ||
-                        matchStatus.includes('Finished') ||
-                        // If we have valid scores and match is not live, consider it finished
-                        (hasValidScores && matchLive !== '1')
-      
-      const isLive = matchStatus === 'LIVE' || 
-                    matchStatus === 'HT' ||
-                    matchStatus === '1H' ||
-                    matchStatus === '2H' ||
-                    matchStatus === 'ET' ||
-                    matchStatus === 'PEN_LIVE' ||
-                    matchLive === '1'
+      const isLive = fixture.match_status === 'LIVE' || 
+                    fixture.match_status === 'HT' ||
+                    fixture.match_status === '1H' ||
+                    fixture.match_status === '2H' ||
+                    fixture.match_live === '1'
 
-      // Update if match is finished or live, OR if we have valid scores (even if status is unclear)
-      if (!isFinished && !isLive && !hasValidScores) {
-        skippedNotFinished++
-        console.log(`⏸️ Match not finished/live and no scores: ${prediction.home_team} vs ${prediction.away_team}, status=${matchStatus}, scores=${homeScoreStr}-${awayScoreStr}`)
+      // Parse scores (use '0' if not available yet)
+      const homeScore = parseInt(fixture.match_hometeam_score || '0', 10)
+      const awayScore = parseInt(fixture.match_awayteam_score || '0', 10)
+
+      // Only update if match is finished or live
+      if (!isFinished && !isLive) {
         continue
       }
 
-      // If we have valid scores, proceed with update even if status is unclear
-      if (hasValidScores) {
-        console.log(`✅ Match has valid scores, proceeding with update: ${prediction.home_team} vs ${prediction.away_team}, scores=${homeScore}-${awayScore}`)
-      } else {
-        skippedNoScores++
-        console.log(`⚠️ No valid scores available: ${prediction.home_team} vs ${prediction.away_team}, score strings=${homeScoreStr}-${awayScoreStr}`)
-        // Still update status even if scores aren't available
-      }
-
-      // Determine result based on prediction type (only if finished and has valid scores)
+      // Determine result based on prediction type (only if finished)
       let result: 'win' | 'loss' | 'pending' | null = null
-      if (isFinished && hasValidScores && homeScore !== null && awayScore !== null) {
+      if (isFinished && !isNaN(homeScore) && !isNaN(awayScore)) {
         result = determineResult(prediction.prediction_type || '', homeScore, awayScore)
-        console.log(`🎯 Determined result for ${prediction.home_team} vs ${prediction.away_team}: ${result} (prediction: ${prediction.prediction_type}, score: ${homeScore}-${awayScore})`)
       } else if (isLive) {
         result = 'pending'
       }
 
-      // Determine status - prioritize finished if we have scores and it's not live
-      const newStatus = isFinished || (hasValidScores && !isLive) ? 'finished' : (isLive ? 'live' : prediction.status)
+      // Determine status
+      const newStatus = isFinished ? 'finished' : (isLive ? 'live' : prediction.status)
 
       // Prepare update object
       const updateData: Database['public']['Tables']['predictions']['Update'] = {
@@ -393,14 +259,13 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString()
       }
 
-      // Update scores if they're available and valid
-      if (hasValidScores && homeScore !== null && awayScore !== null) {
+      // Only update scores if they're available
+      if (!isNaN(homeScore) && !isNaN(awayScore)) {
         updateData.home_score = homeScore
         updateData.away_score = awayScore
-        console.log(`📝 Updating scores: ${homeScore}-${awayScore}`)
       }
 
-      // Only update result if match is finished and we have a result
+      // Only update result if match is finished
       if (result !== null) {
         updateData.result = result
       }
@@ -417,33 +282,11 @@ export async function POST(request: NextRequest) {
       }
 
       updatedCount++
-      console.log(`✅ Updated prediction ${prediction.id}: ${prediction.home_team} vs ${prediction.away_team} - ${homeScore}-${awayScore}, result=${result}`)
-    }
-
-    console.log(`📊 Update summary: ${updatedCount} updated, ${skippedNoFixture} no fixture, ${skippedNotFinished} not finished, ${skippedNoScores} no scores`)
-
-    if (updatedCount === 0) {
-      return NextResponse.json({ 
-        message: `No predictions were updated. ${skippedNoFixture > 0 ? `${skippedNoFixture} had no matching fixtures. ` : ''}${skippedNotFinished > 0 ? `${skippedNotFinished} matches not finished/live. ` : ''}${skippedNoScores > 0 ? `${skippedNoScores} finished matches had no scores.` : ''}`,
-        updated: 0,
-        details: {
-          skippedNoFixture,
-          skippedNotFinished,
-          skippedNoScores,
-          totalPredictions: predictions.length,
-          totalFixtures: fixtures.length
-        }
-      })
     }
 
     return NextResponse.json({ 
       message: `Updated ${updatedCount} prediction(s)`,
-      updated: updatedCount,
-      details: {
-        skippedNoFixture,
-        skippedNotFinished,
-        skippedNoScores
-      }
+      updated: updatedCount 
     })
   } catch (error: any) {
     console.error('Error updating scores:', error)

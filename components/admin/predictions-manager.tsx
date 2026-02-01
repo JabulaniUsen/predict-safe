@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Prediction, Plan } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { Edit, Trash2, MoreVertical, Trophy, CalendarIcon, Target } from 'lucide-react'
+import { Edit, Trash2, MoreVertical, Trophy, CalendarIcon } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,8 +34,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 
 interface PredictionsManagerProps {
   plans: Plan[]
@@ -67,12 +65,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
   const [planToDeleteAll, setPlanToDeleteAll] = useState<{ slug: string; name: string } | null>(null)
   const [teamLogos, setTeamLogos] = useState<TeamLogoCache>({})
   const [addingToVIP, setAddingToVIP] = useState<string | null>(null)
-  const [isAutoUpdating, setIsAutoUpdating] = useState(false)
   const [updatingScores, setUpdatingScores] = useState<Record<string, boolean>>({})
-  const [moveToCorrectScoreDialogOpen, setMoveToCorrectScoreDialogOpen] = useState(false)
-  const [predictionToMove, setPredictionToMove] = useState<Prediction | null>(null)
-  const [scorePrediction, setScorePrediction] = useState('')
-  const [movingToCorrectScore, setMovingToCorrectScore] = useState(false)
   
   // Date filter state - separate for each plan tab
   const [dateFilters, setDateFilters] = useState<Record<string, {
@@ -311,7 +304,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
 
-  // Manual update scores for a specific date/plan
+  // Manual update scores for a specific date
   const updateScoresForDate = async (date: string, planSlug: string) => {
     const key = `${planSlug}-${date}`
     setUpdatingScores(prev => ({ ...prev, [key]: true }))
@@ -333,21 +326,10 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
 
       if (data.updated > 0) {
         toast.success(`Updated ${data.updated} prediction(s) with actual scores`)
+        // Refresh the page to show updated data
         router.refresh()
       } else {
-        const details = data.details || {}
-        let message = data.message || 'No predictions were updated. They may already be up to date or no matches found.'
-        
-        if (details.skippedNoFixture > 0) {
-          message = `${message} ${details.skippedNoFixture} prediction(s) had no matching fixtures.`
-        }
-        if (details.skippedNotFinished > 0) {
-          message = `${message} ${details.skippedNotFinished} match(es) not finished/live yet.`
-        }
-        
-        toast.info(message, {
-          duration: 5000,
-        })
+        toast.info('No predictions were updated. They may already be up to date or no matches found.')
       }
     } catch (error: any) {
       console.error('Error updating scores:', error)
@@ -360,89 +342,6 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
       })
     }
   }
-
-  // Automatic update scores for all visible predictions
-  const autoUpdateScores = async () => {
-    if (isAutoUpdating) return
-    
-    setIsAutoUpdating(true)
-    try {
-      // Get all unique dates from all visible predictions across all tabs
-      const allDates = new Set<string>()
-      
-      // Get dates from regular plans
-      regularPlans.forEach(plan => {
-        const planPreds = getPredictionsForPlan(plan.slug)
-        planPreds.forEach(pred => {
-          const kickoffDate = new Date(pred.kickoff_time).toISOString().split('T')[0]
-          allDates.add(kickoffDate)
-        })
-      })
-      
-      // Get dates from correct score plan
-      if (correctScorePlan) {
-        const correctScorePreds = getPredictionsForPlan('correct-score')
-        correctScorePreds.forEach(pred => {
-          const kickoffDate = new Date(pred.kickoff_time).toISOString().split('T')[0]
-          allDates.add(kickoffDate)
-        })
-      }
-
-      if (allDates.size === 0) {
-        return
-      }
-
-      // Update predictions for each date
-      let hasUpdates = false
-      for (const date of allDates) {
-        try {
-          const response = await fetch('/api/predictions/update-scores', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ date }),
-          })
-
-          const data = await response.json()
-
-          if (response.ok && data.updated > 0) {
-            hasUpdates = true
-          }
-        } catch (error) {
-          console.error(`Error updating scores for date ${date}:`, error)
-        }
-      }
-      
-      // Refresh the page if any updates occurred
-      if (hasUpdates) {
-        router.refresh()
-      }
-    } catch (error: any) {
-      console.error('Error in auto-update:', error)
-    } finally {
-      setIsAutoUpdating(false)
-    }
-  }
-
-  // Auto-update scores periodically and when date filters change
-  useEffect(() => {
-    // Initial update after a short delay to let the component mount
-    const initialTimeout = setTimeout(() => {
-      autoUpdateScores()
-    }, 2000) // Wait 2 seconds before first update
-
-    // Set up periodic updates every 60 seconds
-    const interval = setInterval(() => {
-      autoUpdateScores()
-    }, 60000) // Update every 60 seconds
-
-    return () => {
-      clearTimeout(initialTimeout)
-      clearInterval(interval)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFilters, activeTab])
 
 
   // Helper to get team logo
@@ -562,53 +461,6 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
       toast.error(error.message || 'Failed to add to VIP wins')
     } finally {
       setAddingToVIP(null)
-    }
-  }
-
-  const handleMoveToCorrectScoreClick = (prediction: Prediction) => {
-    setPredictionToMove(prediction)
-    setScorePrediction('')
-    setMoveToCorrectScoreDialogOpen(true)
-  }
-
-  const handleMoveToCorrectScoreConfirm = async () => {
-    if (!predictionToMove || !scorePrediction.trim()) {
-      toast.error('Please enter a valid score prediction (e.g., 2-1)')
-      return
-    }
-
-    // Validate score format (should be like "2-1" or "0-0")
-    const scorePattern = /^\d+-\d+$/
-    if (!scorePattern.test(scorePrediction.trim())) {
-      toast.error('Invalid score format. Please use format like "2-1" or "0-0"')
-      return
-    }
-
-    setMovingToCorrectScore(true)
-    try {
-      const supabase = createClient()
-      
-      // Update the prediction to move it to correct score plan
-      const { error } = await (supabase
-        .from('predictions') as any)
-        .update({
-          plan_type: 'correct_score',
-          prediction_type: scorePrediction.trim(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', predictionToMove.id)
-
-      if (error) throw error
-
-      toast.success('Prediction moved to Correct Score successfully!')
-      setMoveToCorrectScoreDialogOpen(false)
-      setPredictionToMove(null)
-      setScorePrediction('')
-      router.refresh()
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to move prediction to Correct Score')
-    } finally {
-      setMovingToCorrectScore(false)
     }
   }
 
@@ -754,6 +606,11 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                       )
                       const key = `${plan.slug}-${from}`
                       const isUpdating = updatingScores[key]
+                      const today = new Date()
+                      today.setHours(0, 0, 0, 0)
+                      const targetDate = new Date(from)
+                      targetDate.setHours(0, 0, 0, 0)
+                      const isPastDate = targetDate < today
                       
                       return (
                         <Button
@@ -769,7 +626,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                               Updating...
                             </>
                           ) : (
-                            'Update Scores'
+                            'Update'
                           )}
                         </Button>
                       )
@@ -809,7 +666,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                           )}
                         >
                           {/* Time & League */}
-                          <div className="col-span-2 lg:col-span-2">
+                          <div className="col-span-3 lg:col-span-2">
                             <div className="text-xs sm:text-sm font-medium text-gray-900">
                               {formatTime(pred.kickoff_time)}
                             </div>
@@ -951,12 +808,6 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                                 >
                                   <Trophy className="h-4 w-4 mr-2" />
                                   {addingToVIP === pred.id ? 'Adding...' : 'Add to VIP Wins'}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => handleMoveToCorrectScoreClick(pred)}
-                                >
-                                  <Target className="h-4 w-4 mr-2" />
-                                  Move to Correct Score
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
@@ -1110,12 +961,6 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                                     <Trophy className="h-4 w-4 mr-2" />
                                     {addingToVIP === pred.id ? 'Adding...' : 'Add to VIP Wins'}
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => handleMoveToCorrectScoreClick(pred)}
-                                  >
-                                    <Target className="h-4 w-4 mr-2" />
-                                    Move to Correct Score
-                                  </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
                                 onClick={() => handleDeleteClick(pred.id, 'regular')}
@@ -1255,13 +1100,18 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                       )
                       const key = `correct-score-${from}`
                       const isUpdating = updatingScores[key]
+                      const today = new Date()
+                      today.setHours(0, 0, 0, 0)
+                      const targetDate = new Date(from)
+                      targetDate.setHours(0, 0, 0, 0)
+                      const isPastDate = targetDate < today
                       
                       return (
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => updateScoresForDate(from, 'correct-score')}
-                          disabled={isUpdating}
+                          disabled={isUpdating || !isPastDate}
                           className="px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium"
                         >
                           {isUpdating ? (
@@ -1270,7 +1120,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                               Updating...
                             </>
                           ) : (
-                            'Update Scores'
+                            'Update'
                           )}
                         </Button>
                       )
@@ -1689,69 +1539,6 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
               disabled={deletingAll}
             >
               {deletingAll ? 'Deleting All...' : 'Delete All'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Move to Correct Score Dialog */}
-      <Dialog open={moveToCorrectScoreDialogOpen} onOpenChange={setMoveToCorrectScoreDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Move to Correct Score</DialogTitle>
-            <DialogDescription>
-              Move this prediction to the Correct Score plan. Enter the predicted score (e.g., 2-1, 0-0).
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {predictionToMove && (
-              <div className="space-y-2">
-                <div className="text-sm">
-                  <span className="font-medium">Match:</span> {predictionToMove.home_team} vs {predictionToMove.away_team}
-                </div>
-                <div className="text-sm">
-                  <span className="font-medium">Current Plan:</span> {predictionToMove.plan_type}
-                </div>
-                <div className="text-sm">
-                  <span className="font-medium">Current Prediction:</span> {predictionToMove.prediction_type}
-                </div>
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="score-prediction">Score Prediction</Label>
-              <Input
-                id="score-prediction"
-                placeholder="e.g., 2-1"
-                value={scorePrediction}
-                onChange={(e) => setScorePrediction(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleMoveToCorrectScoreConfirm()
-                  }
-                }}
-              />
-              <p className="text-xs text-muted-foreground">
-                Enter the predicted score in format: home-away (e.g., 2-1, 0-0, 3-2)
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setMoveToCorrectScoreDialogOpen(false)
-                setPredictionToMove(null)
-                setScorePrediction('')
-              }}
-              disabled={movingToCorrectScore}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleMoveToCorrectScoreConfirm}
-              disabled={movingToCorrectScore || !scorePrediction.trim()}
-            >
-              {movingToCorrectScore ? 'Moving...' : 'Move to Correct Score'}
             </Button>
           </DialogFooter>
         </DialogContent>
