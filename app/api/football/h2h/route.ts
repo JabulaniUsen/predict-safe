@@ -31,7 +31,11 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json()
-    return NextResponse.json(data)
+    return NextResponse.json(data, {
+      headers: {
+        'Cache-Control': 's-maxage=3600, stale-while-revalidate=86400',
+      },
+    })
   } catch (error: any) {
     console.error('API Football H2H Error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })

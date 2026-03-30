@@ -35,24 +35,25 @@ export async function GET(request: NextRequest) {
     
     // API Football might return an object with standings array, or the array directly
     // Handle both cases
+    const cacheHeaders = {
+      headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=600' },
+    }
+
     if (Array.isArray(data)) {
-      return NextResponse.json(data)
+      return NextResponse.json(data, cacheHeaders)
     } else if (data && Array.isArray(data.standings)) {
-      return NextResponse.json(data.standings)
+      return NextResponse.json(data.standings, cacheHeaders)
     } else if (data && typeof data === 'object') {
-      // Try to find any array in the response
       const standingsArray = Object.values(data).find((val: any) => Array.isArray(val))
       if (standingsArray) {
-        return NextResponse.json(standingsArray)
+        return NextResponse.json(standingsArray, cacheHeaders)
       }
-      // Check if there's an error message
       if (data.error || data.message) {
         console.error('API Football Error:', data.error || data.message)
         return NextResponse.json([])
       }
     }
-    
-    // If no array found, return empty array
+
     return NextResponse.json([])
   } catch (error: any) {
     console.error('API Football Error:', error)

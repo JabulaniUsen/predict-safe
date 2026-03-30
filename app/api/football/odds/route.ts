@@ -29,8 +29,11 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json()
-    console.log('API Football Odds Response:', JSON.stringify(data).substring(0, 500))
-    return NextResponse.json(data)
+    return NextResponse.json(data, {
+      headers: {
+        'Cache-Control': 's-maxage=300, stale-while-revalidate=600',
+      },
+    })
   } catch (error: any) {
     console.error('API Football Error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })

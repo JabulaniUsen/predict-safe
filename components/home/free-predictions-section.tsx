@@ -138,7 +138,7 @@ export function FreePredictionsSection() {
         // For "all" filter, we need to collect all predictions from all filters
         if (selectedFilter === 'all') {
           // Limit fixtures to process (increase to ensure we find enough matches with specific odds)
-          const fixturesToProcess = fixtures.slice(0, 30)
+          const fixturesToProcess = fixtures.slice(0, 15)
           
           // Fetch all odds in parallel
           const oddsPromises = fixturesToProcess.map(async (fixture) => {
@@ -220,7 +220,7 @@ export function FreePredictionsSection() {
           // Increase buffer to find enough matches with the odds criteria
           // For safe free picks, use larger buffer to ensure we get minimum 5 games
           // Process more fixtures to account for filtering (odds range, prediction types)
-          const buffer = selectedFilter === 'free' ? 50 : 10
+          const buffer = selectedFilter === 'free' ? 20 : 10
           const fixturesToProcess = fixtures.slice(0, maxPredictions + buffer)
           
           // Fetch all odds in parallel for the fixtures we need
