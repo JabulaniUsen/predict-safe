@@ -37,17 +37,32 @@ export async function GET(request: NextRequest) {
     const url = `${BASE_URL}/?${queryParams.toString()}`
     console.log('API Football Fixtures URL:', url)
 
-    const response = await fetch(url, {
-      next: { revalidate: 300 }, // Cache for 5 minutes
-    })
+    // Add timeout to prevent hanging requests (30 seconds)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000)
 
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.statusText}`)
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        next: { revalidate: 300 }, // Cache for 5 minutes
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      console.log('API Football Fixtures Response:', JSON.stringify(data).substring(0, 500))
+      return NextResponse.json(data)
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId)
+      if (fetchError.name === 'AbortError') {
+        throw new Error('Request timeout: The API took too long to respond (30s limit)')
+      }
+      throw fetchError
     }
-
-    const data = await response.json()
-    console.log('API Football Fixtures Response:', JSON.stringify(data).substring(0, 500))
-    return NextResponse.json(data)
   } catch (error: any) {
     console.error('API Football Error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
