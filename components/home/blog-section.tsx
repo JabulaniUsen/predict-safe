@@ -23,7 +23,7 @@ export function BlogSection() {
         .eq('published', true)
         .not('published_at', 'is', null)
         .order('published_at', { ascending: false })
-        .limit(6)
+        .limit(3)
 
       if (error) {
         console.error('Error fetching posts:', error)
@@ -72,7 +72,7 @@ export function BlogSection() {
           <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1 lg:mb-2 text-[#1e40af] text-center">Latest Blog Posts</h2>
           <p className="text-sm lg:text-base text-gray-600 text-center">Stay updated with our latest insights and tips</p>
         </div>
-        <div className="grid gap-4 lg:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 lg:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mb-8">
           {posts.map((post) => {
             // Parse featured_image if it's JSON, otherwise use as URL
             let imageUrl = post.featured_image || ''
@@ -118,12 +118,24 @@ export function BlogSection() {
                   asChild 
                   className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] hover:from-[#1e3a8a] hover:to-[#1e40af] text-white font-bold text-xs lg:text-sm w-full"
                 >
-                  <Link href={`/blog/${post.id}`}>Read More</Link>
+                  <a href={`/blog/${post.id}`} target="_blank" rel="noopener noreferrer">Read More</a>
                 </Button>
               </CardContent>
             </Card>
             )
           })}
+        </div>
+        <div className="text-center">
+          <Button
+            asChild
+            size="lg"
+            variant="outline"
+            className="border-2 border-[#1e40af] text-[#1e40af] hover:bg-[#1e40af] hover:text-white font-bold px-8 transition-all duration-300"
+          >
+            <a href="/blog" target="_blank" rel="noopener noreferrer">
+              See More Posts
+            </a>
+          </Button>
         </div>
       </div>
     </section>

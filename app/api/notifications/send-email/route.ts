@@ -2,6 +2,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendEmail, emailTemplates } from '@/lib/email'
 
+// Simple in-memory rate limiter: max 10 emails per user per minute
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
+const RATE_LIMIT_MAX = 10
+const RATE_LIMIT_WINDOW_MS = 60 * 1000
+
+function isRateLimited(userId: string): boolean {
+  const now = Date.now()
+  const record = rateLimitMap.get(userId)
+
+  if (!record || now > record.resetAt) {
+    rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS })
+    return false
+  }
+
+  if (record.count >= RATE_LIMIT_MAX) {
+    return true
+  }
+
+  record.count++
+  return false
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -9,6 +31,10 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    if (isRateLimited(user.id)) {
+      return NextResponse.json({ error: 'Rate limit exceeded. Try again later.' }, { status: 429 })
     }
 
     const body = await request.json()

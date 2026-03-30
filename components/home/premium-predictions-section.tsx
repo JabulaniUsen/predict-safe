@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Lock, CalendarIcon } from 'lucide-react'
+import { Lock, CalendarIcon, Loader2 } from 'lucide-react'
 import { Prediction, CorrectScorePrediction } from '@/types'
 import { formatTime, getDateRange } from '@/lib/utils/date'
 import { CircularProgress } from '@/components/ui/circular-progress'
@@ -592,7 +592,7 @@ export function PremiumPredictionsSection() {
                       <Button
                         variant="outline"
                         className={cn(
-                          "px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all justify-start text-left font-normal bg-gray-800 border-gray-700 text-gray-400 hover:text-yellow-400 hover:bg-gray-700",
+                          "px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all justify-start text-left bg-gray-800 border-gray-700 text-gray-400 hover:text-yellow-400 hover:bg-gray-700",
                           (profitMultiplierCustomDate || profitMultiplierDateType === 'custom') && "bg-yellow-500 text-black shadow-lg shadow-yellow-500/50 border-yellow-500"
                         )}
                       >
@@ -608,7 +608,7 @@ export function PremiumPredictionsSection() {
                           if (date) {
                             setProfitMultiplierCustomDate(format(date, 'yyyy-MM-dd'))
                             setProfitMultiplierDateType('custom')
-                            setProfitMultiplierDaysBack(0)
+                            setProfitMultiplierDaysBack(1)
                           }
                         }}
                         initialFocus
@@ -618,28 +618,44 @@ export function PremiumPredictionsSection() {
                   </Popover>
                   <button
                     onClick={() => {
-                      setProfitMultiplierDateType('today')
+                      setProfitMultiplierDateType('previous')
                       setProfitMultiplierCustomDate('')
-                      setProfitMultiplierDaysBack(0)
+                      setProfitMultiplierDaysBack(1)
                     }}
-                    className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${profitMultiplierDateType === 'today'
+                    className={`flex items-center gap-1 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${profitMultiplierDateType === 'previous'
                         ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/50'
                         : 'text-gray-400 hover:text-yellow-400 hover:bg-gray-700'
                       }`}
                   >
+                    {loading && profitMultiplierDateType === 'previous' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                    Yesterday
+                  </button>
+                  <button
+                    onClick={() => {
+                      setProfitMultiplierDateType('today')
+                      setProfitMultiplierCustomDate('')
+                      setProfitMultiplierDaysBack(1)
+                    }}
+                    className={`flex items-center gap-1 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${profitMultiplierDateType === 'today'
+                        ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/50'
+                        : 'text-gray-400 hover:text-yellow-400 hover:bg-gray-700'
+                      }`}
+                  >
+                    {loading && profitMultiplierDateType === 'today' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                     Today
                   </button>
                   <button
                     onClick={() => {
                       setProfitMultiplierDateType('tomorrow')
                       setProfitMultiplierCustomDate('')
-                      setProfitMultiplierDaysBack(0)
+                      setProfitMultiplierDaysBack(1)
                     }}
-                    className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${profitMultiplierDateType === 'tomorrow'
+                    className={`flex items-center gap-1 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${profitMultiplierDateType === 'tomorrow'
                         ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/50'
                         : 'text-gray-400 hover:text-yellow-400 hover:bg-gray-700'
                       }`}
                   >
+                    {loading && profitMultiplierDateType === 'tomorrow' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                     Tomorrow
                   </button>
                 </div>
@@ -953,7 +969,7 @@ export function PremiumPredictionsSection() {
                       <Button
                         variant="outline"
                         className={cn(
-                          "px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all justify-start text-left font-normal bg-gray-800 border-gray-700 text-gray-400 hover:text-yellow-400 hover:bg-gray-700",
+                          "px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all justify-start text-left bg-gray-800 border-gray-700 text-gray-400 hover:text-yellow-400 hover:bg-gray-700",
                           (correctScoreCustomDate || correctScoreDateType === 'custom') && "bg-yellow-500 text-black shadow-lg shadow-yellow-500/50 border-yellow-500"
                         )}
                       >
@@ -969,7 +985,7 @@ export function PremiumPredictionsSection() {
                           if (date) {
                             setCorrectScoreCustomDate(format(date, 'yyyy-MM-dd'))
                             setCorrectScoreDateType('custom')
-                            setCorrectScoreDaysBack(0)
+                            setCorrectScoreDaysBack(1)
                           }
                         }}
                         initialFocus
@@ -979,28 +995,44 @@ export function PremiumPredictionsSection() {
                   </Popover>
                   <button
                     onClick={() => {
-                      setCorrectScoreDateType('today')
+                      setCorrectScoreDateType('previous')
                       setCorrectScoreCustomDate('')
-                      setCorrectScoreDaysBack(0)
+                      setCorrectScoreDaysBack(1)
                     }}
-                    className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${correctScoreDateType === 'today'
+                    className={`flex items-center gap-1 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${correctScoreDateType === 'previous'
                         ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/50'
                         : 'text-gray-400 hover:text-yellow-400 hover:bg-gray-700'
                       }`}
                   >
+                    {loading && correctScoreDateType === 'previous' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                    Yesterday
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCorrectScoreDateType('today')
+                      setCorrectScoreCustomDate('')
+                      setCorrectScoreDaysBack(1)
+                    }}
+                    className={`flex items-center gap-1 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${correctScoreDateType === 'today'
+                        ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/50'
+                        : 'text-gray-400 hover:text-yellow-400 hover:bg-gray-700'
+                      }`}
+                  >
+                    {loading && correctScoreDateType === 'today' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                     Today
                   </button>
                   <button
                     onClick={() => {
                       setCorrectScoreDateType('tomorrow')
                       setCorrectScoreCustomDate('')
-                      setCorrectScoreDaysBack(0)
+                      setCorrectScoreDaysBack(1)
                     }}
-                    className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${correctScoreDateType === 'tomorrow'
+                    className={`flex items-center gap-1 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${correctScoreDateType === 'tomorrow'
                         ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/50'
                         : 'text-gray-400 hover:text-yellow-400 hover:bg-gray-700'
                       }`}
                   >
+                    {loading && correctScoreDateType === 'tomorrow' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                     Tomorrow
                   </button>
                 </div>

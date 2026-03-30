@@ -6,10 +6,11 @@ import { Color } from '@tiptap/extension-color'
 import TextAlign from '@tiptap/extension-text-align'
 import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
-import { 
-  Bold, 
-  Italic, 
-  Underline, 
+import FontFamily from '@tiptap/extension-font-family'
+import {
+  Bold,
+  Italic,
+  Underline,
   Strikethrough,
   Heading1,
   Heading2,
@@ -25,10 +26,23 @@ import {
   AlignRight,
   Undo,
   Redo,
-  Palette
+  Palette,
+  Type
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { TextStyle } from '@tiptap/extension-text-style'
+
+const FONTS = [
+  { label: 'Default', value: '' },
+  { label: 'Rajdhani', value: 'Rajdhani, sans-serif' },
+  { label: 'Georgia', value: 'Georgia, serif' },
+  { label: 'Times New Roman', value: '"Times New Roman", Times, serif' },
+  { label: 'Arial', value: 'Arial, Helvetica, sans-serif' },
+  { label: 'Verdana', value: 'Verdana, Geneva, sans-serif' },
+  { label: 'Trebuchet MS', value: '"Trebuchet MS", sans-serif' },
+  { label: 'Courier New', value: '"Courier New", Courier, monospace' },
+  { label: 'Impact', value: 'Impact, Charcoal, sans-serif' },
+]
 
 interface RichTextEditorProps {
   value: string
@@ -47,6 +61,7 @@ export function RichTextEditor({ value, onChange, placeholder }: RichTextEditorP
       }),
       TextStyle,
       Color,
+      FontFamily,
       TextAlign.configure({
         types: ['heading', 'paragraph'],
       }),
@@ -105,6 +120,29 @@ export function RichTextEditor({ value, onChange, placeholder }: RichTextEditorP
     <div className="rich-text-editor border-2 border-gray-200 rounded-lg overflow-hidden">
       {/* Toolbar */}
       <div className="bg-gray-50 border-b border-gray-200 p-2 flex flex-wrap gap-1">
+        {/* Font Family */}
+        <div className="flex items-center gap-1 border-r border-gray-300 pr-2 mr-2">
+          <Type className="h-4 w-4 text-gray-500 ml-1" />
+          <select
+            value={editor.getAttributes('textStyle').fontFamily || ''}
+            onChange={(e) => {
+              if (e.target.value) {
+                editor.chain().focus().setFontFamily(e.target.value).run()
+              } else {
+                editor.chain().focus().unsetFontFamily().run()
+              }
+            }}
+            className="h-8 text-xs border border-gray-300 rounded px-1 bg-white cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 max-w-[130px]"
+            title="Font Family"
+          >
+            {FONTS.map((font) => (
+              <option key={font.label} value={font.value} style={{ fontFamily: font.value || 'inherit' }}>
+                {font.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Text Formatting */}
         <div className="flex items-center gap-1 border-r border-gray-300 pr-2 mr-2">
           <Button

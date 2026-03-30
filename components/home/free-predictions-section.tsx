@@ -13,7 +13,7 @@ import Image from 'next/image'
 import { cn } from '@/lib/utils'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { CalendarIcon } from 'lucide-react'
+import { CalendarIcon, Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
 
 const FILTERS = [
@@ -75,7 +75,7 @@ export function FreePredictionsSection() {
   const [selectedFilter, setSelectedFilter] = useState(getInitialFilter)
   const [dateType, setDateType] = useState<'previous' | 'today' | 'tomorrow' | 'custom'>('today')
   const [customDate, setCustomDate] = useState<string>('')
-  const [daysBack, setDaysBack] = useState<number>(0) // Track how many days back from today
+  const [daysBack, setDaysBack] = useState<number>(1) // 1 = yesterday when dateType is 'previous'
   const [loading, setLoading] = useState(true)
 
   // Update URL when filter changes
@@ -486,16 +486,6 @@ export function FreePredictionsSection() {
     return new Date()
   }
 
-  const handleDateChange = (direction: 'previous' | 'next') => {
-    if (direction === 'previous') {
-      if (dateType === 'today') setDateType('previous')
-      else if (dateType === 'tomorrow') setDateType('today')
-    } else {
-      if (dateType === 'today') setDateType('tomorrow')
-      else if (dateType === 'previous') setDateType('today')
-    }
-  }
-
   return (
     <section className="py-4 lg:py-8 bg-white">
       <div className="container mx-auto px-4">
@@ -561,7 +551,7 @@ export function FreePredictionsSection() {
                     if (date) {
                       setCustomDate(format(date, 'yyyy-MM-dd'))
                       setDateType('custom')
-                      setDaysBack(0)
+                      setDaysBack(1)
                     }
                   }}
                   initialFocus
@@ -570,28 +560,44 @@ export function FreePredictionsSection() {
             </Popover>
             <button
               onClick={() => {
-                setDateType('today')
+                setDateType('previous')
                 setCustomDate('')
-                setDaysBack(0)
+                setDaysBack(1)
               }}
-              className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'today'
+              className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'previous'
                   ? 'bg-[#1e40af] text-white shadow-sm'
                   : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
               }`}
             >
+              {loading && dateType === 'previous' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+              Yesterday
+            </button>
+            <button
+              onClick={() => {
+                setDateType('today')
+                setCustomDate('')
+                setDaysBack(1)
+              }}
+              className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'today'
+                  ? 'bg-[#1e40af] text-white shadow-sm'
+                  : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
+              }`}
+            >
+              {loading && dateType === 'today' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
               Today
             </button>
             <button
               onClick={() => {
                 setDateType('tomorrow')
                 setCustomDate('')
-                setDaysBack(0)
+                setDaysBack(1)
               }}
-              className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'tomorrow'
+              className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'tomorrow'
                   ? 'bg-[#1e40af] text-white shadow-sm'
                   : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
               }`}
             >
+              {loading && dateType === 'tomorrow' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
               Tomorrow
             </button>
           </div>
@@ -634,7 +640,7 @@ export function FreePredictionsSection() {
                 <Button
                   variant="outline"
                   className={cn(
-                    "px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all justify-start text-left font-normal",
+                    "px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all justify-start text-left",
                     !customDate && dateType !== 'custom' && "text-gray-600 hover:text-[#1e40af] hover:bg-white",
                     (customDate || dateType === 'custom') && "bg-[#1e40af] text-white shadow-sm"
                   )}
@@ -651,7 +657,7 @@ export function FreePredictionsSection() {
                     if (date) {
                       setCustomDate(format(date, 'yyyy-MM-dd'))
                       setDateType('custom')
-                      setDaysBack(0)
+                      setDaysBack(1)
                     }
                   }}
                   initialFocus
@@ -660,28 +666,44 @@ export function FreePredictionsSection() {
             </Popover>
             <button
               onClick={() => {
-                setDateType('today')
+                setDateType('previous')
                 setCustomDate('')
-                setDaysBack(0)
+                setDaysBack(1)
               }}
-              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'today'
+              className={`flex items-center gap-1 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'previous'
                   ? 'bg-[#1e40af] text-white shadow-sm'
                   : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
               }`}
             >
+              {loading && dateType === 'previous' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+              Yesterday
+            </button>
+            <button
+              onClick={() => {
+                setDateType('today')
+                setCustomDate('')
+                setDaysBack(1)
+              }}
+              className={`flex items-center gap-1 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'today'
+                  ? 'bg-[#1e40af] text-white shadow-sm'
+                  : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
+              }`}
+            >
+              {loading && dateType === 'today' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
               Today
             </button>
             <button
               onClick={() => {
                 setDateType('tomorrow')
                 setCustomDate('')
-                setDaysBack(0)
+                setDaysBack(1)
               }}
-              className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'tomorrow'
+              className={`flex items-center gap-1 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${dateType === 'tomorrow'
                   ? 'bg-[#1e40af] text-white shadow-sm'
                   : 'text-gray-600 hover:text-[#1e40af] hover:bg-white'
               }`}
             >
+              {loading && dateType === 'tomorrow' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
               Tomorrow
             </button>
           </div>

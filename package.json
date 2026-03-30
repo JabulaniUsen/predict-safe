@@ -29,6 +29,7 @@
     "@supabase/supabase-js": "^2.84.0",
     "@tailwindcss/typography": "^0.5.19",
     "@tiptap/extension-color": "^3.11.0",
+    "@tiptap/extension-font-family": "^3.21.0",
     "@tiptap/extension-image": "^3.11.0",
     "@tiptap/extension-link": "^3.11.0",
     "@tiptap/extension-text-align": "^3.11.0",

@@ -44,6 +44,17 @@ export async function sendEmail({ to, subject, html, text }: EmailOptions) {
   }
 }
 
+// Prevent XSS by escaping user-supplied strings before interpolating into HTML
+function escapeHtml(str: string | null | undefined): string {
+  if (!str) return ''
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
 // Email templates
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
 const BRAND_COLORS = {
@@ -156,7 +167,9 @@ const getEmailStyles = (headerColor: string, headerColorDark: string, buttonColo
 const baseStyles = getEmailStyles(BRAND_COLORS.primary, BRAND_COLORS.primaryDark)
 
 export const emailTemplates = {
-  userWelcome: (fullName?: string | null) => ({
+  userWelcome: (fullName?: string | null) => {
+    const safeName = escapeHtml(fullName)
+    return ({
     subject: 'Welcome to PredictSafe!',
     html: `
       <!DOCTYPE html>
@@ -170,10 +183,10 @@ export const emailTemplates = {
           <div style="padding: 20px;">
             <div class="email-wrapper">
             <div class="header">
-                <h1>👋 Welcome${fullName ? `, ${fullName}` : ''}!</h1>
+                <h1>👋 Welcome${safeName ? `, ${safeName}` : ''}!</h1>
             </div>
             <div class="content">
-              <p>Hello${fullName ? ` ${fullName}` : ''},</p>
+              <p>Hello${safeName ? ` ${safeName}` : ''},</p>
                 <p>Thank you for signing up to <strong style="color: ${BRAND_COLORS.primary};">PredictSafe</strong>.</p>
               <p>You're all set to start exploring premium predictions, VIP plans, and tools to help you win more consistently.</p>
                 <div style="text-align: center;">
@@ -189,14 +202,16 @@ export const emailTemplates = {
         </body>
       </html>
     `,
-  }),
+  })},
 
   subscriptionCreated: (planName: string, userName?: string, planType?: string, currency?: string, amount?: string | number, duration?: number) => {
+    const safePlanName = escapeHtml(planName)
+    const safeUserName = escapeHtml(userName)
     const currencySymbol = currency ? (currency === 'ZAR' ? 'R' : currency === 'NGN' ? '₦' : currency === 'GHS' ? '₵' : currency === 'KES' ? 'KSh' : currency === 'USD' ? '$' : currency) : ''
     const formattedAmount = amount ? (typeof amount === 'number' ? amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : amount) : ''
     const durationText = duration === 7 ? 'Weekly' : duration === 30 ? 'Monthly' : duration ? `${duration} days` : ''
     const planTypeText = planType ? planType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : ''
-    
+
     return {
       subject: `Subscription Created - ${planName}`,
       html: `
@@ -214,10 +229,10 @@ export const emailTemplates = {
                 <h1>📦 Subscription Created</h1>
               </div>
               <div class="content">
-                <p>Hello${userName ? ` ${userName}` : ''},</p>
+                <p>Hello${safeUserName ? ` ${safeUserName}` : ''},</p>
                 <p>Your subscription request has been received and is <strong>pending admin approval</strong>.</p>
                 <div class="info-box">
-                  <p><strong>Plan Name:</strong> ${planName}</p>
+                  <p><strong>Plan Name:</strong> ${safePlanName}</p>
                   ${planTypeText ? `<p><strong>Plan Type:</strong> ${planTypeText}</p>` : ''}
                   ${durationText ? `<p><strong>Duration:</strong> ${durationText}</p>` : ''}
                   ${amount && currency ? `<p><strong>Amount:</strong> ${currencySymbol}${formattedAmount} ${currency}</p>` : ''}
@@ -236,7 +251,9 @@ export const emailTemplates = {
     }
   },
 
-  predictionDropped: (planName: string) => ({
+  predictionDropped: (planName: string) => {
+    const safePlanName = escapeHtml(planName)
+    return ({
     subject: `New Predictions Available for ${planName}!`,
     html: `
       <!DOCTYPE html>
@@ -254,7 +271,7 @@ export const emailTemplates = {
             </div>
             <div class="content">
               <p>Hello,</p>
-                <p>Great news! Predictions for <strong style="color: ${BRAND_COLORS.primary};">${planName}</strong> have just been dropped!</p>
+                <p>Great news! Predictions for <strong style="color: ${BRAND_COLORS.primary};">${safePlanName}</strong> have just been dropped!</p>
               <p>Don't miss out on these opportunities. Log in to your dashboard to view all the latest predictions.</p>
                 <div style="text-align: center;">
                   <a href="${SITE_URL}/dashboard/predictions" class="button">View Predictions</a>
@@ -269,9 +286,11 @@ export const emailTemplates = {
         </body>
       </html>
     `,
-  }),
+  })},
 
-  subscriptionConfirmed: (planName: string) => ({
+  subscriptionConfirmed: (planName: string) => {
+    const safePlanName = escapeHtml(planName)
+    return ({
     subject: `Subscription Confirmed - ${planName}`,
     html: `
       <!DOCTYPE html>
@@ -289,7 +308,7 @@ export const emailTemplates = {
             </div>
             <div class="content">
               <p>Hello,</p>
-                <p>Your subscription for <strong style="color: ${BRAND_COLORS.green};">${planName}</strong> has been confirmed and is now active!</p>
+                <p>Your subscription for <strong style="color: ${BRAND_COLORS.green};">${safePlanName}</strong> has been confirmed and is now active!</p>
               <p>You can now access all the premium features and predictions for your plan.</p>
                 <div style="text-align: center;">
                   <a href="${SITE_URL}/dashboard" class="button">Go to Dashboard</a>
@@ -304,9 +323,11 @@ export const emailTemplates = {
         </body>
       </html>
     `,
-  }),
+  })},
 
-  subscriptionExpired: (planName: string) => ({
+  subscriptionExpired: (planName: string) => {
+    const safePlanName = escapeHtml(planName)
+    return ({
     subject: `Subscription Expired - ${planName}`,
     html: `
       <!DOCTYPE html>
@@ -324,7 +345,7 @@ export const emailTemplates = {
             </div>
             <div class="content">
               <p>Hello,</p>
-                <p>Your subscription for <strong style="color: ${BRAND_COLORS.orange};">${planName}</strong> has expired.</p>
+                <p>Your subscription for <strong style="color: ${BRAND_COLORS.orange};">${safePlanName}</strong> has expired.</p>
               <p>To continue enjoying our premium predictions and features, please renew your subscription.</p>
                 <div style="text-align: center;">
                   <a href="${SITE_URL}/subscribe" class="button">Renew Subscription</a>
@@ -339,9 +360,11 @@ export const emailTemplates = {
         </body>
       </html>
     `,
-  }),
+  })},
 
-  subscriptionRemoved: (planName: string) => ({
+  subscriptionRemoved: (planName: string) => {
+    const safePlanName = escapeHtml(planName)
+    return ({
     subject: `Subscription Removed - ${planName}`,
     html: `
       <!DOCTYPE html>
@@ -359,7 +382,7 @@ export const emailTemplates = {
             </div>
             <div class="content">
               <p>Hello,</p>
-                <p>Your subscription for <strong style="color: ${BRAND_COLORS.red};">${planName}</strong> has been removed.</p>
+                <p>Your subscription for <strong style="color: ${BRAND_COLORS.red};">${safePlanName}</strong> has been removed.</p>
               <p>Please renew your subscription to get back on track and continue accessing premium predictions.</p>
                 <div style="text-align: center;">
                   <a href="${SITE_URL}/subscribe" class="button">Renew Subscription</a>
@@ -374,9 +397,13 @@ export const emailTemplates = {
         </body>
       </html>
     `,
-  }),
+  })},
 
-  adminNewSubscription: (userEmail: string, userName: string, planName: string) => ({
+  adminNewSubscription: (userEmail: string, userName: string, planName: string) => {
+    const safePlanName = escapeHtml(planName)
+    const safeUserName = escapeHtml(userName)
+    const safeUserEmail = escapeHtml(userEmail)
+    return ({
     subject: `New Subscription - ${planName}`,
     html: `
       <!DOCTYPE html>
@@ -399,9 +426,9 @@ export const emailTemplates = {
               <p>Hello Admin,</p>
               <p>A new subscription has been created:</p>
               <div class="info-box">
-                <p><strong>User:</strong> ${userName || userEmail}</p>
-                <p><strong>Email:</strong> ${userEmail}</p>
-                <p><strong>Plan:</strong> ${planName}</p>
+                <p><strong>User:</strong> ${safeUserName || safeUserEmail}</p>
+                <p><strong>Email:</strong> ${safeUserEmail}</p>
+                <p><strong>Plan:</strong> ${safePlanName}</p>
               </div>
               </div>
               <div class="footer">
@@ -413,9 +440,11 @@ export const emailTemplates = {
         </body>
       </html>
     `,
-  }),
+  })},
 
-  paymentApproved: (planName: string) => ({
+  paymentApproved: (planName: string) => {
+    const safePlanName = escapeHtml(planName)
+    return ({
     subject: `Payment Approved - ${planName}`,
     html: `
       <!DOCTYPE html>
@@ -433,7 +462,7 @@ export const emailTemplates = {
             </div>
             <div class="content">
               <p>Hello,</p>
-                <p>Great news! Your payment for <strong style="color: ${BRAND_COLORS.green};">${planName}</strong> has been approved and your subscription is now active!</p>
+                <p>Great news! Your payment for <strong style="color: ${BRAND_COLORS.green};">${safePlanName}</strong> has been approved and your subscription is now active!</p>
               <p>You can now access all premium features and predictions for your plan.</p>
                 <div style="text-align: center;">
                   <a href="${SITE_URL}/dashboard" class="button">Go to Dashboard</a>
@@ -448,14 +477,17 @@ export const emailTemplates = {
         </body>
       </html>
     `,
-  }),
+  })},
 
   adminNewPayment: (userEmail: string, userName: string, planName: string, amount: string | number, currency: string, planType?: string, duration?: number) => {
+    const safePlanName = escapeHtml(planName)
+    const safeUserName = escapeHtml(userName)
+    const safeUserEmail = escapeHtml(userEmail)
     const currencySymbol = currency === 'ZAR' ? 'R' : currency === 'NGN' ? '₦' : currency === 'GHS' ? '₵' : currency === 'KES' ? 'KSh' : currency === 'USD' ? '$' : currency
     const formattedAmount = typeof amount === 'number' ? amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : amount
     const durationText = duration === 7 ? 'Weekly' : duration === 30 ? 'Monthly' : duration ? `${duration} days` : ''
     const planTypeText = planType ? planType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : ''
-    
+
     return {
       subject: `New Payment Submitted - ${planName}`,
       html: `
@@ -476,9 +508,9 @@ export const emailTemplates = {
                 <p>Hello Admin,</p>
                 <p>A new payment has been submitted and requires your review:</p>
                 <div class="info-box">
-                  <p><strong>User Name:</strong> ${userName || 'N/A'}</p>
-                  <p><strong>Email:</strong> ${userEmail}</p>
-                  <p><strong>Plan Name:</strong> ${planName}</p>
+                  <p><strong>User Name:</strong> ${safeUserName || 'N/A'}</p>
+                  <p><strong>Email:</strong> ${safeUserEmail}</p>
+                  <p><strong>Plan Name:</strong> ${safePlanName}</p>
                   ${planTypeText ? `<p><strong>Plan Type:</strong> ${planTypeText}</p>` : ''}
                   ${durationText ? `<p><strong>Duration:</strong> ${durationText}</p>` : ''}
                   <p><strong>Amount:</strong> ${currencySymbol}${formattedAmount} (${currency})</p>
@@ -500,7 +532,10 @@ export const emailTemplates = {
     }
   },
 
-  paymentRejected: (planName: string, reason?: string) => ({
+  paymentRejected: (planName: string, reason?: string) => {
+    const safePlanName = escapeHtml(planName)
+    const safeReason = escapeHtml(reason)
+    return ({
     subject: `Payment Rejected - ${planName}`,
     html: `
       <!DOCTYPE html>
@@ -521,11 +556,11 @@ export const emailTemplates = {
             </div>
             <div class="content">
               <p>Hello,</p>
-                <p>We regret to inform you that your payment for <strong style="color: ${BRAND_COLORS.red};">${planName}</strong> has been rejected.</p>
-              ${reason ? `
+                <p>We regret to inform you that your payment for <strong style="color: ${BRAND_COLORS.red};">${safePlanName}</strong> has been rejected.</p>
+              ${safeReason ? `
               <div class="alert-box">
                 <p><strong>Reason:</strong></p>
-                <p>${reason}</p>
+                <p>${safeReason}</p>
               </div>
               ` : ''}
               <p>If you believe this is an error, please contact our support team with your payment proof for review.</p>
@@ -544,6 +579,6 @@ export const emailTemplates = {
         </body>
       </html>
     `,
-  }),
+  })},
 }
 

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { sendEmail, emailTemplates } from '@/lib/email'
 
 export type NotificationType = 
   | 'prediction_dropped'
@@ -19,6 +20,9 @@ interface CreateNotificationParams {
   message: string
   sendEmail?: boolean
   planName?: string
+  /** Email address the notification email is sent TO. Falls back to the userId's email if omitted. */
+  recipientEmail?: string
+  /** Subscriber email used in admin-facing templates as context info. */
   userEmail?: string
   userName?: string
 }
@@ -30,6 +34,7 @@ export async function createNotification({
   message,
   sendEmail: shouldSendEmail = true,
   planName,
+  recipientEmail,
   userEmail,
   userName,
 }: CreateNotificationParams) {
@@ -38,14 +43,13 @@ export async function createNotification({
   // Create notification in database
   const { data: notification, error } = await supabase
     .from('notifications')
-    // @ts-expect-error - Supabase type inference issue
     .insert({
       user_id: userId,
       type,
       title,
       message,
       read: false,
-    })
+    } as any)
     .select()
     .single()
 
@@ -54,28 +58,54 @@ export async function createNotification({
     return { success: false, error }
   }
 
-  // Send email if requested
+  // Send email directly — no HTTP round-trip to own API
   if (shouldSendEmail) {
-    try {
-      const emailResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/notifications/send-email`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          type,
-          userId,
-          planName,
-          userEmail,
-          userName,
-        }),
-      })
+    // Determine recipient: explicit recipientEmail > userEmail > look up from DB
+    let toEmail = recipientEmail || userEmail
+    if (!toEmail) {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('email')
+        .eq('id', userId)
+        .single()
+      toEmail = (userData as any)?.email
+    }
 
-      if (!emailResponse.ok) {
-        console.error('Failed to send notification email')
+    if (toEmail) {
+      let emailData: { subject: string; html: string } | null = null
+
+      switch (type) {
+        case 'user_welcome':
+          emailData = emailTemplates.userWelcome(userName)
+          break
+        case 'prediction_dropped':
+          if (planName) emailData = emailTemplates.predictionDropped(planName)
+          break
+        case 'subscription_confirmed':
+          if (planName) emailData = emailTemplates.subscriptionConfirmed(planName)
+          break
+        case 'subscription_expired':
+          if (planName) emailData = emailTemplates.subscriptionExpired(planName)
+          break
+        case 'subscription_removed':
+          if (planName) emailData = emailTemplates.subscriptionRemoved(planName)
+          break
+        case 'payment_approved':
+          if (planName) emailData = emailTemplates.paymentApproved(planName)
+          break
+        case 'admin_new_subscription':
+          if (planName && userEmail)
+            emailData = emailTemplates.adminNewSubscription(userEmail, userName || userEmail, planName)
+          break
+        // payment_rejected and admin_new_payment require extra context (reason, amount, currency)
+        // and are sent directly from admin actions — not via createNotification
       }
-    } catch (emailError) {
-      console.error('Error sending notification email:', emailError)
+
+      if (emailData) {
+        sendEmail({ to: toEmail, subject: emailData.subject, html: emailData.html }).catch(
+          (err) => console.error('Error sending notification email:', err)
+        )
+      }
     }
   }
 
@@ -163,15 +193,15 @@ export async function notifyAdminNewSubscription(
   userEmail: string,
   userName?: string
 ) {
-  // Get admin user ID (first admin user)
+  // Get admin user (first admin)
   const supabase = await createClient()
   const adminResult: any = await supabase
     .from('users')
-    .select('id')
+    .select('id, email')
     .eq('is_admin', true)
     .limit(1)
     .single()
-  const admin = adminResult.data as { id: string } | null
+  const admin = adminResult.data as { id: string; email: string } | null
 
   if (!admin) {
     console.warn('No admin user found for notification')
@@ -184,7 +214,8 @@ export async function notifyAdminNewSubscription(
     title: 'New Subscription',
     message: `${userName || userEmail} has subscribed to ${planName}`,
     planName,
-    userEmail,
+    recipientEmail: admin.email, // email goes TO the admin
+    userEmail,                   // subscriber context used inside the template
     userName,
   })
 }

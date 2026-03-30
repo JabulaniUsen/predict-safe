@@ -50,57 +50,45 @@ export default async function DashboardPage() {
     .eq('user_id', user.id)
   const subscriptions = subscriptionsRaw as UserSubscriptionWithPlan[] | null
 
-  // Check for expired subscriptions and notify
-  // Wrapped in try-catch to prevent build failures
-  try {
-    if (subscriptions) {
-      const now = new Date()
-      for (const sub of subscriptions) {
-        if (sub.plan_status === 'active' && sub.expiry_date) {
-          const expiryDate = new Date(sub.expiry_date)
-          if (expiryDate < now) {
-            // Update to expired
-            await supabase
-              .from('user_subscriptions')
-              // @ts-expect-error - Supabase type inference issue
-              .update({ plan_status: 'expired' })
-              .eq('id', sub.id)
+  // Check for expired subscriptions, update DB and notify in parallel (non-blocking)
+  if (subscriptions) {
+    const now = new Date()
+    const expiredSubs = subscriptions.filter(
+      (sub) => sub.plan_status === 'active' && sub.expiry_date && new Date(sub.expiry_date) < now
+    )
 
-            // Notify user (non-blocking)
-            const plan = sub.plan as any
-            notifySubscriptionEvent(
-              user.id,
-              plan?.name || 'Unknown Plan',
-              'expired',
-              userProfile?.email,
-              userProfile?.full_name || undefined
-            ).catch((err) => console.error('Error notifying expired subscription:', err))
-          }
-        }
-      }
+    if (expiredSubs.length > 0) {
+      // Run all DB updates in parallel, don't await — page render must not be blocked
+      Promise.all(
+        expiredSubs.map((sub) =>
+          (supabase.from('user_subscriptions') as any)
+            .update({ plan_status: 'expired' })
+            .eq('id', sub.id)
+            .then(() => {
+              const plan = sub.plan as any
+              return notifySubscriptionEvent(
+                user.id,
+                plan?.name || 'Unknown Plan',
+                'expired',
+                userProfile?.email,
+                userProfile?.full_name || undefined
+              )
+            })
+        )
+      ).catch((err) => console.error('Error processing expired subscriptions:', err))
+
+      // Reflect the status change in memory so the page renders correctly immediately
+      expiredSubs.forEach((sub) => { sub.plan_status = 'expired' })
     }
-  } catch (error) {
-    // Silently fail - this is a background task and shouldn't block page rendering
-    console.error('Error checking expired subscriptions:', error)
   }
 
-  // Re-fetch subscriptions after potential updates
-  const { data: subscriptionsRawUpdated } = await supabase
-    .from('user_subscriptions')
-    .select(`
-      *,
-      plan:plans(*)
-    `)
-    .eq('user_id', user.id)
-  const subscriptionsUpdated = subscriptionsRawUpdated as UserSubscriptionWithPlan[] | null
-
   // Count active subscriptions
-  const activeSubscriptions = subscriptionsUpdated?.filter(
+  const activeSubscriptions = subscriptions?.filter(
     (sub) => sub.plan_status === 'active'
   ).length || 0
 
   // Get all subscriptions for display
-  const allSubscriptions = subscriptionsUpdated || []
+  const allSubscriptions = subscriptions || []
 
   // Calculate days since member
   const memberSince = userProfile?.created_at
