@@ -72,23 +72,6 @@ export function PremiumPredictionsSection() {
       const correctScoreFromTimestamp = `${correctScoreDateRange.from}T00:00:00.000Z`
       const correctScoreToTimestamp = `${correctScoreDateRange.to}T23:59:59.999Z`
 
-      console.log('🔍 Premium Predictions - Fetching data:', {
-        profitMultiplierDateRange: {
-          from: profitMultiplierFromTimestamp,
-          to: profitMultiplierToTimestamp,
-          dateType: profitMultiplierDateType,
-          customDate: profitMultiplierCustomDate,
-          daysBack: profitMultiplierDaysBack
-        },
-        correctScoreDateRange: {
-          from: correctScoreFromTimestamp,
-          to: correctScoreToTimestamp,
-          dateType: correctScoreDateType,
-          customDate: correctScoreCustomDate,
-          daysBack: correctScoreDaysBack
-        }
-      })
-
       const [profitMultiplierResult, correctScoreResult] = await Promise.all([
         supabase
           .from('predictions')
@@ -109,19 +92,6 @@ export function PremiumPredictionsSection() {
           .limit(5)
       ])
 
-      console.log('📊 Premium Predictions - Query Results:', {
-        profitMultiplier: {
-          data: profitMultiplierResult.data,
-          error: profitMultiplierResult.error,
-          count: profitMultiplierResult.data?.length || 0
-        },
-        correctScore: {
-          data: correctScoreResult.data,
-          error: correctScoreResult.error,
-          count: correctScoreResult.data?.length || 0
-        }
-      })
-
       if (profitMultiplierResult.error) {
         console.error('❌ Profit Multiplier Query Error:', profitMultiplierResult.error)
       }
@@ -135,7 +105,6 @@ export function PremiumPredictionsSection() {
 
       // Process profit multiplier predictions
       if (profitMultiplierResult.data) {
-        console.log('✅ Processing Profit Multiplier Predictions:', profitMultiplierResult.data.length, 'items')
         profitMultiplierResult.data.forEach((pred: Prediction) => {
           profitMultiplier.push({
             id: pred.id,
@@ -150,14 +119,10 @@ export function PremiumPredictionsSection() {
             type: 'profit_multiplier'
           })
         })
-        console.log('📦 Processed Profit Multiplier:', profitMultiplier)
-      } else {
-        console.warn('⚠️ No Profit Multiplier data returned')
       }
 
       // Process correct score predictions
       if (correctScoreResult.data) {
-        console.log('✅ Processing Correct Score Predictions:', correctScoreResult.data.length, 'items')
         correctScoreResult.data.forEach((pred: any) => {
           // For correct_score predictions in the main predictions table,
           // the score is stored in prediction_type (see insert-predictions route)
@@ -177,9 +142,6 @@ export function PremiumPredictionsSection() {
             type: 'correct_score'
           })
         })
-        console.log('📦 Processed Correct Score:', correctScore)
-      } else {
-        console.warn('⚠️ No Correct Score data returned')
       }
 
       // Sort by kickoff time
@@ -193,19 +155,6 @@ export function PremiumPredictionsSection() {
       // Take first 2 of each for display
       const displayProfitMultiplier = profitMultiplier.slice(0, 2)
       const displayCorrectScore = correctScore.slice(0, 2)
-
-      console.log('🎯 Premium Predictions - Final Display Data:', {
-        profitMultiplier: {
-          total: profitMultiplier.length,
-          display: displayProfitMultiplier.length,
-          items: displayProfitMultiplier
-        },
-        correctScore: {
-          total: correctScore.length,
-          display: displayCorrectScore.length,
-          items: displayCorrectScore
-        }
-      })
 
       // Fetch team logos and match scores for all predictions
       const allPredictions = [...displayProfitMultiplier, ...displayCorrectScore]
@@ -311,11 +260,6 @@ export function PremiumPredictionsSection() {
           }
 
           // Update predictions with scores
-          console.log('🎨 Premium Predictions - Final State After Logo/Score Fetch:', {
-            profitMultiplier: updatedProfitMultiplier,
-            correctScore: updatedCorrectScore,
-            logos: Object.keys(newLogos).length
-          })
           setProfitMultiplierPredictions(updatedProfitMultiplier)
           setCorrectScorePredictions(updatedCorrectScore)
         } catch (error) {
@@ -325,17 +269,9 @@ export function PremiumPredictionsSection() {
           setCorrectScorePredictions(displayCorrectScore)
         }
       } else {
-        console.log('⚠️ Premium Predictions - No predictions to display, setting empty arrays')
         setProfitMultiplierPredictions([])
         setCorrectScorePredictions([])
       }
-
-      console.log('✅ Premium Predictions - Fetch Complete:', {
-        profitMultiplierCount: profitMultiplier.length,
-        correctScoreCount: correctScore.length,
-        displayProfitMultiplierCount: displayProfitMultiplier.length,
-        displayCorrectScoreCount: displayCorrectScore.length
-      })
 
       setLoading(false)
     }
@@ -1351,4 +1287,3 @@ export function PremiumPredictionsSection() {
     </section>
   )
 }
-

@@ -89,14 +89,6 @@ export function HeroSection({
       {/* Content */}
       <div className="container mx-auto px-4 relative z-10 pt-10 pb-6 lg:pt-16 lg:pb-10 flex-1 flex flex-col justify-center">
         <div className="max-w-4xl mx-auto text-center">
-          {/* Trust badge */}
-          <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-4 py-1.5 mb-5">
-            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            <span className="text-white/90 text-xs sm:text-sm font-medium tracking-wide">
-              Trusted by thousands of bettors worldwide
-            </span>
-          </div>
-
           <h1 className="mb-4 text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white tracking-tight leading-tight">
             {headline}
           </h1>

@@ -51,7 +51,9 @@ export default async function HomePage() {
     .select('key, value')
     .in('key', ['hero_headline', 'hero_subtext', 'telegram_link'])
 
-  const config = Object.fromEntries((configRows ?? []).map((r: any) => [r.key, r.value]))
+  const config = Object.fromEntries(
+    (configRows ?? []).map((r: { key: string; value: string | null }) => [r.key, r.value ?? undefined])
+  )
 
   return (
     <>
@@ -67,7 +69,7 @@ export default async function HomePage() {
         <Suspense fallback={<div className="py-8"><div className="container mx-auto px-4">Loading predictions...</div></div>}>
           <FreePredictionsSection />
         </Suspense>
-        <VIPWinningsSection />
+        <VIPWinningsSection showSeeMoreLink />
         <PremiumPredictionsSection />
         <WhatWeOfferSection />
         

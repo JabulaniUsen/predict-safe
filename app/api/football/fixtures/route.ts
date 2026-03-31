@@ -60,6 +60,12 @@ export async function GET(request: NextRequest) {
       }
 
       const data = await response.json()
+      if (data && typeof data === 'object' && 'error' in data) {
+        const apiMessage = typeof (data as { message?: unknown }).message === 'string'
+          ? (data as { message: string }).message
+          : 'API Football provider error'
+        return NextResponse.json({ error: apiMessage }, { status: 502 })
+      }
       return NextResponse.json(data, {
         headers: {
           'Cache-Control': 's-maxage=300, stale-while-revalidate=600',

@@ -110,11 +110,15 @@ export function FreePredictionsSection() {
       setLoading(true)
       try {
         const { from, to } = getDateRange(dateType, customDate, daysBack)
+        const selectedFilterLabel = FILTERS.find((f) => f.id === selectedFilter)?.label || selectedFilter
+
+        console.log(`[Free Predictions] ${selectedFilterLabel} - fetching`, { from, to, dateType })
         
         // Fetch fixtures from API Football
         const fixtures = await getFixtures(from, undefined, to)
         
         if (!Array.isArray(fixtures) || fixtures.length === 0) {
+          console.log(`[Free Predictions] ${selectedFilterLabel} - no fixtures returned from API`, { from, to })
           setPredictions([])
           setLoading(false)
           return
@@ -138,7 +142,7 @@ export function FreePredictionsSection() {
         // For "all" filter, we need to collect all predictions from all filters
         if (selectedFilter === 'all') {
           // Limit fixtures to process (increase to ensure we find enough matches with specific odds)
-          const fixturesToProcess = fixtures.slice(0, 15)
+          const fixturesToProcess = fixtures.slice(0, 60)
           
           // Fetch all odds in parallel
           const oddsPromises = fixturesToProcess.map(async (fixture) => {
@@ -164,29 +168,21 @@ export function FreePredictionsSection() {
               const predictionTypes: Array<{ type: string, odds: number }> = []
               
               if (oddsData) {
-                // Helper to check if odds are in range (1.15 - 1.60)
-                const isInRange = (odd: string | undefined) => {
+                const isUsableOdd = (odd: string | undefined) => {
                   if (!odd) return false
                   const val = parseFloat(odd)
-                  return val >= 1.15 && val <= 1.60
+                  return Number.isFinite(val) && val > 1
                 }
 
-                if (isInRange(oddsData.odd_1)) predictionTypes.push({ type: 'Home Win', odds: parseFloat(oddsData.odd_1!) })
-                if (isInRange(oddsData.odd_2)) predictionTypes.push({ type: 'Away Win', odds: parseFloat(oddsData.odd_2!) })
-                if (isInRange(oddsData['o+2.5'])) predictionTypes.push({ type: 'Over 2.5', odds: parseFloat(oddsData['o+2.5']!) })
-                if (isInRange(oddsData['o+1.5'])) predictionTypes.push({ type: 'Over 1.5', odds: parseFloat(oddsData['o+1.5']!) })
-                if (isInRange(oddsData.bts_yes)) predictionTypes.push({ type: 'BTTS', odds: parseFloat(oddsData.bts_yes!) })
-                if (isInRange(oddsData.odd_1x)) predictionTypes.push({ type: 'Double Chance', odds: parseFloat(oddsData.odd_1x!) })
+                if (isUsableOdd(oddsData.odd_1)) predictionTypes.push({ type: 'Home Win', odds: parseFloat(oddsData.odd_1!) })
+                if (isUsableOdd(oddsData.odd_2)) predictionTypes.push({ type: 'Away Win', odds: parseFloat(oddsData.odd_2!) })
+                if (isUsableOdd(oddsData['o+2.5'])) predictionTypes.push({ type: 'Over 2.5', odds: parseFloat(oddsData['o+2.5']!) })
+                if (isUsableOdd(oddsData['o+1.5'])) predictionTypes.push({ type: 'Over 1.5', odds: parseFloat(oddsData['o+1.5']!) })
+                if (isUsableOdd(oddsData.bts_yes)) predictionTypes.push({ type: 'BTTS', odds: parseFloat(oddsData.bts_yes!) })
+                if (isUsableOdd(oddsData.odd_1x)) predictionTypes.push({ type: 'Double Chance', odds: parseFloat(oddsData.odd_1x!) })
               } else {
-                // Default predictions if no odds
-                predictionTypes.push(
-                  { type: 'Over 2.5', odds: 1.85 },
-                  { type: 'Home Win', odds: 1.85 },
-                  { type: 'BTTS', odds: 1.85 },
-                  { type: 'Over 1.5', odds: 1.85 },
-                  { type: 'Away Win', odds: 1.85 },
-                  { type: 'Double Chance', odds: 1.85 }
-                )
+                // API-only mode: if odds are unavailable for this fixture, skip it
+                continue
               }
 
               // Create a prediction for each available type
@@ -220,7 +216,7 @@ export function FreePredictionsSection() {
           // Increase buffer to find enough matches with the odds criteria
           // For safe free picks, use larger buffer to ensure we get minimum 5 games
           // Process more fixtures to account for filtering (odds range, prediction types)
-          const buffer = selectedFilter === 'free' ? 20 : 10
+          const buffer = selectedFilter === 'free' ? 80 : 60
           const fixturesToProcess = fixtures.slice(0, maxPredictions + buffer)
           
           // Fetch all odds in parallel for the fixtures we need
@@ -272,8 +268,8 @@ export function FreePredictionsSection() {
                   if (isInRange(oddsData.odd_1x)) availableTypes.push('Double Chance')
                   // Note: Super Single will be the highest odd among Home Win, Away Win, Over 1.5
               } else {
-                  // Default predictions if no odds - only allowed types
-                  availableTypes.push('Home Win', 'Away Win', 'Over 1.5', 'Double Chance')
+                  // API-only mode: skip fixtures with no odds
+                  continue
               }
               
               // Select prediction type from rotation to ensure variety
@@ -293,42 +289,40 @@ export function FreePredictionsSection() {
               if (!selectedType && availableTypes.length > 0) {
                 selectedType = availableTypes[0]
               } else if (!selectedType) {
-                  // Default to Home Win for safe free picks
-                  selectedType = 'Home Win'
+                  // No valid API odds for safe free picks in this fixture
+                  continue
               }
               
               predictionType = selectedType
             } else {
               // Filter-specific predictions
-                // Apply odds filter 1.15-1.60 to all filters including super_single
-
-                const isInRange = (odd: string | undefined) => {
+                const isUsableOdd = (odd: string | undefined) => {
                   if (!odd) return false
                   const val = parseFloat(odd)
-                  return val >= 1.15 && val <= 1.60
+                  return Number.isFinite(val) && val > 1
                 }
 
-                if (selectedFilter === 'home_win' && isInRange(oddsData?.odd_1)) {
+                if (selectedFilter === 'home_win' && isUsableOdd(oddsData?.odd_1)) {
                 availableTypes.push('Home Win')
-                } else if (selectedFilter === 'away_win' && isInRange(oddsData?.odd_2)) {
+                } else if (selectedFilter === 'away_win' && isUsableOdd(oddsData?.odd_2)) {
                 availableTypes.push('Away Win')
-                } else if (selectedFilter === 'over_2_5' && isInRange(oddsData?.['o+2.5'])) {
+                } else if (selectedFilter === 'over_2_5' && isUsableOdd(oddsData?.['o+2.5'])) {
                 availableTypes.push('Over 2.5')
-                } else if (selectedFilter === 'over_1_5' && isInRange(oddsData?.['o+1.5'])) {
+                } else if (selectedFilter === 'over_1_5' && isUsableOdd(oddsData?.['o+1.5'])) {
                 availableTypes.push('Over 1.5')
-                } else if (selectedFilter === 'btts' && isInRange(oddsData?.bts_yes)) {
+                } else if (selectedFilter === 'btts' && isUsableOdd(oddsData?.bts_yes)) {
                 availableTypes.push('BTTS')
-                } else if (selectedFilter === 'double_chance' && isInRange(oddsData?.odd_1x)) {
+                } else if (selectedFilter === 'double_chance' && isUsableOdd(oddsData?.odd_1x)) {
                 availableTypes.push('Double Chance')
               } else if (selectedFilter === 'super_single') {
-                  // Super single - pick the best odds prediction within range
+                  // Super single - pick the best available API odd
                 if (oddsData) {
-                    // Find the highest odd that is still within our range (1.15-1.60)
+                    // Find the highest odd from API
                     const validOptions = [
                       { type: 'Home Win', odd: parseFloat(oddsData.odd_1 || '0') },
                       { type: 'Away Win', odd: parseFloat(oddsData.odd_2 || '0') },
                       { type: 'Over 2.5', odd: parseFloat(oddsData['o+2.5'] || '0') }
-                    ].filter(opt => opt.odd >= 1.15 && opt.odd <= 1.60)
+                    ].filter(opt => Number.isFinite(opt.odd) && opt.odd > 1)
 
                     // Sort by odds descending to get the "super" single (highest valid odd)
                     validOptions.sort((a, b) => b.odd - a.odd)
@@ -343,12 +337,12 @@ export function FreePredictionsSection() {
                 if (availableTypes.length > 0) {
                   predictionType = availableTypes[0]
                 } else {
-                  // If no valid type found (e.g. odds not in range), skip this fixture
+                  // API-only mode: no valid odds for this filter
                   continue
                 }
             }
             
-            let odds = 1.85
+            let odds = 0
             let confidence = 75
 
             // Get odds for this prediction type
@@ -374,6 +368,10 @@ export function FreePredictionsSection() {
               }
             }
 
+            if (!Number.isFinite(odds) || odds <= 1) {
+              continue
+            }
+
             allPredictions.push({
               id: `${fixture.match_id}-${predictionType}`,
               home_team: fixture.match_hometeam_name || 'Home Team',
@@ -397,16 +395,10 @@ export function FreePredictionsSection() {
         }
         }
 
-        // Filter predictions based on odds range
-        // For free filter: 1.2 to 1.7, for others: 1.15 to 1.60
-        // Note: We already filtered during generation, but this is a safety check
-        let filteredPredictions = allPredictions.filter(pred => {
-          const odds = pred.odds
-          if (selectedFilter === 'free') {
-            return odds >= 1.2 && odds <= 1.7
-          }
-          return odds >= 1.15 && odds <= 1.60
-        })
+        // API-only: keep predictions with valid API odds
+        let filteredPredictions = allPredictions.filter(
+          (pred) => Number.isFinite(pred.odds) && pred.odds > 1
+        )
 
         // For safe free picks, ensure we only have allowed prediction types
         if (selectedFilter === 'free') {
@@ -431,6 +423,13 @@ export function FreePredictionsSection() {
         } else {
           finalPredictions = filteredPredictions
         }
+
+        console.log(`[Free Predictions] ${selectedFilterLabel} - ready`, {
+          fixtures: fixtures.length,
+          generated: allPredictions.length,
+          displayed: finalPredictions.length,
+        })
+
         setPredictions(finalPredictions)
       } catch (error) {
         console.error('Error fetching predictions:', error)
@@ -631,7 +630,7 @@ export function FreePredictionsSection() {
           <div>
           <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1 lg:mb-2 text-[#1e40af]">{getFilterLabel()}</h2>
           <p className="text-sm lg:text-base text-gray-600">
-            Get expert predictions for {getCurrentDate().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}'s matches
+            Get expert predictions for {getCurrentDate().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}&apos;s matches
           </p>
           </div>
           <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
@@ -1067,4 +1066,3 @@ export function FreePredictionsSection() {
     </section>
   )
 }
-
