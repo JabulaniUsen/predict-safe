@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { notifyPredictionDropped } from '@/lib/notifications'
+import { PLAN_TYPE_TO_SLUG } from '@/lib/constants'
 
 export async function POST(request: NextRequest) {
   try {
@@ -99,18 +100,9 @@ export async function POST(request: NextRequest) {
           }
         })
 
-        // Map plan_type to plan slug to get plan ID
-        const planTypeToSlug: Record<string, string> = {
-          'profit_multiplier': 'profit-multiplier',
-          'daily_2_odds': 'daily-2-odds',
-          'standard': 'standard',
-          'free': 'free',
-          'correct_score': 'correct-score'
-        }
-
         // Notify for each unique plan type
         for (const planType of planTypes) {
-          const planSlug = planTypeToSlug[planType]
+          const planSlug = PLAN_TYPE_TO_SLUG[planType]
           if (planSlug) {
             const planResult: any = await supabase
               .from('plans')

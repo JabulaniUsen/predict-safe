@@ -55,7 +55,11 @@ export async function GET(request: NextRequest) {
         return a.league_name.localeCompare(b.league_name)
       })
 
-    return NextResponse.json(leagues)
+    return NextResponse.json(leagues, {
+      headers: {
+        'Cache-Control': 's-maxage=86400, stale-while-revalidate=172800',
+      },
+    })
   } catch (error: any) {
     console.error('API Football Leagues Error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })

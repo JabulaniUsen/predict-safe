@@ -13,13 +13,23 @@ import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import { CalendarIcon } from 'lucide-react'
 import Image from 'next/image'
+import Link from 'next/link'
 
 interface VIPWinningsSectionProps {
   planIds?: string[] // Optional: filter by plan IDs
   showAll?: boolean // If true, show all wins regardless of plan
+  showSeeMoreLink?: boolean
 }
 
-export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSectionProps) {
+interface APIFixture {
+  match_hometeam_name?: string
+  match_awayteam_name?: string
+  team_home_badge?: string
+  team_away_badge?: string
+  league_name?: string
+}
+
+export function VIPWinningsSection({ planIds, showAll = true, showSeeMoreLink = false }: VIPWinningsSectionProps) {
   const [winnings, setWinnings] = useState<VIPWinning[]>([])
   const [loading, setLoading] = useState(true)
   const [teamLogos, setTeamLogos] = useState<Record<string, string | null>>({})
@@ -28,17 +38,7 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
   const [expandedPlans, setExpandedPlans] = useState<Set<string>>(new Set())
   const initialLimitPerPlan = 2 // Number of winnings to show per plan initially
 
-  useEffect(() => {
-    fetchWinnings()
-  }, [planIds, showAll, selectedDate])
-
-  useEffect(() => {
-    if (winnings.length > 0) {
-      fetchTeamLogos()
-    }
-  }, [winnings])
-
-  const fetchWinnings = async () => {
+  async function fetchWinnings() {
     setLoading(true)
     const supabase = createClient()
     
@@ -200,7 +200,7 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
   // Get unique plan names sorted
   const planNames = Object.keys(groupedWinnings).sort()
 
-  const fetchTeamLogos = async () => {
+  async function fetchTeamLogos() {
     if (winnings.length === 0) return
 
     // Group winnings by date
@@ -234,7 +234,7 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
       })
       
       const fixtureResults = await Promise.all(fixturePromises)
-      const fixturesByDate = new Map<string, any[]>()
+      const fixturesByDate = new Map<string, APIFixture[]>()
       fixtureResults.forEach(({ date, fixtures }) => {
         fixturesByDate.set(date, fixtures)
       })
@@ -247,7 +247,7 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
         
         dateWinnings.forEach((winning) => {
           // Find matching fixture by team names
-          const fixture = fixtures.find((f: any) => {
+          const fixture = fixtures.find((f: APIFixture) => {
             const homeMatch = f.match_hometeam_name?.toLowerCase() === winning.home_team.toLowerCase() ||
                              f.match_hometeam_name?.toLowerCase().includes(winning.home_team.toLowerCase()) ||
                              winning.home_team.toLowerCase().includes(f.match_hometeam_name?.toLowerCase() || '')
@@ -287,6 +287,22 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
     }
   }
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void fetchWinnings()
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [planIds, showAll, selectedDate])
+
+  useEffect(() => {
+    if (winnings.length > 0) {
+      const timer = setTimeout(() => {
+        void fetchTeamLogos()
+      }, 0)
+      return () => clearTimeout(timer)
+    }
+  }, [winnings])
+
   const getTeamLogo = (teamName: string): string | null => {
     return teamLogos[teamName] || null
   }
@@ -312,6 +328,15 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
           <div>
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1 lg:mb-2 text-[#1e40af]">VIP Winnings</h2>
             <p className="text-sm lg:text-base text-gray-600">Track our successful VIP predictions</p>
+            {showSeeMoreLink && (
+              <Button
+                asChild
+                variant="link"
+                className="px-0 h-auto mt-1 text-[#1e40af] font-semibold hover:text-[#1e3a8a]"
+              >
+                <Link href="/previous-wins">See more</Link>
+              </Button>
+            )}
           </div>
           <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
             <Popover>
@@ -669,4 +694,3 @@ export function VIPWinningsSection({ planIds, showAll = true }: VIPWinningsSecti
     </section>
   )
 }
-

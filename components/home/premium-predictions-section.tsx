@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Lock, CalendarIcon } from 'lucide-react'
+import { Lock, CalendarIcon, Loader2 } from 'lucide-react'
 import { Prediction, CorrectScorePrediction } from '@/types'
 import { formatTime, getDateRange } from '@/lib/utils/date'
 import { CircularProgress } from '@/components/ui/circular-progress'
@@ -72,23 +72,6 @@ export function PremiumPredictionsSection() {
       const correctScoreFromTimestamp = `${correctScoreDateRange.from}T00:00:00.000Z`
       const correctScoreToTimestamp = `${correctScoreDateRange.to}T23:59:59.999Z`
 
-      console.log('🔍 Premium Predictions - Fetching data:', {
-        profitMultiplierDateRange: {
-          from: profitMultiplierFromTimestamp,
-          to: profitMultiplierToTimestamp,
-          dateType: profitMultiplierDateType,
-          customDate: profitMultiplierCustomDate,
-          daysBack: profitMultiplierDaysBack
-        },
-        correctScoreDateRange: {
-          from: correctScoreFromTimestamp,
-          to: correctScoreToTimestamp,
-          dateType: correctScoreDateType,
-          customDate: correctScoreCustomDate,
-          daysBack: correctScoreDaysBack
-        }
-      })
-
       const [profitMultiplierResult, correctScoreResult] = await Promise.all([
         supabase
           .from('predictions')
@@ -109,19 +92,6 @@ export function PremiumPredictionsSection() {
           .limit(5)
       ])
 
-      console.log('📊 Premium Predictions - Query Results:', {
-        profitMultiplier: {
-          data: profitMultiplierResult.data,
-          error: profitMultiplierResult.error,
-          count: profitMultiplierResult.data?.length || 0
-        },
-        correctScore: {
-          data: correctScoreResult.data,
-          error: correctScoreResult.error,
-          count: correctScoreResult.data?.length || 0
-        }
-      })
-
       if (profitMultiplierResult.error) {
         console.error('❌ Profit Multiplier Query Error:', profitMultiplierResult.error)
       }
@@ -135,7 +105,6 @@ export function PremiumPredictionsSection() {
 
       // Process profit multiplier predictions
       if (profitMultiplierResult.data) {
-        console.log('✅ Processing Profit Multiplier Predictions:', profitMultiplierResult.data.length, 'items')
         profitMultiplierResult.data.forEach((pred: Prediction) => {
           profitMultiplier.push({
             id: pred.id,
@@ -150,14 +119,10 @@ export function PremiumPredictionsSection() {
             type: 'profit_multiplier'
           })
         })
-        console.log('📦 Processed Profit Multiplier:', profitMultiplier)
-      } else {
-        console.warn('⚠️ No Profit Multiplier data returned')
       }
 
       // Process correct score predictions
       if (correctScoreResult.data) {
-        console.log('✅ Processing Correct Score Predictions:', correctScoreResult.data.length, 'items')
         correctScoreResult.data.forEach((pred: any) => {
           // For correct_score predictions in the main predictions table,
           // the score is stored in prediction_type (see insert-predictions route)
@@ -177,9 +142,6 @@ export function PremiumPredictionsSection() {
             type: 'correct_score'
           })
         })
-        console.log('📦 Processed Correct Score:', correctScore)
-      } else {
-        console.warn('⚠️ No Correct Score data returned')
       }
 
       // Sort by kickoff time
@@ -193,19 +155,6 @@ export function PremiumPredictionsSection() {
       // Take first 2 of each for display
       const displayProfitMultiplier = profitMultiplier.slice(0, 2)
       const displayCorrectScore = correctScore.slice(0, 2)
-
-      console.log('🎯 Premium Predictions - Final Display Data:', {
-        profitMultiplier: {
-          total: profitMultiplier.length,
-          display: displayProfitMultiplier.length,
-          items: displayProfitMultiplier
-        },
-        correctScore: {
-          total: correctScore.length,
-          display: displayCorrectScore.length,
-          items: displayCorrectScore
-        }
-      })
 
       // Fetch team logos and match scores for all predictions
       const allPredictions = [...displayProfitMultiplier, ...displayCorrectScore]
@@ -311,11 +260,6 @@ export function PremiumPredictionsSection() {
           }
 
           // Update predictions with scores
-          console.log('🎨 Premium Predictions - Final State After Logo/Score Fetch:', {
-            profitMultiplier: updatedProfitMultiplier,
-            correctScore: updatedCorrectScore,
-            logos: Object.keys(newLogos).length
-          })
           setProfitMultiplierPredictions(updatedProfitMultiplier)
           setCorrectScorePredictions(updatedCorrectScore)
         } catch (error) {
@@ -325,17 +269,9 @@ export function PremiumPredictionsSection() {
           setCorrectScorePredictions(displayCorrectScore)
         }
       } else {
-        console.log('⚠️ Premium Predictions - No predictions to display, setting empty arrays')
         setProfitMultiplierPredictions([])
         setCorrectScorePredictions([])
       }
-
-      console.log('✅ Premium Predictions - Fetch Complete:', {
-        profitMultiplierCount: profitMultiplier.length,
-        correctScoreCount: correctScore.length,
-        displayProfitMultiplierCount: displayProfitMultiplier.length,
-        displayCorrectScoreCount: displayCorrectScore.length
-      })
 
       setLoading(false)
     }
@@ -592,7 +528,7 @@ export function PremiumPredictionsSection() {
                       <Button
                         variant="outline"
                         className={cn(
-                          "px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all justify-start text-left font-normal bg-gray-800 border-gray-700 text-gray-400 hover:text-yellow-400 hover:bg-gray-700",
+                          "px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all justify-start text-left bg-gray-800 border-gray-700 text-gray-400 hover:text-yellow-400 hover:bg-gray-700",
                           (profitMultiplierCustomDate || profitMultiplierDateType === 'custom') && "bg-yellow-500 text-black shadow-lg shadow-yellow-500/50 border-yellow-500"
                         )}
                       >
@@ -608,7 +544,7 @@ export function PremiumPredictionsSection() {
                           if (date) {
                             setProfitMultiplierCustomDate(format(date, 'yyyy-MM-dd'))
                             setProfitMultiplierDateType('custom')
-                            setProfitMultiplierDaysBack(0)
+                            setProfitMultiplierDaysBack(1)
                           }
                         }}
                         initialFocus
@@ -618,28 +554,44 @@ export function PremiumPredictionsSection() {
                   </Popover>
                   <button
                     onClick={() => {
-                      setProfitMultiplierDateType('today')
+                      setProfitMultiplierDateType('previous')
                       setProfitMultiplierCustomDate('')
-                      setProfitMultiplierDaysBack(0)
+                      setProfitMultiplierDaysBack(1)
                     }}
-                    className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${profitMultiplierDateType === 'today'
+                    className={`flex items-center gap-1 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${profitMultiplierDateType === 'previous'
                         ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/50'
                         : 'text-gray-400 hover:text-yellow-400 hover:bg-gray-700'
                       }`}
                   >
+                    {loading && profitMultiplierDateType === 'previous' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                    Yesterday
+                  </button>
+                  <button
+                    onClick={() => {
+                      setProfitMultiplierDateType('today')
+                      setProfitMultiplierCustomDate('')
+                      setProfitMultiplierDaysBack(1)
+                    }}
+                    className={`flex items-center gap-1 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${profitMultiplierDateType === 'today'
+                        ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/50'
+                        : 'text-gray-400 hover:text-yellow-400 hover:bg-gray-700'
+                      }`}
+                  >
+                    {loading && profitMultiplierDateType === 'today' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                     Today
                   </button>
                   <button
                     onClick={() => {
                       setProfitMultiplierDateType('tomorrow')
                       setProfitMultiplierCustomDate('')
-                      setProfitMultiplierDaysBack(0)
+                      setProfitMultiplierDaysBack(1)
                     }}
-                    className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${profitMultiplierDateType === 'tomorrow'
+                    className={`flex items-center gap-1 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${profitMultiplierDateType === 'tomorrow'
                         ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/50'
                         : 'text-gray-400 hover:text-yellow-400 hover:bg-gray-700'
                       }`}
                   >
+                    {loading && profitMultiplierDateType === 'tomorrow' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                     Tomorrow
                   </button>
                 </div>
@@ -953,7 +905,7 @@ export function PremiumPredictionsSection() {
                       <Button
                         variant="outline"
                         className={cn(
-                          "px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all justify-start text-left font-normal bg-gray-800 border-gray-700 text-gray-400 hover:text-yellow-400 hover:bg-gray-700",
+                          "px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all justify-start text-left bg-gray-800 border-gray-700 text-gray-400 hover:text-yellow-400 hover:bg-gray-700",
                           (correctScoreCustomDate || correctScoreDateType === 'custom') && "bg-yellow-500 text-black shadow-lg shadow-yellow-500/50 border-yellow-500"
                         )}
                       >
@@ -969,7 +921,7 @@ export function PremiumPredictionsSection() {
                           if (date) {
                             setCorrectScoreCustomDate(format(date, 'yyyy-MM-dd'))
                             setCorrectScoreDateType('custom')
-                            setCorrectScoreDaysBack(0)
+                            setCorrectScoreDaysBack(1)
                           }
                         }}
                         initialFocus
@@ -979,28 +931,44 @@ export function PremiumPredictionsSection() {
                   </Popover>
                   <button
                     onClick={() => {
-                      setCorrectScoreDateType('today')
+                      setCorrectScoreDateType('previous')
                       setCorrectScoreCustomDate('')
-                      setCorrectScoreDaysBack(0)
+                      setCorrectScoreDaysBack(1)
                     }}
-                    className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${correctScoreDateType === 'today'
+                    className={`flex items-center gap-1 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${correctScoreDateType === 'previous'
                         ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/50'
                         : 'text-gray-400 hover:text-yellow-400 hover:bg-gray-700'
                       }`}
                   >
+                    {loading && correctScoreDateType === 'previous' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                    Yesterday
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCorrectScoreDateType('today')
+                      setCorrectScoreCustomDate('')
+                      setCorrectScoreDaysBack(1)
+                    }}
+                    className={`flex items-center gap-1 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${correctScoreDateType === 'today'
+                        ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/50'
+                        : 'text-gray-400 hover:text-yellow-400 hover:bg-gray-700'
+                      }`}
+                  >
+                    {loading && correctScoreDateType === 'today' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                     Today
                   </button>
                   <button
                     onClick={() => {
                       setCorrectScoreDateType('tomorrow')
                       setCorrectScoreCustomDate('')
-                      setCorrectScoreDaysBack(0)
+                      setCorrectScoreDaysBack(1)
                     }}
-                    className={`px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${correctScoreDateType === 'tomorrow'
+                    className={`flex items-center gap-1 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${correctScoreDateType === 'tomorrow'
                         ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/50'
                         : 'text-gray-400 hover:text-yellow-400 hover:bg-gray-700'
                       }`}
                   >
+                    {loading && correctScoreDateType === 'tomorrow' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                     Tomorrow
                   </button>
                 </div>
@@ -1319,4 +1287,3 @@ export function PremiumPredictionsSection() {
     </section>
   )
 }
-

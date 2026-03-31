@@ -3,8 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getFixtures } from '@/lib/api-football'
 import { format } from 'date-fns'
 import { notifyPredictionDropped } from '@/lib/notifications'
-
-const API_KEY = process.env.API_FOOTBALL_KEY || '1cb32db603edc3ff2e0c13ba21224f6d55a88a1be0bc9536ac15f4c12011e9ac'
+import { PLAN_TYPE_TO_SLUG } from '@/lib/constants'
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,6 +42,11 @@ export async function POST(request: NextRequest) {
 
     if (!userProfile || !(userProfile as any).is_admin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const API_KEY = process.env.API_FOOTBALL_KEY
+    if (!API_KEY) {
+      return NextResponse.json({ error: 'API_FOOTBALL_KEY is not configured' }, { status: 500 })
     }
 
     // Fetch fixtures from API Football
@@ -199,15 +203,7 @@ export async function POST(request: NextRequest) {
     // Notify users subscribed to this plan type
     if (data && data.length > 0) {
       try {
-        // Map plan_type to plan slug to get plan ID
-        const planTypeToSlug: Record<string, string> = {
-          'profit_multiplier': 'profit-multiplier',
-          'daily_2_odds': 'daily-2-odds',
-          'standard': 'standard',
-          'free': 'free'
-        }
-
-        const planSlug = planTypeToSlug[planType]
+        const planSlug = PLAN_TYPE_TO_SLUG[planType]
         if (planSlug) {
           const planResult: any = await supabase
             .from('plans')

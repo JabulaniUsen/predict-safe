@@ -1,4 +1,4 @@
-const API_KEY = process.env.API_FOOTBALL_KEY || '1cb32db603edc3ff2e0c13ba21224f6d55a88a1be0bc9536ac15f4c12011e9ac'
+const API_KEY = process.env.API_FOOTBALL_KEY
 const BASE_URL = process.env.API_FOOTBALL_BASE_URL || 'https://apiv3.apifootball.com'
 
 export interface Fixture {
@@ -113,6 +113,10 @@ export interface Standing {
 
 // Server-side function (for use in Server Components)
 async function fetchAPIServer(endpoint: string, params: Record<string, string> = {}) {
+  if (!API_KEY) {
+    throw new Error('Missing required environment variable: API_FOOTBALL_KEY')
+  }
+
   const queryParams = new URLSearchParams({
     action: endpoint,
     APIkey: API_KEY,

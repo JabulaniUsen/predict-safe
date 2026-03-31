@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { PredictionSchema } from '@/components/seo/prediction-schema'
+import { createClient } from '@/lib/supabase/server'
 
 export const metadata: Metadata = {
   title: "Free Football Predictions Today | Accurate Betting Tips & Expert Analysis",
@@ -42,18 +43,33 @@ export const metadata: Metadata = {
   },
 }
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Fetch hero config server-side to avoid client-side flash and extra round-trip
+  const supabase = await createClient()
+  const { data: configRows } = await supabase
+    .from('site_config')
+    .select('key, value')
+    .in('key', ['hero_headline', 'hero_subtext', 'telegram_link'])
+
+  const config = Object.fromEntries(
+    (configRows ?? []).map((r: { key: string; value: string | null }) => [r.key, r.value ?? undefined])
+  )
+
   return (
     <>
       <PredictionSchema />
     <div className="flex min-h-screen flex-col">
       <Navbar />
       <main>
-        <HeroSection />
+        <HeroSection
+          headline={config.hero_headline}
+          subtext={config.hero_subtext}
+          telegramLink={config.telegram_link}
+        />
         <Suspense fallback={<div className="py-8"><div className="container mx-auto px-4">Loading predictions...</div></div>}>
           <FreePredictionsSection />
         </Suspense>
-        <VIPWinningsSection />
+        <VIPWinningsSection showSeeMoreLink />
         <PremiumPredictionsSection />
         <WhatWeOfferSection />
         

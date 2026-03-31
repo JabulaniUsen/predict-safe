@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Skranji:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&display=swap');
 
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -20,8 +20,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-skranji);
-  --font-sporty: var(--font-skranji);
+  --font-sans: var(--font-rajdhani);
+  --font-sporty: var(--font-rajdhani);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -129,13 +129,13 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    font-family: var(--font-skranji), sans-serif;
+    font-family: var(--font-sans), sans-serif;
   }
   body {
     @apply bg-background text-foreground;
   }
   h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-skranji), sans-serif;
+    font-family: var(--font-sporty), sans-serif;
   }
 }
 
@@ -149,8 +149,8 @@
   --color-primary-orange-dark: #ea580c;
 }
 
-.font-skranji {
-  font-family: 'Skranji', sans-serif !important;
+.font-rajdhani {
+  font-family: 'Rajdhani', sans-serif !important;
 }
 
 /* Range slider styling */

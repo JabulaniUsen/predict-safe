@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Lock, CalendarIcon } from 'lucide-react'
+import { Lock, CalendarIcon, Loader2 } from 'lucide-react'
 import { Prediction, CorrectScorePrediction, UserSubscriptionWithPlan, Plan } from '@/types'
 import { formatTime, getDateRange } from '@/lib/utils/date'
 import { toast } from 'sonner'
@@ -477,34 +477,37 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
           <Button
             variant={dateType === 'previous' ? 'default' : 'outline'}
             size="sm"
-            className="text-xs lg:text-sm px-2 lg:px-3"
+            className="text-xs lg:text-sm px-2 lg:px-3 gap-1"
             onClick={() => {
               setDateType('previous')
               setCustomDate(undefined)
             }}
           >
-            Previous
+            {loading && dateType === 'previous' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+            Yesterday
           </Button>
           <Button
             variant={dateType === 'today' ? 'default' : 'outline'}
             size="sm"
-            className="text-xs lg:text-sm px-2 lg:px-3"
+            className="text-xs lg:text-sm px-2 lg:px-3 gap-1"
             onClick={() => {
               setDateType('today')
               setCustomDate(undefined)
             }}
           >
+            {loading && dateType === 'today' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
             Today
           </Button>
           <Button
             variant={dateType === 'tomorrow' ? 'default' : 'outline'}
             size="sm"
-            className="text-xs lg:text-sm px-2 lg:px-3"
+            className="text-xs lg:text-sm px-2 lg:px-3 gap-1"
             onClick={() => {
               setDateType('tomorrow')
               setCustomDate(undefined)
             }}
           >
+            {loading && dateType === 'tomorrow' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
             Tomorrow
           </Button>
           <Popover>
@@ -512,9 +515,9 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
               <Button
                 variant={dateType === 'custom' ? 'default' : 'outline'}
                 size="sm"
-                className="text-xs lg:text-sm px-2 lg:px-3"
+                className="text-xs lg:text-sm px-2 lg:px-3 gap-1"
               >
-                <CalendarIcon className="h-3 w-3 lg:h-4 lg:w-4 mr-1 lg:mr-2" />
+                {loading && dateType === 'custom' ? <Loader2 className="h-3 w-3 animate-spin" /> : <CalendarIcon className="h-3 w-3 lg:h-4 lg:w-4" />}
                 Custom
               </Button>
             </PopoverTrigger>

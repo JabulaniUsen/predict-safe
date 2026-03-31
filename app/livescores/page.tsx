@@ -70,10 +70,10 @@ export default function LiveScoresPage() {
   useEffect(() => {
     fetchLiveScores()
     
-    // Auto-refresh every 60 seconds
+    // Auto-refresh every 2 minutes
     const interval = setInterval(() => {
       fetchLiveScores()
-    }, 60000)
+    }, 120000)
     
     return () => clearInterval(interval)
   }, [fetchLiveScores])
