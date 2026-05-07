@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p \"/Users/mac/Desktop/Client projects/predict-safe/components/tips\" \"/Users/mac/Desktop/Client projects/predict-safe/app/tips/[slug]\" \"/Users/mac/Desktop/Client projects/predict-safe/app/admin/pages\")"
+    ],
+    "additionalDirectories": [
+      "/Users/mac/Desktop/Client projects/predict-safe/app/tips"
+    ]
+  }
+}

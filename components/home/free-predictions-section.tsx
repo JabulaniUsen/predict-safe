@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatDate, formatTime, getDateRange } from '@/lib/utils/date'
-import { Fixture, getFixtures, getOdds } from '@/lib/api-football'
+import { Fixture, getFixtures, getOdds, FREE_PLAN_LEAGUES } from '@/lib/api-football'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import Image from 'next/image'
@@ -114,8 +114,14 @@ export function FreePredictionsSection() {
 
         console.log(`[Free Predictions] ${selectedFilterLabel} - fetching`, { from, to, dateType })
         
-        // Fetch fixtures from API Football
-        const fixtures = await getFixtures(from, undefined, to)
+        // Fetch fixtures from API Football — only free-plan leagues (Championship & Ligue 2)
+        // Each league is fetched independently so one with no games doesn't crash the other
+        const leagueFixtures = await Promise.all(
+          FREE_PLAN_LEAGUES.map(leagueId =>
+            getFixtures(from, leagueId, to).catch(() => [] as Fixture[])
+          )
+        )
+        const fixtures: Fixture[] = leagueFixtures.flatMap(f => Array.isArray(f) ? f : [])
         
         if (!Array.isArray(fixtures) || fixtures.length === 0) {
           console.log(`[Free Predictions] ${selectedFilterLabel} - no fixtures returned from API`, { from, to })

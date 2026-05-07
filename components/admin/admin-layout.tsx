@@ -5,10 +5,10 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { 
-  LayoutDashboard, 
-  FileText, 
-  Package, 
+import {
+  LayoutDashboard,
+  FileText,
+  Package,
   Users,
   Settings,
   LogOut,
@@ -21,7 +21,8 @@ import {
   BookOpen,
   Trophy,
   MessageCircle,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Globe
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -87,6 +88,11 @@ const navItems: NavItem[] = [
     href: '/admin/ad-links',
     label: 'Ad Links',
     icon: <LinkIcon className="h-5 w-5 lg:h-6 lg:w-6" />
+  },
+  {
+    href: '/admin/pages',
+    label: 'Pages',
+    icon: <Globe className="h-5 w-5 lg:h-6 lg:w-6" />
   },
   {
     href: '/admin/config',

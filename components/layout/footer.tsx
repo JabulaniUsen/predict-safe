@@ -22,18 +22,39 @@ interface SiteConfig {
   }
 }
 
+interface FooterPage {
+  slug: string
+  footer_label: string | null
+  footer_section: string | null
+  footer_order: number | null
+}
+
 type ConfigItem = Pick<Database['public']['Tables']['site_config']['Row'], 'key' | 'value'>
 
 export function Footer() {
   const [config, setConfig] = useState<SiteConfig>({})
+  const [footerPages, setFooterPages] = useState<FooterPage[]>([])
 
   useEffect(() => {
     const fetchConfig = async () => {
       const supabase = createClient()
-      const { data } = await supabase
-        .from('site_config')
-        .select('key, value')
-        .in('key', ['site_header', 'site_subheader', 'telegram_link', 'contact_email', 'whatsapp_number', 'whatsapp_numbers', 'social_links'])
+
+      const [{ data }, { data: pagesData }] = await Promise.all([
+        supabase
+          .from('site_config')
+          .select('key, value')
+          .in('key', ['site_header', 'site_subheader', 'telegram_link', 'contact_email', 'whatsapp_number', 'whatsapp_numbers', 'social_links']),
+        // custom_pages not yet in generated types — cast through any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from('custom_pages')
+          .select('slug, footer_label, footer_section, footer_order')
+          .eq('show_in_footer', true)
+          .eq('is_published', true)
+          .order('footer_order', { ascending: true }),
+      ])
+
+      if (pagesData) setFooterPages(pagesData as FooterPage[])
 
       if (data) {
         const configData: SiteConfig = {}
@@ -208,6 +229,15 @@ export function Footer() {
                   <span>Download App</span>
                 </Link>
               </li>
+              {footerPages
+                .filter(p => p.footer_section === 'quick_links')
+                .map(p => (
+                  <li key={p.slug}>
+                    <Link href={`/tips/${p.slug}`} className="text-gray-300 hover:text-white transition-colors flex items-center gap-2">
+                      <span>{p.footer_label || p.slug}</span>
+                    </Link>
+                  </li>
+                ))}
             </ul>
           </div>
 
@@ -235,6 +265,15 @@ export function Footer() {
                   Live Scores
                 </Link>
               </li>
+              {footerPages
+                .filter(p => p.footer_section === 'predictions')
+                .map(p => (
+                  <li key={p.slug}>
+                    <Link href={`/tips/${p.slug}`} className="text-gray-300 hover:text-white transition-colors">
+                      {p.footer_label || p.slug}
+                    </Link>
+                  </li>
+                ))}
             </ul>
           </div>
 
@@ -267,6 +306,15 @@ export function Footer() {
                   Cookie Policy
                 </Link>
               </li>
+              {footerPages
+                .filter(p => p.footer_section === 'legal')
+                .map(p => (
+                  <li key={p.slug}>
+                    <Link href={`/tips/${p.slug}`} className="text-gray-300 hover:text-white transition-colors">
+                      {p.footer_label || p.slug}
+                    </Link>
+                  </li>
+                ))}
             </ul>
             
             {/* Contact Info */}

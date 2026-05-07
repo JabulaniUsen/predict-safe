@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const API_KEY = process.env.API_FOOTBALL_KEY || '1cb32db603edc3ff2e0c13ba21224f6d55a88a1be0bc9536ac15f4c12011e9ac'
+const API_KEY = process.env.API_FOOTBALL_KEY || '2039aa84e45a691207351f44eb5f8a8fc7eb516a77bdbf789cebf2a98aa4ca4a'
 const BASE_URL = process.env.API_FOOTBALL_BASE_URL || 'https://apiv3.apifootball.com'
 
 export async function GET(request: NextRequest) {
@@ -9,11 +9,10 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || ''
     const leagueId = searchParams.get('league_id')
 
-    // Popular league IDs: Premier League (152), La Liga (302), Serie A (207), Bundesliga (175), Ligue 1 (168)
-    // Champions League (3), Europa League (4), World Cup (5)
-    const popularLeagueIds = leagueId 
+    // Free plan leagues: Championship (153), Ligue 2 (164)
+    const popularLeagueIds = leagueId
       ? [leagueId]
-      : ['152', '302', '207', '175', '168', '3', '4']
+      : ['153', '164']
 
     let allTeams: any[] = []
 

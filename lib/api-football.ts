@@ -241,13 +241,17 @@ export async function getStandings(leagueId: string) {
   return [] as Standing[]
 }
 
-// Top 5 leagues IDs
+// Free plan supported leagues
+export const FREE_PLAN_LEAGUES = ['153', '164'] // England Championship, France Ligue 2
+
 export const TOP_LEAGUES = {
   PREMIER_LEAGUE: '152', // England Premier League
-  LA_LIGA: '302', // Spain La Liga
-  SERIE_A: '207', // Italy Serie A
-  BUNDESLIGA: '175', // Germany Bundesliga
-  LIGUE_1: '168', // France Ligue 1
+  LA_LIGA: '302',        // Spain La Liga
+  SERIE_A: '207',        // Italy Serie A
+  BUNDESLIGA: '175',     // Germany Bundesliga
+  LIGUE_1: '168',        // France Ligue 1
+  CHAMPIONSHIP: '153',   // England Championship
+  LIGUE_2: '164',        // France Ligue 2
 }
 
 export function getLeagueName(leagueId: string): string {
@@ -257,6 +261,8 @@ export function getLeagueName(leagueId: string): string {
     '207': 'Serie A',
     '175': 'Bundesliga',
     '168': 'Ligue 1',
+    '153': 'Championship',
+    '164': 'Ligue 2',
   }
   return names[leagueId] || 'Unknown League'
 }

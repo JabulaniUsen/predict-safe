@@ -54,7 +54,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
 # API Football
-API_FOOTBALL_KEY=1cb32db603edc3ff2e0c13ba21224f6d55a88a1be0bc9536ac15f4c12011e9ac
+API_FOOTBALL_KEY=2039aa84e45a691207351f44eb5f8a8fc7eb516a77bdbf789cebf2a98aa4ca4a
 API_FOOTBALL_BASE_URL=https://apifootball.com/api
 
 # Payment Gateways (Optional for development)
