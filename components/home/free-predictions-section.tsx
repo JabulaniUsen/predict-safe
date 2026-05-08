@@ -1,13 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatDate, formatTime, getDateRange } from '@/lib/utils/date'
 import { Fixture, getFixtures, getOdds, FREE_PLAN_LEAGUES } from '@/lib/api-football'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
@@ -28,18 +27,7 @@ const FILTERS = [
   { id: 'btts', label: 'BTTS/GG', slug: 'btts-gg' },
 ]
 
-// Map slug to filter ID
-const SLUG_TO_FILTER: Record<string, string> = {
-  'safe-free-picks': 'free',
-  'all-tips': 'all',
-  'super-single': 'super_single',
-  'double-chance': 'double_chance',
-  'home-win': 'home_win',
-  'away-win': 'away_win',
-  '1-5-goals': 'over_1_5',
-  '2-5-goals': 'over_2_5',
-  'btts-gg': 'btts',
-}
+const ROUTE_BUTTONS = FILTERS.filter((filter) => filter.id !== 'free')
 
 interface FreePrediction {
   id: string
@@ -59,51 +47,12 @@ interface FreePrediction {
 }
 
 export function FreePredictionsSection() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
   const [predictions, setPredictions] = useState<FreePrediction[]>([])
-  
-  // Get initial filter from URL or default to 'free'
-  const getInitialFilter = () => {
-    const filterParam = searchParams.get('filter')
-    if (filterParam && SLUG_TO_FILTER[filterParam]) {
-      return SLUG_TO_FILTER[filterParam]
-    }
-    return 'free'
-  }
-  
-  const [selectedFilter, setSelectedFilter] = useState(getInitialFilter)
+  const selectedFilter = 'free'
   const [dateType, setDateType] = useState<'previous' | 'today' | 'tomorrow' | 'custom'>('today')
   const [customDate, setCustomDate] = useState<string>('')
   const [daysBack, setDaysBack] = useState<number>(1) // 1 = yesterday when dateType is 'previous'
   const [loading, setLoading] = useState(true)
-
-  // Update URL when filter changes
-  const handleFilterChange = (filterId: string) => {
-    setSelectedFilter(filterId)
-    const filter = FILTERS.find(f => f.id === filterId)
-    if (filter) {
-      // Update URL with the filter slug
-      const params = new URLSearchParams(searchParams.toString())
-      params.set('filter', filter.slug)
-      router.push(`/?${params.toString()}`, { scroll: false })
-    }
-  }
-
-  // Sync filter with URL on mount and when URL changes
-  useEffect(() => {
-    const filterParam = searchParams.get('filter')
-    if (filterParam && SLUG_TO_FILTER[filterParam]) {
-      const filterId = SLUG_TO_FILTER[filterParam]
-      if (filterId !== selectedFilter) {
-        setSelectedFilter(filterId)
-      }
-    } else if (!filterParam && selectedFilter !== 'free') {
-      // If no filter in URL and not default, set to default
-      setSelectedFilter('free')
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams])
 
   useEffect(() => {
     const fetchPredictions = async () => {
@@ -496,39 +445,6 @@ export function FreePredictionsSection() {
       <div className="container mx-auto px-4">
         {/* Mobile Header */}
         <div className="mb-4 lg:hidden">
-          {/* Mobile Filters - Moved before title */}
-          <div className="mb-4">
-            <div className="grid grid-cols-3 gap-1.5 bg-gray-100 p-1.5 rounded-lg">
-              {FILTERS.map((filter, index) => {
-                const isActive = selectedFilter === filter.id
-                // Row 1: Free Tips, All Tips, Super Single (indices 0-2) - each 1 column
-                // Row 2: Double Chance (index 3) - spans 2 columns, Home Win (index 4) - 1 column
-                // Row 3: Away Win, 1.5 Goals, 2.5 Goals (indices 5-7) - each 1 column
-                // Row 4: BTTS/GG (index 8) - spans all 3 columns
-                let colSpan = ''
-                if (index === 3) {
-                  colSpan = 'col-span-2' // Double Chance spans 2 columns
-                } else if (index === 8) {
-                  colSpan = 'col-span-3' // BTTS/GG spans all 3 columns
-                }
-                
-                return (
-                  <button
-                    key={filter.id}
-                    onClick={() => handleFilterChange(filter.id)}
-                    className={`text-xs font-semibold rounded-md transition-all px-2 py-2.5 ${colSpan
-                      } ${isActive
-                        ? 'bg-[#1e40af] text-white'
-                        : 'bg-white text-gray-600 hover:text-[#1e40af]'
-                    }`}
-                  >
-                    {filter.label}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-          
           <h2 className="text-xl font-bold mb-2 text-gray-900">{getFilterLabel()}</h2>
           <p className="text-sm text-gray-600 mb-4">{getDateLabel()}</p>
           
@@ -610,26 +526,6 @@ export function FreePredictionsSection() {
 
         {/* Desktop Header */}
         <div className="mb-4 lg:mb-8 hidden lg:block">
-          {/* Desktop Filters - Moved before title */}
-          <div className="mb-4">
-            <Tabs value={selectedFilter} onValueChange={handleFilterChange}>
-              <div className="overflow-x-auto">
-                <TabsList className="grid w-full grid-cols-5 lg:grid-cols-9 bg-gray-100 p-1 rounded-lg min-w-[500px] lg:min-w-0">
-                  {FILTERS.map((filter) => (
-                    <TabsTrigger 
-                      key={filter.id} 
-                      value={filter.id} 
-                      className="text-xs sm:text-sm font-semibold data-[state=active]:bg-[#1e40af] data-[state=active]:text-white rounded-md transition-all px-2 lg:px-4"
-                    >
-                      {filter.label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </div>
-            </Tabs>
-          </div>
-          
-          
         </div>
 
         <div className="mb-4 lg:mb-8 hidden lg:flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -1068,6 +964,23 @@ export function FreePredictionsSection() {
           </div>
           </>
         )}
+
+        <div className="mt-6 lg:mt-8">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 lg:gap-3">
+            {ROUTE_BUTTONS.map((item) => (
+              <Link
+                key={item.id}
+                href={`/tips/${item.slug}`}
+                className="relative inline-flex min-h-[48px] sm:min-h-[52px] items-center justify-center rounded-lg border border-[#1e40af] bg-white px-3 py-2.5 text-xs sm:text-sm font-semibold text-[#1e40af] transition-colors hover:bg-[#1e40af] hover:text-white"
+              >
+                <span className="absolute right-1.5 top-1.5 rounded-full bg-[#16a34a] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
+                  Free
+                </span>
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   )

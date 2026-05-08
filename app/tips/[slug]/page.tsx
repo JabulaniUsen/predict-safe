@@ -28,6 +28,13 @@ interface Props {
   params: Promise<{ slug: string }>
 }
 
+function sanitizeDescriptionHtml(input: string) {
+  return input
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/\son\w+="[^"]*"/gi, '')
+    .replace(/\son\w+='[^']*'/gi, '')
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
   const supabase = await createClient()
@@ -80,21 +87,22 @@ export default async function TipsPage({ params }: Props) {
         </div>
       </section>
 
-      {/* Description */}
-      {page.description && (
-        <div className="bg-gray-50 border-b border-gray-200">
-          <div className="container mx-auto px-4 py-5 lg:py-6">
-            <p className="text-gray-700 text-sm lg:text-base max-w-3xl leading-relaxed">
-              {page.description}
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Predictions */}
       <main className="flex-1">
         <TipsPredictionsSection initialFilter={page.filter_id || 'free'} />
       </main>
+
+      {/* Description */}
+      {page.description && (
+        <section className="bg-gray-50 border-t border-gray-200">
+          <div className="container mx-auto px-4 py-6 lg:py-8">
+            <article
+              className="prose prose-gray lg:prose-lg max-w-5xl prose-headings:text-[#2a2356] prose-headings:font-bold prose-a:text-[#1e40af] prose-a:underline prose-strong:text-gray-900"
+              dangerouslySetInnerHTML={{ __html: sanitizeDescriptionHtml(page.description) }}
+            />
+          </div>
+        </section>
+      )}
 
       <Footer />
     </div>

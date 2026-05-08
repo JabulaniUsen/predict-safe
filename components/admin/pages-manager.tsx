@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { RichTextEditor } from '@/components/admin/rich-text-editor'
 import { toast } from 'sonner'
 import { ChevronDown, ChevronUp, Plus, ExternalLink, Trash2 } from 'lucide-react'
 import Link from 'next/link'
@@ -219,11 +219,10 @@ export function PagesManager({ pages: initialPages }: PagesManagerProps) {
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label>Description</Label>
-                <Textarea
+                <RichTextEditor
                   value={newPage.description}
-                  onChange={e => setNewPage(p => ({ ...p, description: e.target.value }))}
-                  placeholder="Introductory paragraph shown below the hero"
-                  rows={3}
+                  onChange={value => setNewPage(p => ({ ...p, description: value }))}
+                  placeholder="Write full page content with headings, subheadings, bold text, and lists..."
                 />
               </div>
               <div className="space-y-2">
@@ -311,11 +310,10 @@ export function PagesManager({ pages: initialPages }: PagesManagerProps) {
                       </div>
                       <div className="space-y-2 sm:col-span-2">
                         <Label>Description</Label>
-                        <Textarea
+                        <RichTextEditor
                           value={page.description || ''}
-                          onChange={e => updatePage(page.id, 'description', e.target.value)}
-                          placeholder="Introductory paragraph visible below the hero section"
-                          rows={3}
+                          onChange={value => updatePage(page.id, 'description', value)}
+                          placeholder="Write full page content with headings, subheadings, bold text, and lists..."
                         />
                       </div>
                       <div className="space-y-2">
@@ -447,7 +445,7 @@ export function PagesManager({ pages: initialPages }: PagesManagerProps) {
         {pages.length === 0 && (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
-              No pages yet. Click "New Page" to create one.
+              No pages yet. Click &quot;New Page&quot; to create one.
             </CardContent>
           </Card>
         )}
