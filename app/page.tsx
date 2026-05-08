@@ -49,11 +49,36 @@ export default async function HomePage() {
   const { data: configRows } = await supabase
     .from('site_config')
     .select('key, value')
-    .in('key', ['hero_headline', 'hero_subtext', 'telegram_link'])
+    .in('key', ['hero_headline', 'hero_subtext', 'telegram_link', 'whatsapp_number', 'whatsapp_numbers'])
 
   const config = Object.fromEntries(
-    (configRows ?? []).map((r: { key: string; value: string | null }) => [r.key, r.value ?? undefined])
-  )
+    (configRows ?? []).map((r: { key: string; value: unknown }) => [r.key, r.value ?? undefined])
+  ) as Record<string, unknown>
+
+  const whatsappNumberFromConfig = (() => {
+    const single = config.whatsapp_number
+    if (typeof single === 'string' && single.trim()) {
+      return single.trim()
+    }
+
+    const legacy = config.whatsapp_numbers
+    if (typeof legacy === 'string') {
+      try {
+        const parsed = JSON.parse(legacy)
+        if (Array.isArray(parsed) && typeof parsed[0] === 'string' && parsed[0].trim()) {
+          return parsed[0].trim()
+        }
+      } catch {
+        return ''
+      }
+    }
+
+    if (Array.isArray(legacy) && typeof legacy[0] === 'string' && legacy[0].trim()) {
+      return legacy[0].trim()
+    }
+
+    return ''
+  })()
 
   return (
     <>
@@ -62,9 +87,10 @@ export default async function HomePage() {
       <Navbar />
       <main>
         <HeroSection
-          headline={config.hero_headline}
-          subtext={config.hero_subtext}
-          telegramLink={config.telegram_link}
+          headline={typeof config.hero_headline === 'string' ? config.hero_headline : undefined}
+          subtext={typeof config.hero_subtext === 'string' ? config.hero_subtext : undefined}
+          telegramLink={typeof config.telegram_link === 'string' ? config.telegram_link : undefined}
+          whatsappNumber={whatsappNumberFromConfig}
         />
         <Suspense fallback={<div className="py-8"><div className="container mx-auto px-4">Loading predictions...</div></div>}>
           <FreePredictionsSection />

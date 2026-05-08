@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import type { User } from '@supabase/supabase-js'
 import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
@@ -25,19 +26,25 @@ interface HeroSectionProps {
   headline?: string
   subtext?: string
   telegramLink?: string
+  whatsappNumber?: string
 }
 
 export function HeroSection({
   headline: initialHeadline = 'Welcome to PredictSafe',
   subtext: initialSubtext = 'Your trusted source for accurate football predictions',
   telegramLink: initialTelegramLink = 'https://t.me/predictsafe',
+  whatsappNumber: initialWhatsappNumber = '',
 }: HeroSectionProps) {
   const router = useRouter()
   const [headline] = useState(initialHeadline)
   const [subtext] = useState(initialSubtext)
   const [telegramLink] = useState(initialTelegramLink)
-  const [user, setUser] = useState<any>(null)
+  const [whatsappNumber] = useState(initialWhatsappNumber)
+  const [user, setUser] = useState<User | null>(null)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const chatLink = whatsappNumber
+    ? `https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}`
+    : telegramLink
 
   useEffect(() => {
     const supabase = createClient()
@@ -121,7 +128,7 @@ export function HeroSection({
               asChild
               className="text-sm sm:text-base bg-white/10 backdrop-blur-sm text-white border-2 border-white/40 hover:bg-white hover:text-[#1e40af] px-8 py-5 rounded-xl font-bold transition-all duration-300 transform hover:scale-105"
             >
-              <a href={telegramLink} target="_blank" rel="noopener noreferrer">
+              <a href={chatLink} target="_blank" rel="noopener noreferrer">
                 Chat with us
               </a>
             </Button>
