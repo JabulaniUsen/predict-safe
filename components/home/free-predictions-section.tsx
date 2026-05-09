@@ -48,7 +48,7 @@ interface FreePrediction {
 
 export function FreePredictionsSection() {
   const [predictions, setPredictions] = useState<FreePrediction[]>([])
-  const selectedFilter = 'free'
+  const selectedFilter: string = 'free'
   const [dateType, setDateType] = useState<'previous' | 'today' | 'tomorrow' | 'custom'>('today')
   const [customDate, setCustomDate] = useState<string>('')
   const [daysBack, setDaysBack] = useState<number>(1) // 1 = yesterday when dateType is 'previous'
