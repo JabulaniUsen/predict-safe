@@ -310,6 +310,7 @@ export interface Database {
           scheduled_at: string | null
           meta_keywords: string | null
           tags: string[] | null
+          view_count: number
           created_at: string
           updated_at: string
         }
@@ -326,6 +327,7 @@ export interface Database {
           scheduled_at?: string | null
           meta_keywords?: string | null
           tags?: string[] | null
+          view_count?: number
           created_at?: string
           updated_at?: string
         }
@@ -342,6 +344,7 @@ export interface Database {
           scheduled_at?: string | null
           meta_keywords?: string | null
           tags?: string[] | null
+          view_count?: number
           created_at?: string
           updated_at?: string
         }
@@ -523,11 +526,15 @@ export interface Database {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      increment_blog_post_views: {
+        Args: {
+          post_id: string
+        }
+        Returns: number
+      }
     }
     Enums: {
       [_ in never]: never
     }
   }
 }
-

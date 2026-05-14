@@ -135,6 +135,7 @@ export function BlogManager({ initialPosts }: BlogManagerProps) {
                     <TableHead>Status</TableHead>
                     <TableHead>Published</TableHead>
                     <TableHead>Created</TableHead>
+                    <TableHead>Views</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -191,6 +192,9 @@ export function BlogManager({ initialPosts }: BlogManagerProps) {
                       <TableCell className="text-sm text-gray-600">
                         {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
                       </TableCell>
+                      <TableCell className="text-sm text-gray-600">
+                        {typeof post.view_count === 'number' ? post.view_count.toLocaleString() : '0'}
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           {post.published && (
@@ -200,7 +204,7 @@ export function BlogManager({ initialPosts }: BlogManagerProps) {
                               asChild
                               className="h-8 w-8 p-0"
                             >
-                              <Link href={`/blog/${post.id}`} target="_blank">
+                              <Link href={`/blog/${post.id}`} target="_blank" prefetch={false}>
                                 <Eye className="h-4 w-4" />
                               </Link>
                             </Button>
@@ -274,4 +278,3 @@ export function BlogManager({ initialPosts }: BlogManagerProps) {
     </div>
   )
 }
-

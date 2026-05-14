@@ -129,6 +129,15 @@ export default async function BlogPostPage({
 
   const blogPost = typedPost
 
+  // @ts-expect-error - Supabase type inference issue
+  const { error: incrementError } = await supabase.rpc('increment_blog_post_views', {
+    post_id: blogPost.id,
+  })
+
+  if (incrementError) {
+    console.error('Error incrementing blog post views:', incrementError)
+  }
+
   // Parse featured_image if it's JSON, otherwise use as URL
   let imageUrl = blogPost.featured_image || ''
   let imageWidth: number | undefined = undefined
@@ -243,4 +252,3 @@ export default async function BlogPostPage({
     </PageLayout>
   )
 }
-
