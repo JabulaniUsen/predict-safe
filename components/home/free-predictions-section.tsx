@@ -63,15 +63,21 @@ export function FreePredictionsSection() {
 
         console.log(`[Free Predictions] ${selectedFilterLabel} - fetching`, { from, to, dateType })
         
-        // Fetch fixtures from API Football — only free-plan leagues (Championship & Ligue 2)
+        // Fetch fixtures from API Football — top leagues first
         // Each league is fetched independently so one with no games doesn't crash the other
         const leagueFixtures = await Promise.all(
           FREE_PLAN_LEAGUES.map(leagueId =>
             getFixtures(from, leagueId, to).catch(() => [] as Fixture[])
           )
         )
-        const fixtures: Fixture[] = leagueFixtures.flatMap(f => Array.isArray(f) ? f : [])
-        
+        let fixtures: Fixture[] = leagueFixtures.flatMap(f => Array.isArray(f) ? f : [])
+
+        // Fallback: if the top leagues have no fixtures for this date (e.g. off-season
+        // or international tournament windows), fall back to all fixtures for the date
+        if (fixtures.length === 0) {
+          fixtures = await getFixtures(from, undefined, to).catch(() => [] as Fixture[])
+        }
+
         if (!Array.isArray(fixtures) || fixtures.length === 0) {
           console.log(`[Free Predictions] ${selectedFilterLabel} - no fixtures returned from API`, { from, to })
           setPredictions([])

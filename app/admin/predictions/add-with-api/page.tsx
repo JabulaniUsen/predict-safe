@@ -244,7 +244,10 @@ function AddPredictionWithAPIContent() {
 
     try {
       // Fetch fixture details
-      const date = new Date(prediction.kickoff_time).toISOString().split('T')[0]
+      // kickoff_time is stored as "YYYY-MM-DD HH:MM:SS" in UTC; take the date portion
+      // directly rather than going through Date (which parses space-separated
+      // datetimes as local time and can shift the date for matches near midnight UTC)
+      const date = prediction.kickoff_time.split(' ')[0]
       const fixtures = await getFixtures(date)
       const fixture = Array.isArray(fixtures) 
         ? fixtures.find((f: any) => f.match_id === prediction.match_id)

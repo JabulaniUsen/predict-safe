@@ -202,7 +202,9 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
     const predictionsByDate = new Map<string, Prediction[]>()
     
     predictionsNeedingLogos.forEach((pred) => {
-      const kickoffDate = new Date(pred.kickoff_time).toISOString().split('T')[0]
+      // kickoff_time is stored as "YYYY-MM-DD HH:MM:SS" in UTC; take the date
+      // portion directly to avoid local-timezone date shifts near midnight UTC
+      const kickoffDate = pred.kickoff_time.split(' ')[0]
       if (!predictionsByDate.has(kickoffDate)) {
         predictionsByDate.set(kickoffDate, [])
       }

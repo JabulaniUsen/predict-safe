@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getFixtures } from '@/lib/api-football'
+import { getFixtures, getOdds } from '@/lib/api-football'
 import { format } from 'date-fns'
 import { notifyPredictionDropped } from '@/lib/notifications'
 import { PLAN_TYPE_TO_SLUG } from '@/lib/constants'
@@ -44,11 +44,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const API_KEY = process.env.API_FOOTBALL_KEY
-    if (!API_KEY) {
-      return NextResponse.json({ error: 'API_FOOTBALL_KEY is not configured' }, { status: 500 })
-    }
-
     // Fetch fixtures from API Football
     const fixtures = await getFixtures(date)
 
@@ -64,52 +59,39 @@ export async function POST(request: NextRequest) {
       try {
         // Fetch odds for this fixture
         let odds = 1.85 // Default
-        let foundOdds: Array<{ type: string; odds: number }> = []
-        
+        const foundOdds: Array<{ type: string; odds: number }> = []
+
         try {
-          const oddsResponse = await fetch(
-            `${process.env.API_FOOTBALL_BASE_URL || 'https://apiv3.apifootball.com'}/?action=get_odds&APIkey=${API_KEY}&match_id=${fixture.match_id}&from=${date}&to=${date}`
-          )
-          
-          if (oddsResponse.ok) {
-            const oddsData = await oddsResponse.json()
-            if (Array.isArray(oddsData) && oddsData.length > 0) {
-              const matchOdds = oddsData[0]
-              
-              // Extract all available odds for all prediction types (including correct score)
-                if (matchOdds.odd_1) {
-                  const oddValue = parseFloat(matchOdds.odd_1)
-                  foundOdds.push({ type: 'Home Win', odds: oddValue })
-                }
-                if (matchOdds.odd_2) {
-                  const oddValue = parseFloat(matchOdds.odd_2)
-                  foundOdds.push({ type: 'Away Win', odds: oddValue })
-                }
-                if (matchOdds.odd_x) {
-                  const oddValue = parseFloat(matchOdds.odd_x)
-                  foundOdds.push({ type: 'Draw', odds: oddValue })
-                }
-                if (matchOdds['o+2.5']) {
-                  const oddValue = parseFloat(matchOdds['o+2.5'])
-                  foundOdds.push({ type: 'Over 2.5', odds: oddValue })
-                }
-                if (matchOdds['o+1.5']) {
-                  const oddValue = parseFloat(matchOdds['o+1.5'])
-                  foundOdds.push({ type: 'Over 1.5', odds: oddValue })
-                }
-                if (matchOdds['u+2.5']) {
-                  const oddValue = parseFloat(matchOdds['u+2.5'])
-                  foundOdds.push({ type: 'Under 2.5', odds: oddValue })
-                }
-                if (matchOdds.bts_yes) {
-                  const oddValue = parseFloat(matchOdds.bts_yes)
-                  foundOdds.push({ type: 'BTTS', odds: oddValue })
-                }
-                
-                // Set default odds from first available
-                if (foundOdds.length > 0) {
-                  odds = foundOdds[0].odds
-              }
+          const oddsData = await getOdds(fixture.match_id)
+          if (Array.isArray(oddsData) && oddsData.length > 0) {
+            const matchOdds = oddsData[0]
+
+            // Extract all available odds for all prediction types (including correct score)
+            if (matchOdds.odd_1) {
+              foundOdds.push({ type: 'Home Win', odds: parseFloat(matchOdds.odd_1) })
+            }
+            if (matchOdds.odd_2) {
+              foundOdds.push({ type: 'Away Win', odds: parseFloat(matchOdds.odd_2) })
+            }
+            if (matchOdds.odd_x) {
+              foundOdds.push({ type: 'Draw', odds: parseFloat(matchOdds.odd_x) })
+            }
+            if (matchOdds['o+2.5']) {
+              foundOdds.push({ type: 'Over 2.5', odds: parseFloat(matchOdds['o+2.5']) })
+            }
+            if (matchOdds['o+1.5']) {
+              foundOdds.push({ type: 'Over 1.5', odds: parseFloat(matchOdds['o+1.5']) })
+            }
+            if (matchOdds['u+2.5']) {
+              foundOdds.push({ type: 'Under 2.5', odds: parseFloat(matchOdds['u+2.5']) })
+            }
+            if (matchOdds.bts_yes) {
+              foundOdds.push({ type: 'BTTS', odds: parseFloat(matchOdds.bts_yes) })
+            }
+
+            // Set default odds from first available
+            if (foundOdds.length > 0) {
+              odds = foundOdds[0].odds
             }
           }
         } catch (oddsError) {
