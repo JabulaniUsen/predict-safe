@@ -15,7 +15,7 @@ export function CustomerCareChatButton() {
         .from('site_config')
         .select('value')
         .eq('key', 'chat_support_url')
-        .single()
+        .single() as { data: { value: string } | null; error: unknown }
 
       if (data?.value && typeof data.value === 'string' && data.value.trim()) {
         setChatUrl(data.value.trim())
