@@ -80,7 +80,13 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
             getFixtures(from, leagueId, to).catch(() => [] as Fixture[])
           )
         )
-        const fixtures: Fixture[] = leagueFixtures.flatMap(f => Array.isArray(f) ? f : [])
+        let fixtures: Fixture[] = leagueFixtures.flatMap(f => Array.isArray(f) ? f : [])
+
+        // Fallback: if the top leagues have no fixtures for this date (e.g. off-season
+        // or international tournament windows), fall back to all fixtures for the date
+        if (fixtures.length === 0) {
+          fixtures = await getFixtures(from, undefined, to).catch(() => [] as Fixture[])
+        }
 
         if (!Array.isArray(fixtures) || fixtures.length === 0) {
           setPredictions([])

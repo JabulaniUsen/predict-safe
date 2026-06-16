@@ -225,6 +225,18 @@ export function ConfigManager({ config }: ConfigManagerProps) {
                 Enter the WhatsApp number that will be used across the website
               </p>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="chat_support_url">Chat Support URL</Label>
+              <Input
+                id="chat_support_url"
+                defaultValue={configMap.get('chat_support_url') || ''}
+                onBlur={(e) => handleUpdateConfig('chat_support_url', e.target.value.trim())}
+                placeholder="https://leenkchat.vercel.app/..."
+              />
+              <p className="text-xs text-muted-foreground">
+                URL for the floating chat support button shown on all pages. Leave empty to hide the button.
+              </p>
+            </div>
           </CardContent>
         </Card>
 
