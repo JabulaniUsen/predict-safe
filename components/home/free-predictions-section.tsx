@@ -163,8 +163,8 @@ export function FreePredictionsSection() {
                           fixture.match_live === '1' ? 'live' : 'not_started',
                   home_team_logo: fixture.team_home_badge,
                   away_team_logo: fixture.team_away_badge,
-                  home_score: fixture.match_hometeam_score || undefined,
-                  away_score: fixture.match_awayteam_score || undefined,
+                  home_score: fixture.match_hometeam_score !== '' ? fixture.match_hometeam_score : undefined,
+                  away_score: fixture.match_awayteam_score !== '' ? fixture.match_awayteam_score : undefined,
                   match_id: fixture.match_id,
                 })
               }

@@ -144,8 +144,8 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
                   status: fixture.match_status === 'Finished' ? 'finished' : fixture.match_live === '1' ? 'live' : 'not_started',
                   home_team_logo: fixture.team_home_badge,
                   away_team_logo: fixture.team_away_badge,
-                  home_score: fixture.match_hometeam_score || undefined,
-                  away_score: fixture.match_awayteam_score || undefined,
+                  home_score: fixture.match_hometeam_score !== '' ? fixture.match_hometeam_score : undefined,
+                  away_score: fixture.match_awayteam_score !== '' ? fixture.match_awayteam_score : undefined,
                   match_id: fixture.match_id,
                 })
               }
@@ -330,7 +330,7 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
       <div className="container mx-auto px-4">
         {/* Mobile Filters */}
         <div className="mb-4 lg:hidden">
-          <div className="grid grid-cols-3 gap-1.5 bg-gray-100 p-1.5 rounded-lg mb-4">
+          <div className="grid grid-cols-3 gap-2 mb-4">
             {FILTERS.map((filter, index) => {
               const isActive = selectedFilter === filter.id
               let colSpan = ''
@@ -340,10 +340,15 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
                 <button
                   key={filter.id}
                   onClick={() => handleFilterChange(filter.id)}
-                  className={`text-xs font-semibold rounded-md transition-all px-2 py-2.5 ${colSpan} ${
-                    isActive ? 'bg-[#1e40af] text-white' : 'bg-white text-gray-600 hover:text-[#1e40af]'
+                  className={`relative inline-flex min-h-[44px] items-center justify-center rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${colSpan} ${
+                    isActive
+                      ? 'border-[#1e40af] bg-[#1e40af] text-white'
+                      : 'border-[#1e40af] bg-white text-[#1e40af] hover:bg-[#1e40af] hover:text-white'
                   }`}
                 >
+                  <span className="absolute right-1 top-1 rounded-full bg-[#16a34a] px-1 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-white">
+                    Free
+                  </span>
                   {filter.label}
                 </button>
               )
@@ -395,21 +400,27 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
 
         {/* Desktop Filters */}
         <div className="mb-4 lg:mb-8 hidden lg:block">
-          <Tabs value={selectedFilter} onValueChange={handleFilterChange}>
-            <div className="overflow-x-auto mb-4">
-              <TabsList className="grid w-full grid-cols-9 bg-gray-100 p-1 rounded-lg">
-                {FILTERS.map((filter) => (
-                  <TabsTrigger
-                    key={filter.id}
-                    value={filter.id}
-                    className="text-xs sm:text-sm font-semibold data-[state=active]:bg-[#1e40af] data-[state=active]:text-white rounded-md transition-all px-2 lg:px-4"
-                  >
-                    {filter.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </div>
-          </Tabs>
+          <div className="grid grid-cols-9 gap-2 mb-4">
+            {FILTERS.map((filter) => {
+              const isActive = selectedFilter === filter.id
+              return (
+                <button
+                  key={filter.id}
+                  onClick={() => handleFilterChange(filter.id)}
+                  className={`relative inline-flex min-h-12 items-center justify-center rounded-lg border px-2 lg:px-3 py-2.5 text-xs sm:text-sm font-semibold transition-colors ${
+                    isActive
+                      ? 'border-[#1e40af] bg-[#1e40af] text-white'
+                      : 'border-[#1e40af] bg-white text-[#1e40af] hover:bg-[#1e40af] hover:text-white'
+                  }`}
+                >
+                  <span className="absolute right-1.5 top-1.5 rounded-full bg-[#16a34a] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
+                    Free
+                  </span>
+                  {filter.label}
+                </button>
+              )
+            })}
+          </div>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <p className="text-sm lg:text-base text-gray-600">

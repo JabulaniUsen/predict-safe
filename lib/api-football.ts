@@ -142,10 +142,12 @@ function getSeasonYear(dateStr?: string): number {
 // Map API-Sports fixture.status.short -> apifootball-style status/live flags
 function mapFixtureStatus(short: string): { match_status: string; match_live: string } {
   const liveCodes = ['1H', 'HT', '2H', 'ET', 'BT', 'P']
+  const finishedCodes = ['FT', 'AET', 'PEN']
   const match_live = liveCodes.includes(short) ? '1' : '0'
 
   let match_status = short
   if (short === 'NS') match_status = 'Not Started'
+  else if (finishedCodes.includes(short)) match_status = 'Finished'
 
   return { match_status, match_live }
 }
