@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
     // Prepare all predictions for the predictions table
     // Correct score predictions are identified by plan_type === 'correct_score'
-    const validColumns = ['plan_type', 'home_team', 'away_team', 'league', 'prediction_type', 'odds', 'confidence', 'kickoff_time', 'status', 'result', 'admin_notes']
+    const validColumns = ['plan_type', 'home_team', 'away_team', 'league', 'league_id', 'prediction_type', 'odds', 'confidence', 'kickoff_time', 'status', 'result', 'admin_notes']
     const cleanedPredictions = predictions.map((pred: any) => {
       const cleaned: any = {}
       

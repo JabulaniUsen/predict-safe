@@ -105,6 +105,7 @@ function AddPredictionContent() {
 
         // Set league and teams
         setLeagueName(prediction.league || '')
+        setLeagueId(prediction.league_id || '')
         setHomeTeam(prediction.home_team || '')
         setAwayTeam(prediction.away_team || '')
 
@@ -148,6 +149,7 @@ function AddPredictionContent() {
       home_team: (homeTeam || formDataObj.get('home_team')) as string,
       away_team: (awayTeam || formDataObj.get('away_team')) as string,
       league: (leagueName || formDataObj.get('league')) as string,
+      league_id: leagueId || null,
       prediction_type: formDataObj.get('prediction_type') as string,
       odds: parseFloat(formDataObj.get('odds') as string),
       confidence: parseInt(formDataObj.get('confidence') as string),

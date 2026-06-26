@@ -103,6 +103,7 @@ function AddCorrectScoreContent() {
 
         // Set league and teams
         setLeagueName(prediction.league || '')
+        setLeagueId(prediction.league_id || '')
         setHomeTeam(prediction.home_team || '')
         setAwayTeam(prediction.away_team || '')
 
@@ -134,6 +135,7 @@ function AddCorrectScoreContent() {
       home_team: (homeTeam || formDataObj.get('home_team')) as string,
       away_team: (awayTeam || formDataObj.get('away_team')) as string,
       league: (leagueName || formDataObj.get('league')) as string,
+      league_id: leagueId || null,
       prediction_type: scorePrediction, // Just the score (e.g., "2-1")
       odds: formDataObj.get('odds') ? parseFloat(formDataObj.get('odds') as string) : 1.0,
       confidence: 80, // Default confidence for correct score predictions

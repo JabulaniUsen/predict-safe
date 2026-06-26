@@ -20,6 +20,7 @@ import {
   X,
   BookOpen,
   Trophy,
+  Medal,
   MessageCircle,
   Link as LinkIcon,
   Globe
@@ -93,6 +94,11 @@ const navItems: NavItem[] = [
     href: '/admin/pages',
     label: 'Pages',
     icon: <Globe className="h-5 w-5 lg:h-6 lg:w-6" />
+  },
+  {
+    href: '/admin/competitions',
+    label: 'Competitions',
+    icon: <Medal className="h-5 w-5 lg:h-6 lg:w-6" />
   },
   {
     href: '/admin/config',

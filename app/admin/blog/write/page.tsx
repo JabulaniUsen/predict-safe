@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Calendar } from 'lucide-react'
 import { toast } from 'sonner'
 import { AdminLayout } from '@/components/admin/admin-layout'
@@ -54,8 +55,10 @@ function WriteBlogContent() {
     scheduled_at: '',
     meta_keywords: '',
     tags: [] as string[],
+    competition_id: '',
   })
   const [tagInput, setTagInput] = useState('')
+  const [competitions, setCompetitions] = useState<{ id: string; name: string }[]>([])
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -85,6 +88,20 @@ function WriteBlogContent() {
 
     checkAuth()
   }, [router])
+
+  useEffect(() => {
+    const loadCompetitions = async () => {
+      const supabase = createClient()
+      const { data } = await (supabase as any)
+        .from('competitions')
+        .select('id, name')
+        .eq('status', 'active')
+        .order('display_order', { ascending: true })
+      setCompetitions(data || [])
+    }
+
+    loadCompetitions()
+  }, [])
 
   // Load blog post data if editing
   useEffect(() => {
@@ -138,6 +155,7 @@ function WriteBlogContent() {
           scheduled_at: post.scheduled_at ? new Date(post.scheduled_at).toISOString().slice(0, 16) : '',
           meta_keywords: post.meta_keywords || '',
           tags: post.tags || [],
+          competition_id: post.competition_id || '',
         })
 
         // In edit mode, slug is already set, so mark it as manually edited to preserve it
@@ -265,6 +283,7 @@ function WriteBlogContent() {
       author_id: user.id,
       meta_keywords: formData.meta_keywords.trim() || null,
       tags: formData.tags.length > 0 ? formData.tags : null,
+      competition_id: formData.competition_id || null,
     }
 
     // Handle scheduling
@@ -711,6 +730,25 @@ function WriteBlogContent() {
                 />
                 <p className="text-xs text-gray-500">
                   Comma-separated keywords for SEO (e.g., football, predictions, betting tips)
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="competition">Competition</Label>
+                <Select
+                  value={formData.competition_id || 'none'}
+                  onValueChange={(v) => setFormData({ ...formData, competition_id: v === 'none' ? '' : v })}
+                >
+                  <SelectTrigger id="competition"><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {competitions.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500">
+                  Assigning a competition automatically lists this post under Related Articles on its competition page.
                 </p>
               </div>
 

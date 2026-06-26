@@ -199,6 +199,15 @@ export function Navbar() {
             </Link>
 
             <Link
+              href="/competitions"
+              className={`text-sm font-medium transition-colors ${
+                pathname === '/competitions' ? 'text-[#1e40af]' : 'text-gray-600 hover:text-[#1e40af]'
+              }`}
+            >
+              Competitions
+            </Link>
+
+            <Link
               href="/blog"
               className={`text-sm font-medium transition-colors ${
                 pathname === '/blog' ? 'text-[#1e40af]' : 'text-gray-600 hover:text-[#1e40af]'
@@ -424,8 +433,19 @@ export function Navbar() {
                 >
                   Livescores
                 </Link>
-                <Link 
-                  href="/blog" 
+                <Link
+                  href="/competitions"
+                  className={`px-4 py-3 rounded-lg transition-colors ${
+                    pathname === '/competitions'
+                      ? 'bg-[#1e40af]/10 text-[#1e40af] font-medium'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-[#1e40af]'
+                  }`}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Competitions
+                </Link>
+                <Link
+                  href="/blog"
                   className={`px-4 py-3 rounded-lg transition-colors ${
                     pathname === '/blog' 
                       ? 'bg-[#1e40af]/10 text-[#1e40af] font-medium' 

@@ -168,6 +168,7 @@ export interface Database {
           home_score: number | null
           away_score: number | null
           admin_notes: string | null
+          league_id: string | null
           created_at: string
           updated_at: string
         }
@@ -186,6 +187,7 @@ export interface Database {
           home_score?: number | null
           away_score?: number | null
           admin_notes?: string | null
+          league_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -204,6 +206,7 @@ export interface Database {
           home_score?: number | null
           away_score?: number | null
           admin_notes?: string | null
+          league_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -311,6 +314,7 @@ export interface Database {
           meta_keywords: string | null
           tags: string[] | null
           view_count: number
+          competition_id: string | null
           created_at: string
           updated_at: string
         }
@@ -328,6 +332,7 @@ export interface Database {
           meta_keywords?: string | null
           tags?: string[] | null
           view_count?: number
+          competition_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -345,6 +350,7 @@ export interface Database {
           meta_keywords?: string | null
           tags?: string[] | null
           view_count?: number
+          competition_id?: string | null
           created_at?: string
           updated_at?: string
         }
