@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { RichTextEditor } from '@/components/admin/rich-text-editor'
+import { ImportCompetitionDialog } from '@/components/admin/import-competition-dialog'
 import { toast } from 'sonner'
-import { ChevronDown, ChevronUp, Plus, ExternalLink, Trash2, ImagePlus } from 'lucide-react'
+import { ChevronDown, ChevronUp, Plus, ExternalLink, Trash2, ImagePlus, Download } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 
@@ -27,6 +28,9 @@ interface Competition {
   subheading: string | null
   introduction: string | null
   display_order: number | null
+  country: string | null
+  competition_type: string | null
+  current_season: string | null
 }
 
 interface CompetitionsManagerProps {
@@ -90,6 +94,7 @@ export function CompetitionsManager({ competitions: initialCompetitions }: Compe
   const [deleting, setDeleting] = useState<string | null>(null)
   const [uploadingId, setUploadingId] = useState<string | null>(null)
   const [showNewForm, setShowNewForm] = useState(false)
+  const [showImportDialog, setShowImportDialog] = useState(false)
   const [creatingCompetition, setCreatingCompetition] = useState(false)
   const [newCompetition, setNewCompetition] = useState({
     slug: '',
@@ -123,6 +128,9 @@ export function CompetitionsManager({ competitions: initialCompetitions }: Compe
           subheading: competition.subheading,
           introduction: competition.introduction,
           display_order: competition.display_order,
+          country: competition.country,
+          competition_type: competition.competition_type,
+          current_season: competition.current_season,
         })
         .eq('id', competition.id)
 
@@ -207,11 +215,26 @@ export function CompetitionsManager({ competitions: initialCompetitions }: Compe
             Manage competition landing pages shown at /competitions
           </p>
         </div>
-        <Button onClick={() => setShowNewForm(!showNewForm)} className="gap-2">
-          <Plus className="h-4 w-4" />
-          New Competition
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowImportDialog(true)} className="gap-2">
+            <Download className="h-4 w-4" />
+            Import Competition
+          </Button>
+          <Button onClick={() => setShowNewForm(!showNewForm)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            New Competition
+          </Button>
+        </div>
       </div>
+
+      <ImportCompetitionDialog
+        open={showImportDialog}
+        onOpenChange={setShowImportDialog}
+        existingSlugs={competitions.map(c => c.slug)}
+        existingLeagueIds={competitions.map(c => c.league_id)}
+        nextDisplayOrder={competitions.length + 1}
+        onImported={imported => setCompetitions(prev => [...prev, imported as Competition])}
+      />
 
       {showNewForm && (
         <Card className="border-2 border-blue-200 bg-blue-50/30">
@@ -361,6 +384,28 @@ export function CompetitionsManager({ competitions: initialCompetitions }: Compe
                         <Input
                           value={competition.league_id}
                           onChange={e => updateCompetition(competition.id, 'league_id', e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Country</Label>
+                        <Input
+                          value={competition.country || ''}
+                          onChange={e => updateCompetition(competition.id, 'country', e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Competition Type</Label>
+                        <Input
+                          value={competition.competition_type || ''}
+                          onChange={e => updateCompetition(competition.id, 'competition_type', e.target.value)}
+                          placeholder="League or Cup"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Current Season</Label>
+                        <Input
+                          value={competition.current_season || ''}
+                          onChange={e => updateCompetition(competition.id, 'current_season', e.target.value)}
                         />
                       </div>
                       <div className="space-y-2 sm:col-span-2">

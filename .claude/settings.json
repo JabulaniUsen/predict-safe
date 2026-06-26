@@ -49,7 +49,8 @@
       "Bash(curl -s \"http://localhost:3000/api/football/odds?match_id=1532192\")",
       "Bash(curl -s \"http://localhost:3000/api/football/odds?match_id=1489372\")",
       "Bash(curl -s \"http://localhost:3000/api/football/fixtures?from=2026-06-15&to=2026-06-15\" -o /tmp/fx2.json)",
-      "Bash(pkill -f \"next dev\")"
+      "Bash(pkill -f \"next dev\")",
+      "Bash(xargs -I{} sh -c 'echo \"=== {} ===\"; cat {}')"
     ],
     "additionalDirectories": [
       "/Users/mac/Desktop/Client projects/predict-safe/app/tips"

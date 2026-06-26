@@ -1,0 +1,3 @@
+ALTER TABLE competitions ADD COLUMN IF NOT EXISTS country VARCHAR(255);
+ALTER TABLE competitions ADD COLUMN IF NOT EXISTS competition_type VARCHAR(50);
+ALTER TABLE competitions ADD COLUMN IF NOT EXISTS current_season VARCHAR(20);

@@ -123,6 +123,8 @@ export interface League {
   country_name?: string
   country_logo?: string
   league_logo?: string
+  league_type?: string
+  current_season?: string
 }
 
 export interface Team {
@@ -450,13 +452,19 @@ export async function getLeagues(search?: string) {
   if (search) params.search = search
 
   const data = await callProvider('leagues', params)
-  const leagues: League[] = (data.response || []).map((item: any) => ({
-    league_id: String(item.league?.id ?? ''),
-    league_name: item.league?.name || '',
-    country_name: item.country?.name || '',
-    country_logo: item.country?.flag || '',
-    league_logo: item.league?.logo || '',
-  }))
+  const leagues: League[] = (data.response || []).map((item: any) => {
+    const seasons = item.seasons || []
+    const currentSeason = seasons.find((s: any) => s.current) || seasons[seasons.length - 1]
+    return {
+      league_id: String(item.league?.id ?? ''),
+      league_name: item.league?.name || '',
+      country_name: item.country?.name || '',
+      country_logo: item.country?.flag || '',
+      league_logo: item.league?.logo || '',
+      league_type: item.league?.type || '',
+      current_season: currentSeason?.year != null ? String(currentSeason.year) : '',
+    }
+  })
 
   return leagues
     .filter((l) => l.league_id && l.league_name)
