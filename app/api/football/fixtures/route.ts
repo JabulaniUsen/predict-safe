@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getFixtures } from '@/lib/api-football'
 
+export const dynamic = 'force-dynamic'
+
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message

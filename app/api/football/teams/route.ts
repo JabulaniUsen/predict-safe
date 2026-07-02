@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getTeams, FREE_PLAN_LEAGUES } from '@/lib/api-football'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
