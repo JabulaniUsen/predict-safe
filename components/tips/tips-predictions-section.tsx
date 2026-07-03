@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatTime, getDateRange } from '@/lib/utils/date'
 import { Fixture, getFixtures, getOdds, FREE_PLAN_LEAGUES } from '@/lib/api-football'
+import { mapWithConcurrency } from '@/lib/utils/concurrency'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import Image from 'next/image'
@@ -104,7 +105,7 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
 
         if (selectedFilter === 'all') {
           const fixturesToProcess = fixtures.slice(0, 60)
-          const oddsPromises = fixturesToProcess.map(async (fixture) => {
+          const oddsResults = await mapWithConcurrency(fixturesToProcess, 5, async (fixture) => {
             try {
               const odds = await getOdds(fixture.match_id)
               return { matchId: fixture.match_id, odds: Array.isArray(odds) && odds.length > 0 ? odds[0] : null }
@@ -112,7 +113,6 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
               return { matchId: fixture.match_id, odds: null }
             }
           })
-          const oddsResults = await Promise.all(oddsPromises)
           const oddsMap = new Map(oddsResults.map(r => [r.matchId, r.odds]))
 
           for (const fixture of fixturesToProcess) {
@@ -162,7 +162,7 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
         } else {
           const buffer = selectedFilter === 'free' ? 80 : 60
           const fixturesToProcess = fixtures.slice(0, maxPredictions + buffer)
-          const oddsPromises = fixturesToProcess.map(async (fixture) => {
+          const oddsResults = await mapWithConcurrency(fixturesToProcess, 5, async (fixture) => {
             try {
               const odds = await getOdds(fixture.match_id)
               return { matchId: fixture.match_id, odds: Array.isArray(odds) && odds.length > 0 ? odds[0] : null }
@@ -170,7 +170,6 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
               return { matchId: fixture.match_id, odds: null }
             }
           })
-          const oddsResults = await Promise.all(oddsPromises)
           const oddsMap = new Map(oddsResults.map(r => [r.matchId, r.odds]))
 
           for (const fixture of fixturesToProcess) {

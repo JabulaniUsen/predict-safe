@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatDate, formatTime, getDateRange } from '@/lib/utils/date'
 import { Fixture, getFixtures, getOdds, FREE_PLAN_LEAGUES } from '@/lib/api-football'
+import { mapWithConcurrency } from '@/lib/utils/concurrency'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
@@ -105,8 +106,8 @@ export function FreePredictionsSection() {
           // Limit fixtures to process (increase to ensure we find enough matches with specific odds)
           const fixturesToProcess = fixtures.slice(0, 60)
           
-          // Fetch all odds in parallel
-          const oddsPromises = fixturesToProcess.map(async (fixture) => {
+          // Fetch odds with limited concurrency to avoid tripping the provider's rate limit
+          const oddsResults = await mapWithConcurrency(fixturesToProcess, 5, async (fixture) => {
             try {
               const odds = await getOdds(fixture.match_id)
               return { matchId: fixture.match_id, odds: Array.isArray(odds) && odds.length > 0 ? odds[0] : null }
@@ -115,10 +116,8 @@ export function FreePredictionsSection() {
               return { matchId: fixture.match_id, odds: null }
             }
           })
-          
-          const oddsResults = await Promise.all(oddsPromises)
           const oddsMap = new Map(oddsResults.map(r => [r.matchId, r.odds]))
-          
+
           // Process all fixtures and create predictions for all available types
           for (const fixture of fixturesToProcess) {
             try {
@@ -180,8 +179,8 @@ export function FreePredictionsSection() {
           const buffer = selectedFilter === 'free' ? 80 : 60
           const fixturesToProcess = fixtures.slice(0, maxPredictions + buffer)
           
-          // Fetch all odds in parallel for the fixtures we need
-          const oddsPromises = fixturesToProcess.map(async (fixture) => {
+          // Fetch odds with limited concurrency to avoid tripping the provider's rate limit
+          const oddsResults = await mapWithConcurrency(fixturesToProcess, 5, async (fixture) => {
             try {
               const odds = await getOdds(fixture.match_id)
               return { matchId: fixture.match_id, odds: Array.isArray(odds) && odds.length > 0 ? odds[0] : null }
@@ -190,8 +189,6 @@ export function FreePredictionsSection() {
               return { matchId: fixture.match_id, odds: null }
             }
           })
-          
-          const oddsResults = await Promise.all(oddsPromises)
           const oddsMap = new Map(oddsResults.map(r => [r.matchId, r.odds]))
           
           for (const fixture of fixturesToProcess) {
