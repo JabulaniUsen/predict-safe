@@ -306,6 +306,14 @@ function dateRange(from: string, to: string): string[] {
   return dates.length > 0 ? dates : [from]
 }
 
+// Shared cache for provider responses, keyed by request URL. Keeps repeat
+// visitors within the same warm server instance from each re-hitting the
+// provider (and burning daily quota) for the same fixtures/odds.
+const PROVIDER_CACHE_TTL_MS = 90_000
+const PROVIDER_CACHE_MAX_ENTRIES = 1000
+const providerCache = new Map<string, { data: any; expires: number }>()
+const inFlightRequests = new Map<string, Promise<any>>()
+
 // Server-side request to API-Sports
 async function callProvider(path: string, params: Record<string, string> = {}) {
   if (!API_KEY) {
@@ -315,22 +323,46 @@ async function callProvider(path: string, params: Record<string, string> = {}) {
   const queryParams = new URLSearchParams(params)
   const url = `${BASE_URL}/${path}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
 
-  try {
-    const response = await fetch(url, {
-      headers: { 'x-apisports-key': API_KEY },
-      next: { revalidate: 300 }, // Cache for 5 minutes
-    })
-
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.statusText}`)
-    }
-
-    const data = await response.json()
-    return data
-  } catch (error) {
-    console.error('API Football Error:', error)
-    throw error
+  const cached = providerCache.get(url)
+  if (cached && cached.expires > Date.now()) {
+    return cached.data
   }
+
+  // Coalesce concurrent requests for the same URL into a single provider call
+  const pending = inFlightRequests.get(url)
+  if (pending) {
+    return pending
+  }
+
+  const requestPromise = (async () => {
+    try {
+      const response = await fetch(url, {
+        headers: { 'x-apisports-key': API_KEY },
+      })
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+
+      if (providerCache.size >= PROVIDER_CACHE_MAX_ENTRIES) {
+        const oldestKey = providerCache.keys().next().value
+        if (oldestKey !== undefined) providerCache.delete(oldestKey)
+      }
+      providerCache.set(url, { data, expires: Date.now() + PROVIDER_CACHE_TTL_MS })
+
+      return data
+    } catch (error) {
+      console.error('API Football Error:', error)
+      throw error
+    } finally {
+      inFlightRequests.delete(url)
+    }
+  })()
+
+  inFlightRequests.set(url, requestPromise)
+  return requestPromise
 }
 
 // Detect if we're on server or client

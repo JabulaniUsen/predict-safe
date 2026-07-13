@@ -15,7 +15,9 @@ export async function GET(request: NextRequest) {
     const standings = await getStandings(leagueId)
 
     return NextResponse.json(standings, {
-      headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=600' },
+      // Caching is handled by the shared provider-response cache in lib/api-football.ts;
+      // avoid CDN-level caching here since it previously cached by path, ignoring query params.
+      headers: { 'Cache-Control': 'no-store' },
     })
   } catch (error: any) {
     console.error('API Football Error:', error)

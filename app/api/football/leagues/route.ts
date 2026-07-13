@@ -12,7 +12,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(leagues, {
       headers: {
-        'Cache-Control': 's-maxage=86400, stale-while-revalidate=172800',
+        // Caching is handled by the shared provider-response cache in lib/api-football.ts;
+        // avoid CDN-level caching here since it previously cached by path, ignoring query params.
+        'Cache-Control': 'no-store',
       },
     })
   } catch (error: any) {

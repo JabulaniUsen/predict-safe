@@ -56,7 +56,7 @@ function escapeHtml(str: string | null | undefined): string {
 }
 
 // Email templates
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').replace(/\/+$/, '')
 const BRAND_COLORS = {
   primary: '#1e40af',
   primaryDark: '#1e3a8a',

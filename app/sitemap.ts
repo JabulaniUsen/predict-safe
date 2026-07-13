@@ -6,7 +6,7 @@ import { Database } from '@/types/database'
 export const revalidate = 3600 // Revalidate every hour
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://predictsafe.com'
+  const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://predictsafe.com').replace(/\/+$/, '')
   
   // Static pages
   const staticPages: MetadataRoute.Sitemap = [
@@ -107,7 +107,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     if (result.error) {
       console.error('Error fetching blog posts for sitemap:', result.error)
-      return staticPages
     }
 
     const blogPosts = result.data
@@ -119,7 +118,30 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.7,
     }))
 
-    return [...staticPages, ...blogPages]
+    // Get published tips landing pages (e.g. /tips/safe-free-picks, /tips/home-win)
+    const tipsPagesPromise = supabase
+      .from('custom_pages')
+      .select('slug, updated_at')
+      .eq('is_published', true)
+
+    const tipsTimeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) =>
+      setTimeout(() => resolve({ data: null, error: { message: 'Timeout' } }), 10000)
+    )
+
+    const tipsResult = await Promise.race([tipsPagesPromise, tipsTimeoutPromise]) as { data: any[] | null; error: any }
+
+    if (tipsResult.error) {
+      console.error('Error fetching tips pages for sitemap:', tipsResult.error)
+    }
+
+    const tipsPages: MetadataRoute.Sitemap = (tipsResult.data || []).map((page: { slug: string; updated_at: string | null }) => ({
+      url: `${baseUrl}/tips/${page.slug}`,
+      lastModified: new Date(page.updated_at || new Date()),
+      changeFrequency: 'daily' as const,
+      priority: 0.8,
+    }))
+
+    return [...staticPages, ...blogPages, ...tipsPages]
   } catch (error) {
     console.error('Error generating sitemap:', error)
     // Always return static pages even if blog posts fail
