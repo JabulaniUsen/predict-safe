@@ -13,15 +13,15 @@ import { stripHtmlTags } from '@/lib/utils/html'
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ id: string }>
+  params: Promise<{ slug: string }>
 }): Promise<Metadata> {
-  const { id } = await params
+  const { slug } = await params
   const supabase = await createClient()
 
   const { data: post, error } = await supabase
     .from('blog_posts')
     .select('*')
-    .eq('id', id)
+    .eq('slug', slug)
     .single()
 
   if (error || !post) {
@@ -77,20 +77,20 @@ export async function generateMetadata({
 export default async function BlogPostPage({
   params,
 }: {
-  params: Promise<{ id: string }>
+  params: Promise<{ slug: string }>
 }) {
-  const { id } = await params
+  const { slug } = await params
   const supabase = await createClient()
 
-  // Get the blog post by ID (without publishing restrictions for now to debug)
+  // Get the blog post by slug (without publishing restrictions for now to debug)
   const { data: post, error } = await supabase
     .from('blog_posts')
     .select('*')
-    .eq('id', id)
+    .eq('slug', slug)
     .single()
 
   if (error || !post) {
-    console.error(`Blog post not found with id: ${id}`, error)
+    console.error(`Blog post not found with slug: ${slug}`, error)
     notFound()
   }
 
@@ -100,13 +100,13 @@ export default async function BlogPostPage({
   // Check if post is published and available
   const isPublished = typedPost.published === true
   const hasPublishedAt = typedPost.published_at !== null
-  const isPublishedInPast = typedPost.published_at 
+  const isPublishedInPast = typedPost.published_at
     ? new Date(typedPost.published_at) <= new Date()
     : false
 
   // Log the post status for debugging
   console.log('Blog post status:', {
-    id,
+    slug,
     title: typedPost.title,
     published: isPublished,
     hasPublishedAt,
@@ -118,7 +118,7 @@ export default async function BlogPostPage({
   // Only show if published and published_at is set and in the past
   if (!isPublished || !hasPublishedAt || !isPublishedInPast) {
     console.error(`Blog post exists but is not available:`, {
-      id,
+      slug,
       published: isPublished,
       hasPublishedAt,
       isPublishedInPast,

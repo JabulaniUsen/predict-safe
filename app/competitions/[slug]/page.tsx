@@ -172,7 +172,7 @@ export default async function CompetitionPage({ params }: Props) {
                     </CardHeader>
                     <CardContent className="bg-gray-50 p-4">
                       <Button asChild className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white w-full">
-                        <Link href={`/blog/${post.id}`} prefetch={false}>Read More</Link>
+                        <Link href={`/blog/${post.slug}`} prefetch={false}>Read More</Link>
                       </Button>
                     </CardContent>
                   </Card>

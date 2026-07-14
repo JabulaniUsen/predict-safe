@@ -84,6 +84,13 @@ export default function RootLayout({
         className={`${rajdhani.variable} font-rajdhani antialiased`}
       >
         <PWAHead />
+        {/* Google AdSense */}
+        <Script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8238566133808506"
+          crossOrigin="anonymous"
+          strategy="beforeInteractive"
+        />
         {/* Google Analytics */}
         {process.env.NEXT_PUBLIC_GA_ID && (
           <>

@@ -1,0 +1,6 @@
+# ads.txt for PredictSafe
+# https://iabtechlab.com/ads-txt/
+
+google.com, pub-8238566133808506, DIRECT, f08c47fec0942fa0
+
+# Clever Advertising entry to be added here once provided

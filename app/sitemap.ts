@@ -94,7 +94,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Get published blog posts with timeout protection
     const blogPostsPromise = supabase
       .from('blog_posts')
-      .select('id, updated_at, published_at')
+      .select('slug, updated_at, published_at')
       .eq('published', true)
       .not('published_at', 'is', null)
 
@@ -111,8 +111,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     const blogPosts = result.data
 
-    const blogPages: MetadataRoute.Sitemap = (blogPosts || []).map((post: { id: string; updated_at: string | null; published_at: string | null }) => ({
-      url: `${baseUrl}/blog/${post.id}`,
+    const blogPages: MetadataRoute.Sitemap = (blogPosts || []).map((post: { slug: string; updated_at: string | null; published_at: string | null }) => ({
+      url: `${baseUrl}/blog/${post.slug}`,
       lastModified: new Date(post.updated_at || post.published_at || new Date()),
       changeFrequency: 'weekly' as const,
       priority: 0.7,
