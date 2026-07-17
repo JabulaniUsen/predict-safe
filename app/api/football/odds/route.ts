@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getOdds } from '@/lib/api-football'
+import { getOdds, getOddsByLeague } from '@/lib/api-football'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,12 +14,14 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const matchId = searchParams.get('match_id')
+    const leagueId = searchParams.get('league_id')
+    const date = searchParams.get('date')
 
-    if (!matchId) {
-      return NextResponse.json({ error: 'match_id is required' }, { status: 400 })
+    if (!matchId && !(leagueId && date)) {
+      return NextResponse.json({ error: 'match_id, or league_id and date, is required' }, { status: 400 })
     }
 
-    const odds = await getOdds(matchId)
+    const odds = matchId ? await getOdds(matchId) : await getOddsByLeague(leagueId as string, date as string)
 
     return NextResponse.json(odds, {
       headers: {

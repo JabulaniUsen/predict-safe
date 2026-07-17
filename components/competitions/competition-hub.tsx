@@ -16,6 +16,7 @@ import Image from 'next/image'
 
 interface CompetitionHubProps {
   leagueId: string
+  leagueName: string
   competitionName: string
 }
 
@@ -24,7 +25,7 @@ const MATCH_RANGES = [
   { id: 'results', label: 'Recent Results' },
 ] as const
 
-export function CompetitionHub({ leagueId, competitionName }: CompetitionHubProps) {
+export function CompetitionHub({ leagueId, leagueName, competitionName }: CompetitionHubProps) {
   const router = useRouter()
 
   // Predictions
@@ -45,19 +46,41 @@ export function CompetitionHub({ leagueId, competitionName }: CompetitionHubProp
       setLoadingPredictions(true)
       try {
         const supabase = createClient()
-        const { data } = await supabase
-          .from('predictions')
-          .select('*')
-          .eq('league_id', leagueId)
-          .order('kickoff_time', { ascending: false })
-          .limit(20)
-        setPredictions((data as Prediction[]) || [])
+        // Admin-entered predictions rarely have league_id populated, so a
+        // strict league_id match misses almost everything. Match on either
+        // the numeric league_id (when present) or the league's free-text
+        // name (how predictions are actually tagged today).
+        const [byId, byName] = await Promise.all([
+          supabase
+            .from('predictions')
+            .select('*')
+            .eq('league_id', leagueId)
+            .order('kickoff_time', { ascending: false })
+            .limit(60),
+          supabase
+            .from('predictions')
+            .select('*')
+            .ilike('league', `%${leagueName}%`)
+            .order('kickoff_time', { ascending: false })
+            .limit(60),
+        ])
+
+        const merged = new Map<string, Prediction>()
+        ;[...((byId.data || []) as Prediction[]), ...((byName.data || []) as Prediction[])].forEach((pred) => {
+          merged.set(pred.id, pred)
+        })
+
+        const combined = Array.from(merged.values())
+          .sort((a, b) => new Date(b.kickoff_time).getTime() - new Date(a.kickoff_time).getTime())
+          .slice(0, 60)
+
+        setPredictions(combined)
       } finally {
         setLoadingPredictions(false)
       }
     }
     loadPredictions()
-  }, [leagueId])
+  }, [leagueId, leagueName])
 
   const loadMatches = useCallback(async () => {
     setLoadingMatches(true)

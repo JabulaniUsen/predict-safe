@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatTime, getDateRange } from '@/lib/utils/date'
-import { Fixture, getFixtures, getOdds, FREE_PLAN_LEAGUES } from '@/lib/api-football'
+import { Fixture, Odds, getFixtures, getOddsByLeague, FREE_PLAN_LEAGUES } from '@/lib/api-football'
 import { mapWithConcurrency } from '@/lib/utils/concurrency'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CircularProgress } from '@/components/ui/circular-progress'
@@ -48,6 +48,56 @@ interface FreePrediction {
 
 interface TipsPredictionsSectionProps {
   initialFilter: string
+}
+
+// Fixtures skew heavily toward leagues with only 1-2 matches that day
+// (especially outside the big European season). Bookmakers rarely price
+// those, so pulling fixtures in raw order wastes odds calls on leagues that
+// almost never have coverage. Sorting so the busiest leagues come first
+// means the fixture slice we actually process is concentrated in the
+// leagues most likely to have odds — fewer wasted calls and more predictions.
+function prioritizeByLeagueSize(fixtures: Fixture[]): Fixture[] {
+  const byLeague = new Map<string, Fixture[]>()
+  fixtures.forEach((f) => {
+    const key = f.league_id || 'unknown'
+    const list = byLeague.get(key)
+    if (list) list.push(f)
+    else byLeague.set(key, [f])
+  })
+  return Array.from(byLeague.values())
+    .sort((a, b) => b.length - a.length)
+    .flat()
+}
+
+// Fetches odds for a batch of fixtures with a handful of requests (one per
+// distinct league/date pair, each covering every fixture in that league on
+// that date) instead of one request per fixture — this is what lets the page
+// pull odds for 100+ fixtures without a many-second wait or tripping the
+// provider's rate limit.
+async function fetchOddsMap(fixtures: Fixture[]): Promise<Map<string, Odds>> {
+  const leagueDatePairs = new Map<string, { leagueId: string; date: string }>()
+  fixtures.forEach((f) => {
+    if (!f.league_id || !f.match_date) return
+    leagueDatePairs.set(`${f.league_id}|${f.match_date}`, { leagueId: f.league_id, date: f.match_date })
+  })
+
+  const results = await mapWithConcurrency(
+    Array.from(leagueDatePairs.values()),
+    6,
+    async ({ leagueId, date }) => {
+      try {
+        return await getOddsByLeague(leagueId, date)
+      } catch {
+        return [] as Odds[]
+      }
+    }
+  )
+
+  const oddsMap = new Map<string, Odds>()
+  results.flat().forEach((odds) => {
+    if (odds.match_id) oddsMap.set(odds.match_id, odds)
+  })
+  return oddsMap
 }
 
 export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSectionProps) {
@@ -96,7 +146,8 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
         }
 
         const allPredictions: FreePrediction[] = []
-        const maxPredictions = selectedFilter === 'free' ? 5 : 15
+        // Only "Safe free picks" is capped at 5 — every other filter aims for 60+
+        const maxPredictions = selectedFilter === 'free' ? 5 : 65
         const minPredictions = selectedFilter === 'free' ? 5 : 0
         const typeRotation = selectedFilter === 'free'
           ? ['Home Win', 'Away Win', 'Over 1.5', 'Double Chance']
@@ -104,16 +155,8 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
         let typeIndex = 0
 
         if (selectedFilter === 'all') {
-          const fixturesToProcess = fixtures.slice(0, 60)
-          const oddsResults = await mapWithConcurrency(fixturesToProcess, 5, async (fixture) => {
-            try {
-              const odds = await getOdds(fixture.match_id)
-              return { matchId: fixture.match_id, odds: Array.isArray(odds) && odds.length > 0 ? odds[0] : null }
-            } catch {
-              return { matchId: fixture.match_id, odds: null }
-            }
-          })
-          const oddsMap = new Map(oddsResults.map(r => [r.matchId, r.odds]))
+          const fixturesToProcess = prioritizeByLeagueSize(fixtures).slice(0, 150)
+          const oddsMap = await fetchOddsMap(fixturesToProcess)
 
           for (const fixture of fixturesToProcess) {
             try {
@@ -160,17 +203,9 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
             }
           }
         } else {
-          const buffer = selectedFilter === 'free' ? 80 : 60
-          const fixturesToProcess = fixtures.slice(0, maxPredictions + buffer)
-          const oddsResults = await mapWithConcurrency(fixturesToProcess, 5, async (fixture) => {
-            try {
-              const odds = await getOdds(fixture.match_id)
-              return { matchId: fixture.match_id, odds: Array.isArray(odds) && odds.length > 0 ? odds[0] : null }
-            } catch {
-              return { matchId: fixture.match_id, odds: null }
-            }
-          })
-          const oddsMap = new Map(oddsResults.map(r => [r.matchId, r.odds]))
+          const buffer = selectedFilter === 'free' ? 80 : 250
+          const fixturesToProcess = prioritizeByLeagueSize(fixtures).slice(0, maxPredictions + buffer)
+          const oddsMap = await fetchOddsMap(fixturesToProcess)
 
           for (const fixture of fixturesToProcess) {
             if (selectedFilter !== 'free' && allPredictions.length >= maxPredictions) break

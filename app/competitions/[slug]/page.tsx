@@ -125,7 +125,7 @@ export default async function CompetitionPage({ params }: Props) {
       {/* Hub */}
       <main className="flex-1">
         <div className="container mx-auto px-4 py-8 lg:py-12">
-          <CompetitionHub leagueId={competition.league_id} competitionName={competition.heading || competition.name} />
+          <CompetitionHub leagueId={competition.league_id} leagueName={competition.name} competitionName={competition.heading || competition.name} />
         </div>
       </main>
 

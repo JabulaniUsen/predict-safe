@@ -433,6 +433,35 @@ export async function getOdds(fixtureId: string) {
   return [mapOdds(fixtureId, data.response)] as Odds[]
 }
 
+// Fetches odds for every fixture in a league on a given date in a handful of
+// requests (paginated ~10 fixtures/page) instead of one request per fixture.
+// This is what keeps the tips pages from having to make 60-200 individual
+// odds calls (and hitting the provider's rate limit) just to render a page.
+export async function getOddsByLeague(leagueId: string, date: string) {
+  if (!isServer()) {
+    return callClient('/api/football/odds', { league_id: leagueId, date }) as Promise<Odds[]>
+  }
+
+  const season = String(getSeasonYear(date))
+  const allOdds: Odds[] = []
+  const maxPages = 20 // cap at ~200 fixtures' worth of odds per league/date
+
+  for (let page = 1; page <= maxPages; page++) {
+    const data = await callProvider('odds', { league: leagueId, season, date, page: String(page) })
+    const response: any[] = Array.isArray(data.response) ? data.response : []
+
+    for (const item of response) {
+      const fixtureId = String(item?.fixture?.id ?? '')
+      if (fixtureId) allOdds.push(mapOdds(fixtureId, [item]))
+    }
+
+    const totalPages = data?.paging?.total ?? 1
+    if (response.length === 0 || page >= totalPages) break
+  }
+
+  return allOdds as Odds[]
+}
+
 export async function getH2H(firstTeamId: string, secondTeamId: string) {
   if (!isServer()) {
     return callClient('/api/football/h2h', { firstTeamId, secondTeamId }) as Promise<H2HData>
