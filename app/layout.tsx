@@ -116,6 +116,35 @@ export default function RootLayout({
         <Toaster />
         <InstallPrompt />
         <CustomerCareChatButton />
+        {/* CleverCore ad network integration */}
+        <Script
+          id="clever-core"
+          data-cfasync="false"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function (document, window) {
+                  var a, c = document.createElement("script"), f = window.frameElement;
+
+                  c.id = "CleverCoreLoader105192";
+                  c.src = "https://scripts.cleverwebserver.com/06cb8c09f8fdd489cf0fd19174e90600.js";
+
+                  c.async = !0;
+                  c.type = "text/javascript";
+                  c.setAttribute("data-target", window.name || (f && f.getAttribute("id")));
+
+                  try {
+                      a = parent.document.getElementsByTagName("script")[0] || document.getElementsByTagName("script")[0];
+                  } catch (e) {
+                      a = !1;
+                  }
+
+                  a || (a = document.getElementsByTagName("head")[0] || document.getElementsByTagName("body")[0]);
+                  a.parentNode.insertBefore(c, a);
+              })(document, window);
+            `,
+          }}
+        />
       </body>
     </html>
   );

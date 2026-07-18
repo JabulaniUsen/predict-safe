@@ -163,8 +163,11 @@ export function VIPWinningsSection({ planIds, showAll = true, showSeeMoreLink = 
     setLoading(false)
   }
 
-  const handleTodayClick = () => {
-    setSelectedDate(new Date())
+  const handleLatestClick = () => {
+    // "Latest" isn't pinned to today's date — it means "no specific date
+    // filter", which is what makes fetchWinnings() fall back to the most
+    // recent day with results when today has none yet.
+    setSelectedDate(undefined)
   }
 
   const handleDateSelect = (date: Date | undefined) => {
@@ -326,7 +329,7 @@ export function VIPWinningsSection({ planIds, showAll = true, showSeeMoreLink = 
         {/* Header */}
         <div className="mb-4 lg:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1 lg:mb-2 text-[#1e40af]">VIP Winnings</h2>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1 lg:mb-2 text-[#1e40af]">VIP Winning History</h2>
             <p className="text-sm lg:text-base text-gray-600">Track our successful VIP predictions</p>
             {showSeeMoreLink && (
               <Button
@@ -364,7 +367,7 @@ export function VIPWinningsSection({ planIds, showAll = true, showSeeMoreLink = 
             </Popover>
             <Button
               variant="outline"
-              onClick={handleTodayClick}
+              onClick={handleLatestClick}
               className={cn(
                 "px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all",
                 !selectedDate || (selectedDate && format(selectedDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd'))
@@ -372,7 +375,7 @@ export function VIPWinningsSection({ planIds, showAll = true, showSeeMoreLink = 
                   : "text-gray-600 hover:text-[#1e40af] hover:bg-white"
               )}
             >
-              Today
+              Latest
             </Button>
             {selectedDate && (
               <Button
