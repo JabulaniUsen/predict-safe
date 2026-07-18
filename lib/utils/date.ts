@@ -35,7 +35,15 @@ export function getDateRange(type: 'previous' | 'today' | 'tomorrow' | 'custom',
 }
 
 export function formatDate(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date
+  // Plain "YYYY-MM-DD" strings (e.g. from a Postgres `date` column, like
+  // vip_winnings.date) are parsed by `new Date()` as UTC midnight. Formatting
+  // that in any timezone behind UTC shifts the displayed day back by one.
+  // Parse the year/month/day directly so the date shown always matches what's
+  // stored, regardless of the viewer's timezone.
+  const dateOnlyMatch = typeof date === 'string' ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(date) : null
+  const d = dateOnlyMatch
+    ? new Date(Number(dateOnlyMatch[1]), Number(dateOnlyMatch[2]) - 1, Number(dateOnlyMatch[3]))
+    : typeof date === 'string' ? new Date(date) : date
   const day = d.getDate()
   const suffix = day === 1 || day === 21 || day === 31 ? 'st' :
                  day === 2 || day === 22 ? 'nd' :
