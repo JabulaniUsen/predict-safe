@@ -129,8 +129,12 @@ function AddCorrectScoreContent() {
     const kickoffTime = formDataObj.get('kickoff_time') as string
     const kickoffDateTime = `${kickoffDate}T${kickoffTime}:00`
 
-    // Prepare data for predictions table
-    const predictionData = {
+    // Prepare data for predictions table. `status` (and the score/result
+    // fields it drives) is intentionally left out here: it's only set below
+    // for brand-new predictions. Editing an existing one must not touch it,
+    // otherwise saving an edit on a finished match would reset it back to
+    // "not_started".
+    const predictionData: Record<string, unknown> = {
       plan_type: 'correct_score', // Use correct_score as plan_type
       home_team: (homeTeam || formDataObj.get('home_team')) as string,
       away_team: (awayTeam || formDataObj.get('away_team')) as string,
@@ -140,8 +144,11 @@ function AddCorrectScoreContent() {
       odds: formDataObj.get('odds') ? parseFloat(formDataObj.get('odds') as string) : 1.0,
       confidence: 80, // Default confidence for correct score predictions
       kickoff_time: kickoffDateTime,
-      status: 'not_started' as const,
       admin_notes: (formDataObj.get('admin_notes') as string) || null,
+    }
+
+    if (!isEditMode) {
+      predictionData.status = 'not_started'
     }
 
     try {

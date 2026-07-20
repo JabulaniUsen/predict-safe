@@ -14,7 +14,6 @@ import { getCurrencySymbol as getCurrencySymbolUtil, getCurrencyFromCountry } fr
 interface Country {
   name: string
   code: string
-  cca3: string
 }
 
 export default function SubscriptionsPage() {
