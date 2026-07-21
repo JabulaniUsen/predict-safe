@@ -25,9 +25,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(odds, {
       headers: {
-        // Caching is handled by the shared provider-response cache in lib/api-football.ts;
-        // avoid CDN-level caching here since it previously cached by path, ignoring query params.
-        'Cache-Control': 'no-store',
+        // See fixtures/route.ts for why CDN caching is safe here alongside
+        // force-dynamic. Kept short since odds can move before kickoff.
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
       },
     })
   } catch (error: unknown) {

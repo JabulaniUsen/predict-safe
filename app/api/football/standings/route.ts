@@ -15,9 +15,10 @@ export async function GET(request: NextRequest) {
     const standings = await getStandings(leagueId)
 
     return NextResponse.json(standings, {
-      // Caching is handled by the shared provider-response cache in lib/api-football.ts;
-      // avoid CDN-level caching here since it previously cached by path, ignoring query params.
-      headers: { 'Cache-Control': 'no-store' },
+      // See football/fixtures/route.ts for why CDN caching is safe here
+      // alongside force-dynamic. Standings only change after full-time
+      // results are processed, so this can be cached longer.
+      headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' },
     })
   } catch (error: any) {
     console.error('API Football Error:', error)

@@ -309,7 +309,7 @@ function dateRange(from: string, to: string): string[] {
 // Shared cache for provider responses, keyed by request URL. Keeps repeat
 // visitors within the same warm server instance from each re-hitting the
 // provider (and burning daily quota) for the same fixtures/odds.
-const PROVIDER_CACHE_TTL_MS = 90_000
+const PROVIDER_CACHE_TTL_MS = 120_000
 const PROVIDER_CACHE_MAX_ENTRIES = 1000
 const providerCache = new Map<string, { data: any; expires: number }>()
 const inFlightRequests = new Map<string, Promise<any>>()

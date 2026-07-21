@@ -24,9 +24,13 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(fixtures, {
       headers: {
-        // Caching is handled by the shared provider-response cache in lib/api-football.ts;
-        // avoid CDN-level caching here since it previously cached by path, ignoring query params.
-        'Cache-Control': 'no-store',
+        // `dynamic = 'force-dynamic'` above guarantees this always recomputes
+        // per request (correctly varying by from/to/league_id), so it's safe
+        // to also let Vercel's edge cache the response for a short window —
+        // that's what actually cuts serverless invocations for repeat
+        // visitors, on top of the in-process cache in lib/api-football.ts.
+        // Kept short since fixtures carry live scores/status.
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
       },
     })
   } catch (error: unknown) {

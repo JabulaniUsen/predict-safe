@@ -29,9 +29,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(teams, {
       headers: {
-        // Caching is handled by the shared provider-response cache in lib/api-football.ts;
-        // avoid CDN-level caching here since it previously cached by path, ignoring query params.
-        'Cache-Control': 'no-store',
+        // See football/fixtures/route.ts for why CDN caching is safe here
+        // alongside force-dynamic. Team reference data barely changes,
+        // so this can be cached for a long time.
+        'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
       },
     })
   } catch (error: any) {
