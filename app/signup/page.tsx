@@ -18,12 +18,8 @@ import { getRandomAvatar } from '@/lib/utils/avatars'
 type UserInsert = Database['public']['Tables']['users']['Insert']
 
 interface Country {
-  name: {
-    common: string
-    official: string
-  }
-  cca2: string
-  cca3: string
+  name: string
+  code: string
 }
 
 
@@ -52,21 +48,21 @@ export default function SignupPage() {
     }
   }, [rateLimitCountdown, rateLimitError])
 
-  // Fetch countries from REST Countries API
+  // Fetch countries from our own countries API (static list — no external dependency)
   useEffect(() => {
     const fetchCountries = async () => {
       try {
         setLoadingCountries(true)
-        const response = await fetch('https://restcountries.com/v3.1/all?fields=name,cca2,cca3')
+        const response = await fetch('/api/countries')
         const data: Country[] = await response.json()
-        
+
         const countryOptions = data
           .map((country) => ({
-            value: country.cca2,
-            label: country.name.common,
+            value: country.code,
+            label: country.name,
           }))
           .sort((a, b) => a.label.localeCompare(b.label))
-        
+
         setCountries(countryOptions)
       } catch (error) {
         console.error('Error fetching countries:', error)
@@ -86,25 +82,17 @@ export default function SignupPage() {
     try {
       const supabase = createClient()
       
-        // Map selected country code to country name
+        // Map selected country code to country name using the already-fetched
+        // list (avoids a second network round-trip, and a second point of failure)
         let countryName = 'Nigeria' // Default
         if (selectedCountry) {
-          // Get country name from REST Countries API
-          try {
-            const countryResponse = await fetch(`https://restcountries.com/v3.1/alpha/${selectedCountry}?fields=name,cca2,cca3`)
-            const countryData = await countryResponse.json()
-            const countryCommonName = countryData?.name?.common || ''
-            
-            // Map to our supported countries
-            if (['Nigeria', 'Ghana', 'Kenya'].includes(countryCommonName)) {
-              countryName = countryCommonName
-            } else {
-              countryName = 'Other' // For any other country
-            }
-          } catch (error) {
-            console.error('Error fetching country name:', error)
-            // Default to Nigeria if API fails
-            countryName = 'Nigeria'
+          const countryCommonName = countries.find((c) => c.value === selectedCountry)?.label || ''
+
+          // Map to our supported countries
+          if (['Nigeria', 'Ghana', 'Kenya'].includes(countryCommonName)) {
+            countryName = countryCommonName
+          } else {
+            countryName = 'Other' // For any other country
           }
         }
 
