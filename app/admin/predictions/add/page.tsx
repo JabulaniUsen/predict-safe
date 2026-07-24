@@ -17,6 +17,7 @@ import { Database } from '@/types/database'
 import { Prediction } from '@/types'
 
 type UserProfile = Pick<Database['public']['Tables']['users']['Row'], 'is_admin'>
+type MatchStatus = 'not_started' | 'finished'
 
 function AddPredictionContent() {
   const router = useRouter()
@@ -38,6 +39,10 @@ function AddPredictionContent() {
     confidence: '',
     kickoff_date: '',
     kickoff_time: '',
+    match_status: 'not_started' as MatchStatus,
+    home_score: '',
+    away_score: '',
+    result: 'win' as 'win' | 'loss',
     admin_notes: '',
   })
 
@@ -100,6 +105,10 @@ function AddPredictionContent() {
           confidence: prediction.confidence?.toString() || '',
           kickoff_date: kickoffDateTime ? kickoffDateTime.toISOString().slice(0, 10) : '',
           kickoff_time: kickoffDateTime ? kickoffDateTime.toISOString().slice(11, 16) : '',
+          match_status: prediction.status === 'finished' ? 'finished' : 'not_started',
+          home_score: prediction.home_score !== null && prediction.home_score !== undefined ? prediction.home_score.toString() : '',
+          away_score: prediction.away_score !== null && prediction.away_score !== undefined ? prediction.away_score.toString() : '',
+          result: prediction.result === 'loss' ? 'loss' : 'win',
           admin_notes: prediction.admin_notes || '',
         })
 
@@ -139,6 +148,19 @@ function AddPredictionContent() {
       ? getPlanTypeFromSlug(planSlug)
       : (formDataObj.get('plan_type') as string)
 
+    const matchStatus = formDataObj.get('match_status') as MatchStatus
+    const homeScoreValue = formDataObj.get('home_score') as string
+    const awayScoreValue = formDataObj.get('away_score') as string
+    const homeScore = homeScoreValue === '' ? null : Number(homeScoreValue)
+    const awayScore = awayScoreValue === '' ? null : Number(awayScoreValue)
+    const result = formDataObj.get('result') as 'win' | 'loss'
+
+    if (matchStatus === 'finished' && !result) {
+      toast.error('Select whether the prediction won or lost before marking the game as finished')
+      setLoading(false)
+      return
+    }
+
     // Combine date and time into ISO datetime string
     const kickoffDate = formDataObj.get('kickoff_date') as string
     const kickoffTime = formDataObj.get('kickoff_time') as string
@@ -154,6 +176,10 @@ function AddPredictionContent() {
       odds: parseFloat(formDataObj.get('odds') as string),
       confidence: parseInt(formDataObj.get('confidence') as string),
       kickoff_time: kickoffDateTime,
+      status: matchStatus,
+      home_score: matchStatus === 'finished' ? homeScore : null,
+      away_score: matchStatus === 'finished' ? awayScore : null,
+      result: matchStatus === 'finished' ? result : null,
       admin_notes: (formDataObj.get('admin_notes') as string) || null,
     }
 
@@ -349,6 +375,82 @@ function AddPredictionContent() {
                     title="Enter time in 24-hour format (HH:MM), e.g., 14:30 or 19:45"
                   />
                   <p className="text-xs text-muted-foreground">Format: HH:MM (e.g., 14:30, 19:45)</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                <div className="space-y-2">
+                  <Label htmlFor="match_status">Game Status *</Label>
+                  <Select
+                    name="match_status"
+                    value={formData.match_status}
+                    onValueChange={(value: MatchStatus) =>
+                      setFormData({
+                        ...formData,
+                        match_status: value,
+                        home_score: value === 'finished' ? formData.home_score : '',
+                        away_score: value === 'finished' ? formData.away_score : '',
+                      })
+                    }
+                  >
+                    <SelectTrigger id="match_status" className="w-full">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="not_started">Not Finished</SelectItem>
+                      <SelectItem value="finished">Finished</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="home_score">Home Score</Label>
+                  <Input
+                    id="home_score"
+                    name="home_score"
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputMode="numeric"
+                    placeholder="0"
+                    disabled={formData.match_status !== 'finished'}
+                    value={formData.home_score}
+                    onChange={(e) => setFormData({ ...formData, home_score: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="away_score">Away Score</Label>
+                  <Input
+                    id="away_score"
+                    name="away_score"
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputMode="numeric"
+                    placeholder="0"
+                    disabled={formData.match_status !== 'finished'}
+                    value={formData.away_score}
+                    onChange={(e) => setFormData({ ...formData, away_score: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="result">Result {formData.match_status === 'finished' ? '*' : ''}</Label>
+                  <Select
+                    name="result"
+                    value={formData.result}
+                    onValueChange={(value: 'win' | 'loss') => setFormData({ ...formData, result: value })}
+                    disabled={formData.match_status !== 'finished'}
+                  >
+                    <SelectTrigger id="result" className="w-full">
+                      <SelectValue placeholder="Select result" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="win">Win</SelectItem>
+                      <SelectItem value="loss">Loss</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
