@@ -16,21 +16,14 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          // Set cookies on request object
           cookiesToSet.forEach(({ name, value }) => {
             request.cookies.set(name, value)
           })
-          
-          // Set cookies on response with proper options preserved
+          supabaseResponse = NextResponse.next({
+            request,
+          })
           cookiesToSet.forEach(({ name, value, options }) => {
-            supabaseResponse.cookies.set(name, value, {
-              ...options,
-              // Ensure important cookie options are set
-              httpOnly: options?.httpOnly ?? true,
-              secure: options?.secure ?? process.env.NODE_ENV === 'production',
-              sameSite: options?.sameSite ?? 'lax',
-              path: options?.path ?? '/',
-            })
+            supabaseResponse.cookies.set(name, value, options)
           })
         },
       },
@@ -43,29 +36,7 @@ export async function updateSession(request: NextRequest) {
 
   const {
     data: { user },
-    error: authError,
   } = await supabase.auth.getUser()
-
-  // Handle JWT errors by attempting to refresh the session
-  if (authError && authError.message?.includes('JWT')) {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (session) {
-      // Session exists, try to refresh it
-      await supabase.auth.refreshSession()
-    }
-  }
-
-  // Explicitly refresh session if it's about to expire (within 5 minutes)
-  if (user) {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (session && session.expires_at) {
-      const expiresIn = session.expires_at - Math.floor(Date.now() / 1000)
-      // Refresh if session expires within 5 minutes
-      if (expiresIn < 300) {
-        await supabase.auth.refreshSession()
-      }
-    }
-  }
 
   if (
     !user &&
@@ -96,4 +67,3 @@ export async function updateSession(request: NextRequest) {
 
   return supabaseResponse
 }
-

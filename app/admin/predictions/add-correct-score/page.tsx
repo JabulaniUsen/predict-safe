@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { TeamSelector } from '@/components/admin/team-selector'
 import { LeagueSelector } from '@/components/admin/league-selector'
@@ -15,6 +16,35 @@ import { AdminLayout } from '@/components/admin/admin-layout'
 import { Database } from '@/types/database'
 
 type UserProfile = Pick<Database['public']['Tables']['users']['Row'], 'is_admin'>
+type MatchStatus = 'not_started' | 'finished'
+
+interface CorrectScorePredictionRow {
+  prediction_type: string | null
+  odds: number | null
+  kickoff_time: string | null
+  status: string | null
+  home_score: number | null
+  away_score: number | null
+  admin_notes: string | null
+  league: string | null
+  league_id: string | null
+  home_team: string | null
+  away_team: string | null
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback
+}
+
+function determineCorrectScoreResult(scorePrediction: string, homeScore: number, awayScore: number): 'win' | 'loss' {
+  const [predictedHome, predictedAway] = scorePrediction.split('-').map((score) => Number(score.trim()))
+
+  if (Number.isNaN(predictedHome) || Number.isNaN(predictedAway)) {
+    return 'loss'
+  }
+
+  return predictedHome === homeScore && predictedAway === awayScore ? 'win' : 'loss'
+}
 
 function AddCorrectScoreContent() {
   const router = useRouter()
@@ -34,6 +64,9 @@ function AddCorrectScoreContent() {
     odds: '',
     kickoff_date: '',
     kickoff_time: '',
+    match_status: 'not_started' as MatchStatus,
+    home_score: '',
+    away_score: '',
     admin_notes: '',
   })
 
@@ -86,7 +119,7 @@ function AddCorrectScoreContent() {
           return
         }
 
-        const prediction = data as any
+        const prediction = data as CorrectScorePredictionRow
 
         // Extract score from prediction_type (just the score, e.g., "2-1")
         const score = prediction.prediction_type || ''
@@ -98,6 +131,9 @@ function AddCorrectScoreContent() {
           odds: prediction.odds?.toString() || '',
           kickoff_date: kickoffDateTime ? kickoffDateTime.toISOString().slice(0, 10) : '',
           kickoff_time: kickoffDateTime ? kickoffDateTime.toISOString().slice(11, 16) : '',
+          match_status: prediction.status === 'finished' ? 'finished' : 'not_started',
+          home_score: prediction.home_score !== null && prediction.home_score !== undefined ? prediction.home_score.toString() : '',
+          away_score: prediction.away_score !== null && prediction.away_score !== undefined ? prediction.away_score.toString() : '',
           admin_notes: prediction.admin_notes || '',
         })
 
@@ -108,8 +144,8 @@ function AddCorrectScoreContent() {
         setAwayTeam(prediction.away_team || '')
 
         setLoadingPrediction(false)
-      } catch (error: any) {
-        toast.error(error.message || 'Failed to load prediction')
+      } catch (error: unknown) {
+        toast.error(getErrorMessage(error, 'Failed to load prediction'))
         router.push('/admin/predictions')
       }
     }
@@ -123,17 +159,25 @@ function AddCorrectScoreContent() {
 
     const formDataObj = new FormData(e.currentTarget)
     const scorePrediction = formDataObj.get('score_prediction') as string
+    const matchStatus = formDataObj.get('match_status') as MatchStatus
+    const homeScoreValue = formDataObj.get('home_score') as string
+    const awayScoreValue = formDataObj.get('away_score') as string
+    const homeScore = homeScoreValue === '' ? null : Number(homeScoreValue)
+    const awayScore = awayScoreValue === '' ? null : Number(awayScoreValue)
+
+    if (matchStatus === 'finished') {
+      if (homeScore === null || awayScore === null || Number.isNaN(homeScore) || Number.isNaN(awayScore)) {
+        toast.error('Enter the actual score before marking the game as finished')
+        setLoading(false)
+        return
+      }
+    }
 
     // Combine date and time into ISO datetime string
     const kickoffDate = formDataObj.get('kickoff_date') as string
     const kickoffTime = formDataObj.get('kickoff_time') as string
     const kickoffDateTime = `${kickoffDate}T${kickoffTime}:00`
 
-    // Prepare data for predictions table. `status` (and the score/result
-    // fields it drives) is intentionally left out here: it's only set below
-    // for brand-new predictions. Editing an existing one must not touch it,
-    // otherwise saving an edit on a finished match would reset it back to
-    // "not_started".
     const predictionData: Record<string, unknown> = {
       plan_type: 'correct_score', // Use correct_score as plan_type
       home_team: (homeTeam || formDataObj.get('home_team')) as string,
@@ -144,11 +188,13 @@ function AddCorrectScoreContent() {
       odds: formDataObj.get('odds') ? parseFloat(formDataObj.get('odds') as string) : 1.0,
       confidence: 80, // Default confidence for correct score predictions
       kickoff_time: kickoffDateTime,
+      status: matchStatus,
+      home_score: matchStatus === 'finished' ? homeScore : null,
+      away_score: matchStatus === 'finished' ? awayScore : null,
+      result: matchStatus === 'finished' && homeScore !== null && awayScore !== null
+        ? determineCorrectScoreResult(scorePrediction, homeScore, awayScore)
+        : null,
       admin_notes: (formDataObj.get('admin_notes') as string) || null,
-    }
-
-    if (!isEditMode) {
-      predictionData.status = 'not_started'
     }
 
     try {
@@ -201,8 +247,8 @@ function AddCorrectScoreContent() {
       }
 
       router.push('/admin/predictions')
-    } catch (error: any) {
-      toast.error(error.message || `Failed to ${isEditMode ? 'update' : 'add'} prediction`)
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, `Failed to ${isEditMode ? 'update' : 'add'} prediction`))
       setLoading(false)
     }
   }
@@ -327,6 +373,66 @@ function AddCorrectScoreContent() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="match_status">Game Status *</Label>
+                  <Select
+                    name="match_status"
+                    value={formData.match_status}
+                    onValueChange={(value: MatchStatus) =>
+                      setFormData({
+                        ...formData,
+                        match_status: value,
+                        home_score: value === 'finished' ? formData.home_score : '',
+                        away_score: value === 'finished' ? formData.away_score : '',
+                      })
+                    }
+                  >
+                    <SelectTrigger id="match_status" className="w-full">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="not_started">Not Finished</SelectItem>
+                      <SelectItem value="finished">Finished</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="home_score">Home Score</Label>
+                  <Input
+                    id="home_score"
+                    name="home_score"
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputMode="numeric"
+                    placeholder="0"
+                    required={formData.match_status === 'finished'}
+                    disabled={formData.match_status !== 'finished'}
+                    value={formData.home_score}
+                    onChange={(e) => setFormData({ ...formData, home_score: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="away_score">Away Score</Label>
+                  <Input
+                    id="away_score"
+                    name="away_score"
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputMode="numeric"
+                    placeholder="0"
+                    required={formData.match_status === 'finished'}
+                    disabled={formData.match_status !== 'finished'}
+                    value={formData.away_score}
+                    onChange={(e) => setFormData({ ...formData, away_score: e.target.value })}
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="admin_notes">Admin Notes (Optional)</Label>
                 <Textarea
@@ -366,4 +472,3 @@ export default function AddCorrectScorePage() {
     </Suspense>
   )
 }
-

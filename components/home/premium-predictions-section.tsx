@@ -2,12 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Lock, CalendarIcon, Loader2 } from 'lucide-react'
-import { Prediction, CorrectScorePrediction } from '@/types'
 import { formatTime, getDateRange } from '@/lib/utils/date'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import { cn } from '@/lib/utils'
@@ -34,9 +33,36 @@ interface PremiumPrediction {
   away_score?: string | null
 }
 
+type PredictionStatus = PremiumPrediction['status']
+
+interface PredictionRow {
+  id: string
+  home_team: string
+  away_team: string
+  league: string
+  prediction_type: string | null
+  score_prediction?: string | null
+  odds: number | string | null
+  confidence: number | null
+  kickoff_time: string
+  status: PredictionStatus | null
+  home_score: number | string | null
+  away_score: number | string | null
+}
+
+interface FixtureData {
+  match_hometeam_name?: string | null
+  match_awayteam_name?: string | null
+  team_home_badge?: string | null
+  team_away_badge?: string | null
+  match_hometeam_score?: string | number | null
+  match_awayteam_score?: string | number | null
+  match_status?: string | null
+}
+
 export function PremiumPredictionsSection() {
   const router = useRouter()
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [profitMultiplierPredictions, setProfitMultiplierPredictions] = useState<PremiumPrediction[]>([])
   const [correctScorePredictions, setCorrectScorePredictions] = useState<PremiumPrediction[]>([])
   const [loading, setLoading] = useState(true)
@@ -105,28 +131,30 @@ export function PremiumPredictionsSection() {
 
       // Process profit multiplier predictions
       if (profitMultiplierResult.data) {
-        profitMultiplierResult.data.forEach((pred: Prediction) => {
+        ;(profitMultiplierResult.data as PredictionRow[]).forEach((pred) => {
           profitMultiplier.push({
             id: pred.id,
             home_team: pred.home_team,
             away_team: pred.away_team,
             league: pred.league,
             prediction_type: pred.prediction_type || undefined,
-            odds: pred.odds,
-            confidence: pred.confidence,
+            odds: Number(pred.odds) || 0,
+            confidence: pred.confidence ?? undefined,
             kickoff_time: pred.kickoff_time,
-            status: pred.status,
-            type: 'profit_multiplier'
+            status: pred.status || 'not_started',
+            type: 'profit_multiplier',
+            home_score: pred.home_score === null || pred.home_score === undefined ? null : String(pred.home_score),
+            away_score: pred.away_score === null || pred.away_score === undefined ? null : String(pred.away_score)
           })
         })
       }
 
       // Process correct score predictions
       if (correctScoreResult.data) {
-        correctScoreResult.data.forEach((pred: any) => {
+        ;(correctScoreResult.data as PredictionRow[]).forEach((pred) => {
           // For correct_score predictions in the main predictions table,
           // the score is stored in prediction_type (see insert-predictions route)
-          const score = (pred as any).prediction_type || (pred as any).score_prediction || '0-0'
+          const score = pred.prediction_type || pred.score_prediction || '0-0'
 
           correctScore.push({
             id: pred.id,
@@ -136,10 +164,12 @@ export function PremiumPredictionsSection() {
             score_prediction: score,
             odds: Number(pred.odds) || 0,
             // Preserve confidence from the predictions table so we can display it on the home page
-            confidence: (pred as any).confidence ?? undefined,
+            confidence: pred.confidence ?? undefined,
             kickoff_time: pred.kickoff_time,
-            status: (pred as any).status || 'not_started',
-            type: 'correct_score'
+            status: pred.status || 'not_started',
+            type: 'correct_score',
+            home_score: pred.home_score === null || pred.home_score === undefined ? null : String(pred.home_score),
+            away_score: pred.away_score === null || pred.away_score === undefined ? null : String(pred.away_score)
           })
         })
       }
@@ -181,8 +211,13 @@ export function PremiumPredictionsSection() {
               const response = await fetch(`/api/football/fixtures?from=${date}&to=${date}`)
               if (!response.ok) return { date, fixtures: [] }
 
-              const fixturesData = await response.json()
-              const fixtures = Array.isArray(fixturesData) ? fixturesData : (Array.isArray(fixturesData?.data) ? fixturesData.data : [])
+              const fixturesData: unknown = await response.json()
+              const fixtureResponse = fixturesData as { data?: unknown }
+              const fixtures = Array.isArray(fixturesData)
+                ? (fixturesData as FixtureData[])
+                : Array.isArray(fixtureResponse.data)
+                  ? (fixtureResponse.data as FixtureData[])
+                  : []
               return { date, fixtures }
             } catch (err) {
               console.error(`Error fetching fixtures for date ${date}:`, err)
@@ -191,7 +226,7 @@ export function PremiumPredictionsSection() {
           })
 
           const fixtureResults = await Promise.all(fixturePromises)
-          const fixturesByDate = new Map<string, any[]>()
+          const fixturesByDate = new Map<string, FixtureData[]>()
           fixtureResults.forEach(({ date, fixtures }) => {
             fixturesByDate.set(date, fixtures)
           })
@@ -201,7 +236,7 @@ export function PremiumPredictionsSection() {
             const fixtures = fixturesByDate.get(date) || []
 
             datePredictions.forEach((pred) => {
-              const fixture = fixtures.find((f: any) => {
+              const fixture = fixtures.find((f) => {
                 const homeMatch = f.match_hometeam_name?.toLowerCase() === pred.home_team.toLowerCase() ||
                   f.match_hometeam_name?.toLowerCase().includes(pred.home_team.toLowerCase()) ||
                   pred.home_team.toLowerCase().includes(f.match_hometeam_name?.toLowerCase() || '')
@@ -306,6 +341,22 @@ export function PremiumPredictionsSection() {
 
   const getTeamLogo = (teamName: string): string | null => {
     return teamLogos[teamName] || null
+  }
+
+  const formatActualScore = (prediction: PremiumPrediction): string => {
+    const { home_score, away_score } = prediction
+    if (
+      home_score === null ||
+      home_score === undefined ||
+      home_score === '' ||
+      away_score === null ||
+      away_score === undefined ||
+      away_score === ''
+    ) {
+      return '-'
+    }
+
+    return `${home_score}-${away_score}`
   }
 
   return (
@@ -698,9 +749,7 @@ export function PremiumPredictionsSection() {
                             )}
                           </div>
                           <div className="text-[10px] sm:text-xs font-semibold text-gray-400 text-center">
-                            {prediction.status === 'finished' && prediction.home_score && prediction.away_score
-                              ? `${prediction.home_score}-${prediction.away_score}`
-                              : '-'}
+                            {formatActualScore(prediction)}
                           </div>
                           <div className="text-[10px] sm:text-xs font-semibold text-gray-400 text-center flex items-center justify-center gap-1">
                             {shouldShowLocks(prediction.kickoff_time) ? (
@@ -813,9 +862,7 @@ export function PremiumPredictionsSection() {
                           {/* Score */}
                           <div className="col-span-1 text-center hidden sm:block">
                             <span className="text-sm font-semibold text-gray-400">
-                              {prediction.status === 'finished' && prediction.home_score && prediction.away_score
-                                ? `${prediction.home_score}-${prediction.away_score}`
-                                : '-'}
+                              {formatActualScore(prediction)}
                             </span>
                           </div>
 
@@ -1080,9 +1127,7 @@ export function PremiumPredictionsSection() {
                               )}
                             </div>
                             <div className="text-[10px] sm:text-xs font-semibold text-gray-400 text-center">
-                              {prediction.status === 'finished' && prediction.home_score && prediction.away_score
-                                ? `${prediction.home_score}-${prediction.away_score}`
-                                : '-'}
+                              {formatActualScore(prediction)}
                             </div>
                             <div className="text-[10px] sm:text-xs font-semibold text-gray-400 text-center flex items-center justify-center gap-1">
                               {showLocks ? (
@@ -1193,7 +1238,7 @@ export function PremiumPredictionsSection() {
 
                           {/* Score */}
                           <div className="col-span-1 text-center hidden sm:block">
-                            <span className="text-sm font-semibold text-gray-400">-</span>
+                            <span className="text-sm font-semibold text-gray-400">{formatActualScore(prediction)}</span>
                           </div>
 
                           {/* Status */}

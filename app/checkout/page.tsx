@@ -69,7 +69,7 @@ function CheckoutContent() {
   const [uploading, setUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [whatsappNumber, setWhatsappNumber] = useState<string>('')
+  const [supportChatUrl, setSupportChatUrl] = useState<string>('')
 
   // Fetch countries from API
   useEffect(() => {
@@ -132,36 +132,15 @@ function CheckoutContent() {
       setSelectedCountry(initialCountry)
       setTempCountry(initialCountry)
 
-      // Fetch WhatsApp number from site config
+      // Fetch support chat URL from site config
       const { data: configData } = await supabase
         .from('site_config')
         .select('key, value')
-        .in('key', ['whatsapp_number', 'whatsapp_numbers'])
+        .eq('key', 'chat_support_url')
 
-      if (configData && Array.isArray(configData)) {
-        let whatsappNum = ''
-        configData.forEach((item: { key: string; value: any }) => {
-          if (item.key === 'whatsapp_number') {
-            whatsappNum = typeof item.value === 'string' ? item.value : String(item.value || '')
-          } else if (item.key === 'whatsapp_numbers' && !whatsappNum) {
-            // Legacy support: if whatsapp_number doesn't exist, try whatsapp_numbers (array)
-            try {
-              const parsed = typeof item.value === 'string' 
-                ? JSON.parse(item.value) 
-                : item.value
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                whatsappNum = parsed[0] // Use first number from legacy array
-              }
-            } catch {
-              if (Array.isArray(item.value) && item.value.length > 0) {
-                whatsappNum = item.value[0]
-              }
-            }
-          }
-        })
-        if (whatsappNum) {
-          setWhatsappNumber(whatsappNum)
-        }
+      const chatUrl = (configData as Array<{ value: unknown }> | null)?.[0]?.value
+      if (typeof chatUrl === 'string' && chatUrl.trim()) {
+        setSupportChatUrl(chatUrl.trim())
       }
 
       // Get plan
@@ -1240,18 +1219,18 @@ function CheckoutContent() {
         </Dialog>
 
         {/* Support Link */}
-        {whatsappNumber && (
+        {supportChatUrl && (
         <div className="text-center mt-8 text-sm text-gray-600">
             <p className="flex items-center justify-center gap-2">
             Can't find your suitable payment method? Contact support team on{' '}
               <a 
-                href={`https://leenkchat.vercel.app/${whatsappNumber.replace(/[^0-9]/g, '')}`} 
+                href={supportChatUrl}
                 target="_blank" 
                 rel="noopener noreferrer" 
                 className="text-blue-600 hover:underline inline-flex items-center gap-1"
               >
                 <MessageCircle className="h-4 w-4" />
-              Leenk
+              Contact Support
             </a>
           </p>
         </div>
@@ -1274,4 +1253,3 @@ export default function CheckoutPage() {
     </Suspense>
   )
 }
-
