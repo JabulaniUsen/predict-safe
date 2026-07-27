@@ -440,7 +440,6 @@ export function DashboardContent({
           onOpenChange={setActivationModalOpen}
           planId={selectedSubscription.plan_id}
           planName={selectedSubscription.plan?.name || 'Unknown Plan'}
-          userCountry={userProfile?.country || 'Nigeria'}
           subscriptionId={selectedSubscription.id}
         />
       )}

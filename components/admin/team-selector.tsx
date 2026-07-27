@@ -146,12 +146,14 @@ export function TeamSelector({
             ) : (
               <>
                 <CommandEmpty>
-                  {!leagueId ? (
+                  {!leagueId && !allowCustom ? (
                     'Please select a league first'
                   ) : searchQuery ? (
                     allowCustom ? (
                       <div className="py-2">
-                        <p className="text-sm text-muted-foreground mb-2">No teams found.</p>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          {leagueId ? 'No teams found.' : 'No league selected — you can still add a custom team name.'}
+                        </p>
                         <Button
                           variant="outline"
                           size="sm"
@@ -167,6 +169,8 @@ export function TeamSelector({
                     ) : (
                       'No teams found.'
                     )
+                  ) : !leagueId ? (
+                    'Select a league to search its teams, or type a custom team name.'
                   ) : (
                     'Start typing to search...'
                   )}

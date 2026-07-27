@@ -35,7 +35,6 @@ interface ActivationFeeModalProps {
   onOpenChange: (open: boolean) => void
   planId: string
   planName: string
-  userCountry: string
   subscriptionId: string
 }
 
@@ -44,7 +43,6 @@ export function ActivationFeeModal({
   onOpenChange,
   planId,
   planName,
-  userCountry,
   subscriptionId,
 }: ActivationFeeModalProps) {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
@@ -55,7 +53,10 @@ export function ActivationFeeModal({
   const [uploading, setUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [selectedCountry, setSelectedCountry] = useState<string>(userCountry)
+  // No default country — the user must actively pick one so the price and
+  // currency shown are never a silent guess (this used to fall back to
+  // 'Nigeria', which showed a wrong/zero fee before the user chose anything).
+  const [selectedCountry, setSelectedCountry] = useState<string>('')
   const [countries, setCountries] = useState<Array<{ value: string; label: string }>>([])
   const [loadingCountries, setLoadingCountries] = useState(true)
   const [durationDays, setDurationDays] = useState<number>(30)
@@ -87,11 +88,11 @@ export function ActivationFeeModal({
 
   useEffect(() => {
     if (open) {
-      setSelectedCountry(userCountry)
+      setSelectedCountry('')
       fetchSubscriptionDuration()
       fetchData()
     }
-  }, [open, planId, userCountry, subscriptionId])
+  }, [open, planId, subscriptionId])
 
   // Fetch subscription to get duration
   const fetchSubscriptionDuration = async () => {
@@ -489,19 +490,31 @@ export function ActivationFeeModal({
               )}
             </div>
 
-            {/* Amount Display */}
-            <div className="bg-blue-50 rounded-lg p-4 text-center">
-              <p className="text-sm text-gray-600 mb-1">Activation Fee</p>
-              <div className="flex items-baseline justify-center gap-1">
-                <span className="text-3xl font-bold text-blue-600">{currency}</span>
-                <span className="text-4xl font-bold text-blue-600">
-                  {formattedAmount.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                </span>
+            {!selectedCountry ? (
+              <div className="text-center py-8 text-gray-500 border rounded-lg">
+                Select your country above to see the activation fee, currency, and available payment methods.
               </div>
-            </div>
+            ) : (
+              <>
+                {/* Amount Display */}
+                <div className="bg-blue-50 rounded-lg p-4 text-center">
+                  <p className="text-sm text-gray-600 mb-1">Activation Fee</p>
+                  {activationPrice ? (
+                    <div className="flex items-baseline justify-center gap-1">
+                      <span className="text-3xl font-bold text-blue-600">{currency}</span>
+                      <span className="text-4xl font-bold text-blue-600">
+                        {formattedAmount.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-amber-600">
+                      Activation fee not available for {selectedCountry}. Please contact support.
+                    </p>
+                  )}
+                </div>
 
-            {/* Payment Methods */}
-            {paymentMethods.length > 0 ? (
+                {/* Payment Methods */}
+                {paymentMethods.length > 0 ? (
               <div className="space-y-3">
                 <Label>Select Payment Method *</Label>
                 {!selectedPaymentMethod && paymentMethods.length > 0 && (
@@ -659,6 +672,8 @@ export function ActivationFeeModal({
                 </div>
               )}
             </div>
+              </>
+            )}
           </div>
         )}
 

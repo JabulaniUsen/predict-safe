@@ -509,11 +509,13 @@ export async function getLeagues(search?: string) {
     return callClient('/api/football/leagues', search ? { country: search } : {}) as Promise<League[]>
   }
 
-  const params: Record<string, string> = { current: 'true' }
-  if (search) params.search = search
+  // API-Sports rejects `current` and `search` used together (it errors and
+  // returns zero results), so search drops the `current` param and instead
+  // filters to current-season leagues client-side after the fact.
+  const params: Record<string, string> = search ? { search } : { current: 'true' }
 
   const data = await callProvider('leagues', params)
-  const leagues: League[] = (data.response || []).map((item: any) => {
+  const leagues: (League & { isCurrent: boolean })[] = (data.response || []).map((item: any) => {
     const seasons = item.seasons || []
     const currentSeason = seasons.find((s: any) => s.current) || seasons[seasons.length - 1]
     return {
@@ -524,11 +526,12 @@ export async function getLeagues(search?: string) {
       league_logo: item.league?.logo || '',
       league_type: item.league?.type || '',
       current_season: currentSeason?.year != null ? String(currentSeason.year) : '',
+      isCurrent: seasons.some((s: any) => s.current),
     }
   })
 
   return leagues
-    .filter((l) => l.league_id && l.league_name)
+    .filter((l) => l.league_id && l.league_name && (!search || l.isCurrent))
     .sort((a, b) => {
       if (a.country_name && b.country_name) {
         const countryCompare = a.country_name.localeCompare(b.country_name)
@@ -536,6 +539,7 @@ export async function getLeagues(search?: string) {
       }
       return a.league_name.localeCompare(b.league_name)
     })
+    .map(({ isCurrent, ...league }) => league)
 }
 
 export async function getTeams(leagueId: string, search?: string) {
@@ -574,10 +578,31 @@ export const TOP_LEAGUES = {
   LIGUE_2: '62',         // France Ligue 2
 }
 
-// Leagues used to source fixtures for the free predictions section.
-// Was previously restricted to 2 leagues due to the old provider's free-tier
-// limits; the current API-Sports plan has full access, so use all top leagues.
-export const FREE_PLAN_LEAGUES = Object.values(TOP_LEAGUES)
+// Leagues used to source fixtures for the free/tips predictions sections.
+// The top-5 European leagues (TOP_LEAGUES) all kick off within the same
+// evening UTC window and share a single Aug-May season, so relying on them
+// alone leaves the site with nothing to show overnight and nothing at all
+// during the European summer off-season. Mixing in leagues from other
+// confederations/timezones keeps fixtures available around the clock and
+// year-round. `getOddsByLeague` already skips leagues with no fixtures on a
+// given date cheaply, so an idle/off-season league here costs one request.
+export const FREE_PLAN_LEAGUES = [
+  ...Object.values(TOP_LEAGUES), // Europe (top 5 + 2nd tiers) — evening UTC
+  '71',   // Brazil - Série A — runs Apr-Dec, evening/night UTC (South America)
+  '128',  // Argentina - Liga Profesional — runs Jan-Nov, evening/night UTC
+  '253',  // USA - MLS — runs Feb-Nov, evening/night UTC (North America)
+  '262',  // Mexico - Liga MX — runs Jul-Nov/Jan-May, evening/night UTC
+  '265',  // Chile - Primera División — runs Jan-Dec
+  '281',  // Peru - Primera División — runs Jan-Nov
+  '292',  // South Korea - K League 1 — runs Feb-Dec, daytime UTC (Asia)
+  '98',   // Japan - J1 League — runs Feb-Dec, daytime UTC (Asia)
+  '307',  // Saudi Arabia - Pro League — runs Aug-May, afternoon UTC (Middle East)
+  '188',  // Australia - A-League — runs Oct-May, daytime/morning UTC (Oceania)
+  '106',  // Poland - Ekstraklasa — runs Jul-May
+  '103',  // Norway - Eliteserien — runs Mar-Dec (summer-season Europe)
+  '113',  // Sweden - Allsvenskan — runs Apr-Nov (summer-season Europe)
+  '119',  // Denmark - Superliga — runs Jul-May
+]
 
 export function getLeagueName(leagueId: string): string {
   const names: Record<string, string> = {

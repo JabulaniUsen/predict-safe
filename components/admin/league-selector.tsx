@@ -54,9 +54,12 @@ export function LeagueSelector({
     }
   }, [open])
 
-  // Fetch leagues when search query changes (debounced)
+  // Fetch leagues when search query changes (debounced).
+  // API-Sports requires >= 3 characters for its search param and errors
+  // below that, so skip the request rather than wiping the loaded list.
   React.useEffect(() => {
     if (!open) return
+    if (searchQuery.length > 0 && searchQuery.length < 3) return
 
     const timer = setTimeout(() => {
       fetchLeagues(searchQuery)
@@ -158,7 +161,9 @@ export function LeagueSelector({
             ) : (
               <>
                 <CommandEmpty>
-                  {searchQuery ? (
+                  {searchQuery && searchQuery.length < 3 ? (
+                    'Type at least 3 characters to search by league or country name...'
+                  ) : searchQuery ? (
                     allowCustom ? (
                       <div className="py-2">
                         <p className="text-sm text-muted-foreground mb-2">No leagues found.</p>
@@ -178,7 +183,7 @@ export function LeagueSelector({
                       'No leagues found.'
                     )
                   ) : (
-                    'Start typing to search...'
+                    'Start typing to search by league or country name...'
                   )}
                 </CommandEmpty>
                 <CommandGroup>

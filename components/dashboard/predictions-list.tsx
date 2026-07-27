@@ -379,26 +379,6 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
     (selectedPlan.requires_activation || isCorrectScorePlan)
 
   const [activationModalOpen, setActivationModalOpen] = useState(false)
-  const [userCountry, setUserCountry] = useState<string>('Nigeria')
-
-  // Fetch user country
-  useEffect(() => {
-    const fetchUserCountry = async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: profile } = await supabase
-          .from('users')
-          .select('country')
-          .eq('id', user.id)
-          .single() as { data: { country: string } | null }
-        if (profile?.country) {
-          setUserCountry(profile.country)
-        }
-      }
-    }
-    fetchUserCountry()
-  }, [])
 
   const handleSubscribe = () => {
     router.push(`/checkout?plan=${selectedPlanSlug}`)
@@ -1065,7 +1045,6 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
           onOpenChange={setActivationModalOpen}
           planId={selectedPlan.id}
           planName={selectedPlan.name}
-          userCountry={userCountry}
           subscriptionId={selectedSubscription.id}
         />
       )}

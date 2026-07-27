@@ -133,10 +133,18 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
         )
         let fixtures: Fixture[] = leagueFixtures.flatMap(f => Array.isArray(f) ? f : [])
 
-        // Fallback: if the top leagues have no fixtures for this date (e.g. off-season
-        // or international tournament windows), fall back to all fixtures for the date
-        if (fixtures.length === 0) {
-          fixtures = await getFixtures(from, undefined, to).catch(() => [] as Fixture[])
+        // Fallback: if the curated leagues have no fixtures for this date (e.g.
+        // off-season or international tournament windows) — or every one of
+        // their fixtures for the day has already finished, which happens once
+        // that day's slate wraps up but there's more time left before the date
+        // rolls over — pull from every league so there's always something to
+        // show instead of going dry until "tomorrow" is clicked. Skip this for
+        // dates fully in the past, where "all finished" is expected, not a gap.
+        const todayStr = new Date().toISOString().split('T')[0]
+        const hasUpcoming = fixtures.some((f) => f.match_status !== 'Finished')
+        if (fixtures.length === 0 || (!hasUpcoming && to >= todayStr)) {
+          const allFixtures = await getFixtures(from, undefined, to).catch(() => [] as Fixture[])
+          if (allFixtures.length > 0) fixtures = allFixtures
         }
 
         if (!Array.isArray(fixtures) || fixtures.length === 0) {

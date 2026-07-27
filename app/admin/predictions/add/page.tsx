@@ -290,7 +290,7 @@ function AddPredictionContent() {
               <div className="space-y-2">
                 <Label htmlFor="league">League *</Label>
                 <LeagueSelector
-                  value={leagueId}
+                  value={leagueId || leagueName}
                   onValueChange={(id, name) => {
                     setLeagueId(id)
                     setLeagueName(name)

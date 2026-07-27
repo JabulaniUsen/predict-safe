@@ -502,7 +502,7 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
             <div className="space-y-2">
               <Label htmlFor="league">League *</Label>
               <LeagueSelector
-                value={form.league_id}
+                value={form.league_id || form.league_name}
                 onValueChange={handleLeagueChange}
                 placeholder="Select a league"
               />

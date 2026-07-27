@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getFixtures, getOdds } from '@/lib/api-football'
+import { getFixtures, getOddsByLeague, Odds } from '@/lib/api-football'
 import { format } from 'date-fns'
 import { notifyPredictionDropped } from '@/lib/notifications'
 import { PLAN_TYPE_TO_SLUG } from '@/lib/constants'
+import { mapWithConcurrency } from '@/lib/utils/concurrency'
 
 export async function POST(request: NextRequest) {
   try {
@@ -51,52 +52,72 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'No fixtures found', synced: 0 })
     }
 
-    // Fetch odds for each fixture to get prediction types and odds
+    // Fetch odds in bulk per league/date pair instead of one request per
+    // fixture — a busy day can have hundreds of fixtures but only a couple
+    // dozen distinct leagues, so this lets every fixture for the date be
+    // processed (not just a capped first-N slice) in a handful of requests.
+    const leagueDatePairs = new Map<string, { leagueId: string; date: string }>()
+    fixtures.forEach((f) => {
+      if (!f.league_id || !f.match_date) return
+      leagueDatePairs.set(`${f.league_id}|${f.match_date}`, { leagueId: f.league_id, date: f.match_date })
+    })
+
+    const oddsResults = await mapWithConcurrency(
+      Array.from(leagueDatePairs.values()),
+      6,
+      async ({ leagueId, date: leagueDate }) => {
+        try {
+          return await getOddsByLeague(leagueId, leagueDate)
+        } catch (oddsError) {
+          console.error(`Error fetching odds for league ${leagueId}:`, oddsError)
+          return [] as Odds[]
+        }
+      }
+    )
+
+    const oddsByMatchId = new Map<string, Odds>()
+    oddsResults.flat().forEach((odds) => {
+      if (odds.match_id) oddsByMatchId.set(odds.match_id, odds)
+    })
+
     const predictions = []
     let filteredCount = 0 // Track how many predictions were filtered out
-    
-    for (const fixture of fixtures.slice(0, 50)) { // Limit to 50 to avoid rate limits
+
+    for (const fixture of fixtures) {
       try {
-        // Fetch odds for this fixture
-        let odds = 1.85 // Default
+        // Default odds when the provider has no market priced for this fixture yet
+        let odds = 1.85
         const foundOdds: Array<{ type: string; odds: number }> = []
 
-        try {
-          const oddsData = await getOdds(fixture.match_id)
-          if (Array.isArray(oddsData) && oddsData.length > 0) {
-            const matchOdds = oddsData[0]
-
-            // Extract all available odds for all prediction types (including correct score)
-            if (matchOdds.odd_1) {
-              foundOdds.push({ type: 'Home Win', odds: parseFloat(matchOdds.odd_1) })
-            }
-            if (matchOdds.odd_2) {
-              foundOdds.push({ type: 'Away Win', odds: parseFloat(matchOdds.odd_2) })
-            }
-            if (matchOdds.odd_x) {
-              foundOdds.push({ type: 'Draw', odds: parseFloat(matchOdds.odd_x) })
-            }
-            if (matchOdds['o+2.5']) {
-              foundOdds.push({ type: 'Over 2.5', odds: parseFloat(matchOdds['o+2.5']) })
-            }
-            if (matchOdds['o+1.5']) {
-              foundOdds.push({ type: 'Over 1.5', odds: parseFloat(matchOdds['o+1.5']) })
-            }
-            if (matchOdds['u+2.5']) {
-              foundOdds.push({ type: 'Under 2.5', odds: parseFloat(matchOdds['u+2.5']) })
-            }
-            if (matchOdds.bts_yes) {
-              foundOdds.push({ type: 'BTTS', odds: parseFloat(matchOdds.bts_yes) })
-            }
-
-            // Set default odds from first available
-            if (foundOdds.length > 0) {
-              odds = foundOdds[0].odds
-            }
+        const matchOdds = oddsByMatchId.get(fixture.match_id)
+        if (matchOdds) {
+          // Extract all available odds for all prediction types (including correct score)
+          if (matchOdds.odd_1) {
+            foundOdds.push({ type: 'Home Win', odds: parseFloat(matchOdds.odd_1) })
           }
-        } catch (oddsError) {
-          console.error('Error fetching odds:', oddsError)
-          // Continue with defaults
+          if (matchOdds.odd_2) {
+            foundOdds.push({ type: 'Away Win', odds: parseFloat(matchOdds.odd_2) })
+          }
+          if (matchOdds.odd_x) {
+            foundOdds.push({ type: 'Draw', odds: parseFloat(matchOdds.odd_x) })
+          }
+          if (matchOdds['o+2.5']) {
+            foundOdds.push({ type: 'Over 2.5', odds: parseFloat(matchOdds['o+2.5']) })
+          }
+          if (matchOdds['o+1.5']) {
+            foundOdds.push({ type: 'Over 1.5', odds: parseFloat(matchOdds['o+1.5']) })
+          }
+          if (matchOdds['u+2.5']) {
+            foundOdds.push({ type: 'Under 2.5', odds: parseFloat(matchOdds['u+2.5']) })
+          }
+          if (matchOdds.bts_yes) {
+            foundOdds.push({ type: 'BTTS', odds: parseFloat(matchOdds.bts_yes) })
+          }
+
+          // Set default odds from first available
+          if (foundOdds.length > 0) {
+            odds = foundOdds[0].odds
+          }
         }
 
         // For all plan types (including correct score), use ALL available odds from the API
