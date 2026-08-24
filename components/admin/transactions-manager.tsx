@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 import { Database } from '@/types/database'
-import { CheckCircle2, X, Eye, ExternalLink, Loader2, XCircle } from 'lucide-react'
+import { CheckCircle2, X, Eye, ExternalLink, Loader2, XCircle, Trash2 } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 
 type TransactionUpdate = Database['public']['Tables']['transactions']['Update']
@@ -29,6 +29,8 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
   const [showActivateDialog, setShowActivateDialog] = useState(false)
   const [showRejectDialog, setShowRejectDialog] = useState(false)
   const [rejectionReason, setRejectionReason] = useState('')
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [deleteReason, setDeleteReason] = useState('')
   const [loading, setLoading] = useState(false)
   const [viewingProof, setViewingProof] = useState<string | null>(null)
 
@@ -614,6 +616,115 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
     }
   }
 
+  const openDeleteDialog = (transaction: any) => {
+    setSelectedTransaction(transaction)
+    setDeleteReason('')
+    setShowDeleteDialog(true)
+  }
+
+  const handleDeleteTransaction = async () => {
+    if (!selectedTransaction) return
+
+    setLoading(true)
+    try {
+      const supabase = createClient()
+
+      // Reset the related subscription so it doesn't stay stuck in a pending state
+      try {
+        const subscription = subscriptions.find(
+          (sub: any) => sub.user_id === selectedTransaction.user_id && sub.plan_id === selectedTransaction.plan_id
+        )
+
+        if (subscription && subscription.plan_status !== 'active') {
+          if (selectedTransaction.payment_type === 'subscription') {
+            await supabase
+              .from('user_subscriptions')
+              // @ts-expect-error - Supabase type inference issue
+              .update({
+                plan_status: 'inactive',
+                subscription_fee_paid: false,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', subscription.id)
+          } else if (selectedTransaction.payment_type === 'activation') {
+            await supabase
+              .from('user_subscriptions')
+              // @ts-expect-error - Supabase type inference issue
+              .update({
+                activation_fee_paid: false,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', subscription.id)
+          }
+        }
+      } catch (subError) {
+        console.error('Error resetting subscription:', subError)
+        // Don't throw - still proceed with deleting the transaction
+      }
+
+      // Delete the transaction record
+      const { error: txError } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('id', selectedTransaction.id)
+
+      if (txError) throw txError
+
+      // Notify user that this payment record was removed and needs resubmission
+      const userEmail = (selectedTransaction.users as any)?.email
+      const planName = (selectedTransaction.plans as any)?.name || 'Subscription'
+      const userName = (selectedTransaction.users as any)?.full_name
+
+      try {
+        await fetch('/api/notifications/send-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            type: 'payment_rejected',
+            userId: selectedTransaction.user_id,
+            planName,
+            userEmail,
+            userName,
+            reason: deleteReason || undefined,
+          }),
+        })
+      } catch (emailError) {
+        console.error('Error sending deletion email:', emailError)
+      }
+
+      try {
+        await supabase
+          .from('notifications')
+          // @ts-expect-error - Supabase type inference issue
+          .insert({
+            user_id: selectedTransaction.user_id,
+            type: 'payment_rejected',
+            title: 'Payment Removed',
+            message: deleteReason
+              ? `Your payment for ${planName} has been removed. Reason: ${deleteReason}. Please resubmit your payment with a valid proof.`
+              : `Your payment for ${planName} has been removed. Please resubmit your payment with a valid proof.`,
+            read: false,
+          })
+      } catch (notifError) {
+        console.error('Error creating notification:', notifError)
+      }
+
+      // Remove from local state immediately
+      setTransactions((prev) => prev.filter((tx: any) => tx.id !== selectedTransaction.id))
+
+      toast.success('Transaction deleted')
+      setShowDeleteDialog(false)
+      setDeleteReason('')
+    } catch (error: any) {
+      console.error('Error deleting transaction:', error)
+      toast.error(error.message || 'Failed to delete transaction')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const getPaymentProofUrl = (transaction: any) => {
     const metadata = transaction.metadata as any
     return metadata?.payment_proof_url || null
@@ -851,15 +962,26 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
                           {new Date(tx.created_at).toLocaleDateString()}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => openActivateDialog(tx)}
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            <CheckCircle2 className="h-4 w-4 mr-1" />
-                            Activate Subscription
-                          </Button>
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => openActivateDialog(tx)}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <CheckCircle2 className="h-4 w-4 mr-1" />
+                              Activate Subscription
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openDeleteDialog(tx)}
+                              className="bg-red-50 hover:bg-red-100 text-red-700 border-red-200"
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Delete
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1162,6 +1284,78 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
                 <>
                   <XCircle className="h-4 w-4 mr-2" />
                   Reject Payment
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Transaction Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Transaction</DialogTitle>
+            <DialogDescription>
+              Permanently remove this transaction so it stops showing as pending activation. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedTransaction && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-sm">
+                  <span className="font-medium">User: </span>
+                  {(selectedTransaction.users as any)?.full_name || (selectedTransaction.users as any)?.email}
+                </p>
+                <p className="text-sm">
+                  <span className="font-medium">Plan: </span>
+                  {(selectedTransaction.plans as any)?.name}
+                </p>
+                <p className="text-sm">
+                  <span className="font-medium">Amount: </span>
+                  {selectedTransaction.currency} {selectedTransaction.amount}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="delete-reason" className="text-sm font-medium">
+                  Reason (Optional)
+                </label>
+                <Textarea
+                  id="delete-reason"
+                  placeholder="Enter reason for deleting this transaction (e.g., Duplicate, Invalid payment, etc.)"
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  rows={4}
+                  className="resize-none"
+                />
+                <p className="text-xs text-muted-foreground">
+                  This reason will be included in the email sent to the user.
+                </p>
+              </div>
+              <div className="rounded-lg bg-red-50 p-3 text-red-800 text-sm">
+                <p className="font-medium mb-1">⚠️ Warning:</p>
+                <p>This will permanently delete the transaction record and reset the related subscription. The user will be notified and will need to resubmit their payment.</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)} disabled={loading}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDeleteTransaction}
+              disabled={loading}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Transaction
                 </>
               )}
             </Button>
