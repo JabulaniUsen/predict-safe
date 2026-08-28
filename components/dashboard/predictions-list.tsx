@@ -96,26 +96,20 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
     
     // For plans that require activation, also check if activation fee is paid
     const plan = allPlans.find((p) => p.id === planId)
-    
-    // Check if this is Correct Score plan (by slug) - it always requires activation fee
-    const isCorrectScore = plan?.slug === 'correct-score'
-    
-    // If plan requires activation OR is Correct Score, check activation fee
-    if ((plan?.requires_activation || isCorrectScore) && !subscription.activation_fee_paid) {
+
+    if (plan?.requires_activation && !subscription.activation_fee_paid) {
       console.log('🔒 Plan not unlocked: Activation fee not paid for plan', planId, {
         requires_activation: plan?.requires_activation,
-        isCorrectScore,
         activation_fee_paid: subscription.activation_fee_paid,
         plan_status: subscription.plan_status
       })
       return false
     }
-    
+
     console.log('✅ Plan unlocked for plan', planId, {
       plan_status: subscription.plan_status,
       activation_fee_paid: subscription.activation_fee_paid,
       requires_activation: plan?.requires_activation,
-      isCorrectScore
     })
     return true
   }
@@ -364,11 +358,13 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
   const selectedPlan = allPlans.find((p) => p.slug === selectedPlanSlug)
   const selectedSubscription = selectedPlan ? subscriptions.find((s) => s.plan_id === selectedPlan.id) : null
   const isUnlocked = selectedPlan ? isPlanUnlocked(selectedPlan.id) : false
+  // Used for correct-score-specific rendering/data selection below, not for
+  // activation-fee gating (that's driven by plan.requires_activation instead).
   const isCorrectScorePlan = selectedPlan?.slug === 'correct-score'
-  
-  // Check if subscription exists but activation fee not paid (for correct score)
-  const isPendingActivation = isCorrectScorePlan && 
-    selectedSubscription && 
+
+  // Check if subscription exists but activation fee not paid
+  const isPendingActivation = Boolean(selectedPlan?.requires_activation) &&
+    selectedSubscription &&
     selectedSubscription.plan_status === 'pending_activation' &&
     !selectedSubscription.activation_fee_paid
 
@@ -376,7 +372,7 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
   const needsActivationFee = selectedPlan && selectedSubscription &&
     selectedSubscription.plan_status === 'active' &&
     !selectedSubscription.activation_fee_paid &&
-    (selectedPlan.requires_activation || isCorrectScorePlan)
+    selectedPlan.requires_activation
 
   const [activationModalOpen, setActivationModalOpen] = useState(false)
 

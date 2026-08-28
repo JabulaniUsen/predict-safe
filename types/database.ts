@@ -465,6 +465,7 @@ export interface Database {
           display_order: number
           logo_url: string | null
           countries: Json | null
+          payment_link: string | null
           created_at: string
           updated_at: string
         }
@@ -478,6 +479,7 @@ export interface Database {
           display_order?: number
           logo_url?: string | null
           countries?: Json | null
+          payment_link?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -491,6 +493,7 @@ export interface Database {
           display_order?: number
           logo_url?: string | null
           countries?: Json | null
+          payment_link?: string | null
           created_at?: string
           updated_at?: string
         }

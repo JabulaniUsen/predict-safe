@@ -36,7 +36,7 @@ export default async function AdminTransactionsPage() {
     .select(`
       *,
       users(email, full_name),
-      plans(name, slug)
+      plans(name, slug, requires_activation)
     `)
     .order('created_at', { ascending: false })
 

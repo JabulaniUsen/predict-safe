@@ -402,6 +402,60 @@ export function ActivationFeeModal({
 
       if (txError) throw txError
 
+      // Notify admin about the new activation-fee payment submission
+      try {
+        const adminResult: any = await supabase
+          .from('users')
+          .select('id')
+          .eq('is_admin', true)
+          .limit(1)
+          .single()
+        const adminUser = adminResult.data as any
+
+        if (adminUser) {
+          const userProfileResult: any = await supabase
+            .from('users')
+            .select('full_name, email')
+            .eq('id', user.id)
+            .single()
+          const userProfile = userProfileResult.data as any
+          const userName = userProfile?.full_name || user.email?.split('@')[0] || 'User'
+          const userEmail = userProfile?.email || user.email
+
+          await supabase
+            .from('notifications')
+            // @ts-expect-error - Supabase type inference issue
+            .insert({
+              user_id: adminUser.id,
+              type: 'admin_new_payment',
+              title: 'New Activation Fee Payment Submitted',
+              message: `${userName} (${userEmail}) has submitted an activation fee payment proof for ${planName}. Amount: ${activationPrice.currency} ${activationPrice.activation_fee}.`,
+              read: false,
+            })
+
+          try {
+            await fetch('/api/notifications/send-email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'admin_new_payment',
+                userId: adminUser.id,
+                planName,
+                userEmail,
+                userName,
+                amount: activationPrice.activation_fee,
+                currency: activationPrice.currency,
+              }),
+            })
+          } catch (emailError) {
+            console.error('Error sending admin notification email:', emailError)
+          }
+        }
+      } catch (notifError) {
+        console.error('Error creating admin notification:', notifError)
+        // Don't throw - the payment submission itself already succeeded
+      }
+
       toast.success('Payment proof submitted! Awaiting admin approval.')
       onOpenChange(false)
       
@@ -612,6 +666,17 @@ export function ActivationFeeModal({
                                 </div>
                               )}
                             </div>
+                          )}
+                          {(method as any).payment_link && (
+                            <a
+                              href={(method as any).payment_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-block text-sm text-blue-600 hover:text-blue-800 underline mt-1"
+                            >
+                              Open Payment Page
+                            </a>
                           )}
                         </Label>
                       </div>

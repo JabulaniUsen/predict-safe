@@ -1107,6 +1107,18 @@ function CheckoutContent() {
                     )}
                   </div>
 
+                  {/* Payment Link */}
+                  {(method as any).payment_link && (
+                    <a
+                      href={(method as any).payment_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block w-full text-center text-sm text-purple-700 hover:text-purple-900 underline mb-2"
+                    >
+                      Open Payment Page
+                    </a>
+                  )}
+
                   {/* Action Button */}
                   <Button
                     onClick={() => handlePaymentMethodAction(method)}

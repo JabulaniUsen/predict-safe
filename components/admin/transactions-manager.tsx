@@ -31,8 +31,117 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
   const [rejectionReason, setRejectionReason] = useState('')
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleteReason, setDeleteReason] = useState('')
+  const [showActivationQuestionDialog, setShowActivationQuestionDialog] = useState(false)
   const [loading, setLoading] = useState(false)
   const [viewingProof, setViewingProof] = useState<string | null>(null)
+
+  // Moves a confirmed first-payment subscription into 'pending_activation' instead of
+  // straight to 'active', for plans that require a separate activation fee. Used both
+  // when the plan already has "Requires Activation Fee" enabled, and when the admin
+  // answers "Yes" to the activation-fee question for a plan that doesn't.
+  const moveToPendingActivation = async (tx: any) => {
+    setLoading(true)
+    try {
+      const supabase = createClient()
+
+      let subscription: any = null
+
+      if (tx.subscription_id) {
+        const subResultById = await supabase
+          .from('user_subscriptions')
+          .select('*')
+          .eq('id', tx.subscription_id)
+          .maybeSingle()
+
+        if (!subResultById.error && subResultById.data) {
+          subscription = subResultById.data
+        }
+      }
+
+      if (!subscription && tx.user_id && tx.plan_id) {
+        const subResult = await supabase
+          .from('user_subscriptions')
+          .select('*')
+          .eq('user_id', tx.user_id)
+          .eq('plan_id', tx.plan_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (!subResult.error && subResult.data) {
+          subscription = subResult.data
+        }
+      }
+
+      if (!subscription) {
+        toast.error('Subscription not found for this transaction.')
+        return
+      }
+
+      const updateSubData: UserSubscriptionUpdate = {
+        plan_status: 'pending_activation',
+        subscription_fee_paid: true,
+        updated_at: new Date().toISOString(),
+      }
+
+      const subResult: any = await supabase
+        .from('user_subscriptions')
+        // @ts-expect-error - Supabase type inference issue
+        .update(updateSubData)
+        .eq('id', subscription.id)
+      const { error: subError } = subResult
+
+      if (subError) throw subError
+
+      const planName = (tx.plans as any)?.name || 'Subscription'
+      const userEmail = (tx.users as any)?.email
+      const userName = (tx.users as any)?.full_name
+
+      try {
+        await supabase
+          .from('notifications')
+          // @ts-expect-error - Supabase type inference issue
+          .insert({
+            user_id: tx.user_id,
+            type: 'payment_approved',
+            title: 'Payment Confirmed - Activation Fee Required',
+            message: `Your payment for ${planName} has been confirmed. Please log in to your dashboard and pay the required activation fee to activate your subscription.`,
+            read: false,
+          })
+      } catch (notifError) {
+        console.error('Error creating notification:', notifError)
+      }
+
+      try {
+        await fetch('/api/notifications/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'payment_approved',
+            userId: tx.user_id,
+            planName,
+            userEmail,
+            userName,
+            requiresActivation: true,
+          }),
+        })
+      } catch (emailError) {
+        console.error('Error sending confirmation email:', emailError)
+      }
+
+      toast.success('Payment confirmed! Subscription moved to Pending Activation, awaiting the activation fee.')
+      setShowConfirmDialog(false)
+      setShowActivationQuestionDialog(false)
+      setTimeout(() => {
+        window.location.reload()
+      }, 1500)
+    } catch (error: any) {
+      console.error('Error moving subscription to pending activation:', error)
+      toast.error(error.message || 'Failed to update subscription')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleConfirmPayment = async () => {
     if (!selectedTransaction) return
@@ -41,10 +150,9 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
     try {
       const supabase = createClient()
 
-      // Check if this is an activation fee payment
       const isActivationFee = selectedTransaction.payment_type === 'activation'
 
-      // Update transaction status to completed
+      // Mark the transaction as completed
       const updateData: TransactionUpdate = {
         status: 'completed',
         updated_at: new Date().toISOString(),
@@ -58,133 +166,52 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
 
       if (txError) throw txError
 
-      // For activation fees, just set activation_fee_paid to true (plan is already active)
       if (isActivationFee) {
-        // Find the subscription (should already be active)
-        let subscription: any = null
-        let subscriptionId: string | null = null
-
-        if (selectedTransaction.subscription_id) {
-          const subResultById = await supabase
-            .from('user_subscriptions')
-            .select('*')
-            .eq('id', selectedTransaction.subscription_id)
-            .maybeSingle()
-          
-          if (!subResultById.error && subResultById.data) {
-            subscription = subResultById.data
-            subscriptionId = subscription?.id || null
-          }
-        }
-
-        if (!subscription && selectedTransaction.user_id && selectedTransaction.plan_id) {
-          const subResult = await supabase
-            .from('user_subscriptions')
-            .select('*')
-            .eq('user_id', selectedTransaction.user_id)
-            .eq('plan_id', selectedTransaction.plan_id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-          
-          if (!subResult.error && subResult.data) {
-            subscription = subResult.data
-            subscriptionId = subscription?.id || null
-          }
-        }
-
-        if (subscription && subscriptionId) {
-          // Only set activation_fee_paid to true - don't change plan status or dates
-          const updateSubData: UserSubscriptionUpdate = {
-            activation_fee_paid: true,
-            updated_at: new Date().toISOString(),
-          }
-
-          const subResult: any = await supabase
-            .from('user_subscriptions')
-            // @ts-expect-error - Supabase type inference issue
-            .update(updateSubData)
-            .eq('id', subscriptionId)
-            .select()
-          
-          const { data: updatedSub, error: subError } = subResult
-
-          if (subError) {
-            console.error('Error updating subscription:', subError)
-            throw subError
-          }
-
-          if (!updatedSub || updatedSub.length === 0) {
-            throw new Error(`Subscription update failed - no rows updated. Subscription ID: ${subscriptionId}`)
-          }
-
-          toast.success('Activation fee approved! User can now access correct score predictions.')
-          
-          // Notify user
-          try {
-            const planName = (selectedTransaction.plans as any)?.name || 'Subscription'
-            const userEmail = (selectedTransaction.users as any)?.email
-            const userName = (selectedTransaction.users as any)?.full_name
-
-            await supabase
-              .from('notifications')
-              // @ts-expect-error - Supabase type inference issue
-              .insert({
-                user_id: selectedTransaction.user_id,
-                type: 'payment_approved',
-                title: 'Activation Fee Approved',
-                message: `Your activation fee for ${planName} has been approved! You can now access all premium features including correct score predictions.`,
-                read: false,
-              })
-
-            try {
-              await fetch('/api/notifications/send-email', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  type: 'payment_approved',
-                  userId: selectedTransaction.user_id,
-                  planName,
-                  userEmail,
-                  userName,
-                }),
-              })
-            } catch (emailError) {
-              console.error('Error sending approval email:', emailError)
-            }
-          } catch (notifError) {
-            console.error('Error creating approval notification:', notifError)
-          }
-
-          setShowConfirmDialog(false)
-          // Delay reload to allow toast to be visible
-          setTimeout(() => {
+        // Confirming the activation-fee payment no longer activates the subscription
+        // directly - it now surfaces in the "Ready to Activate" tab for a final,
+        // explicit Activate step (mirrors the first-payment flow).
+        toast.success('Activation fee payment confirmed! Go to the Ready to Activate tab to activate the subscription.')
+        setShowConfirmDialog(false)
+        setTimeout(() => {
           window.location.reload()
-          }, 1500)
-          return
-        } else {
-          toast.error('Subscription not found for this transaction.')
-          setShowConfirmDialog(false)
-          return
-        }
+        }, 1500)
+        return
       }
 
-      // For subscription payments, show activate dialog
-      toast.success('Payment confirmed successfully! You can now activate the subscription.')
+      const requiresActivation = Boolean((selectedTransaction.plans as any)?.requires_activation)
+
+      if (requiresActivation) {
+        // Package already has "Requires Activation Fee" enabled - skip straight to
+        // Pending Activation, don't prompt to activate immediately.
+        await moveToPendingActivation(selectedTransaction)
+        return
+      }
+
+      // Plan doesn't have an activation fee pre-configured - ask the admin
       setShowConfirmDialog(false)
-      
-      // After confirming, show activate dialog
       setTimeout(() => {
-        setSelectedTransaction(selectedTransaction)
-        setShowActivateDialog(true)
-      }, 500)
+        setShowActivationQuestionDialog(true)
+      }, 300)
     } catch (error: any) {
       toast.error(error.message || 'Failed to confirm payment')
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleActivationQuestionAnswer = async (activationRequired: boolean) => {
+    if (!selectedTransaction) return
+
+    if (activationRequired) {
+      await moveToPendingActivation(selectedTransaction)
+      return
+    }
+
+    setShowActivationQuestionDialog(false)
+    toast.success('Payment confirmed successfully! You can now activate the subscription.')
+    setTimeout(() => {
+      setShowActivateDialog(true)
+    }, 300)
   }
 
   const handleActivateSubscription = async () => {
@@ -763,13 +790,20 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
   // Combine both subscription and activation fee payments for the "Pending Subscription Payments" tab
   const pendingTransactions = [...pendingSubscriptionPayments, ...pendingActivationFees]
   
-  // Get completed transactions that haven't been activated yet
+  // Get completed transactions that haven't been activated yet.
+  // Includes both subscription and activation-fee payments, since confirming an
+  // activation-fee payment now requires a separate Activate step too. A subscription
+  // payment whose plan already moved to 'pending_activation' is excluded here — it's
+  // waiting on the activation-fee transaction, not ready to activate yet.
   const completedNotActivated = transactions.filter((tx: any) => {
-    if (tx.status !== 'completed' || tx.payment_type !== 'subscription') return false
+    if (tx.status !== 'completed') return false
+    if (tx.payment_type !== 'subscription' && tx.payment_type !== 'activation') return false
     const subscription = subscriptions.find(
       (sub: any) => sub.user_id === tx.user_id && sub.plan_id === tx.plan_id
     )
-    return subscription && subscription.plan_status !== 'active'
+    if (!subscription || subscription.plan_status === 'active') return false
+    if (tx.payment_type === 'subscription' && subscription.plan_status === 'pending_activation') return false
+    return true
   })
   
   const completedTransactions = transactions.filter(
@@ -955,7 +989,14 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
                         </TableCell>
                         <TableCell>{(tx.plans as any)?.name || 'N/A'}</TableCell>
                         <TableCell>
-                          {tx.currency} {tx.amount}
+                          <div className="flex items-center gap-2">
+                            <span>{tx.currency} {tx.amount}</span>
+                            {tx.payment_type === 'activation' && (
+                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                                Activation Fee
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>{tx.payment_gateway || 'N/A'}</TableCell>
                         <TableCell>
@@ -1098,6 +1139,55 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
                 </>
               ) : (
                 'Confirm Payment'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Activation Fee Question Dialog - shown after confirming a first payment for a
+          plan that doesn't already have "Requires Activation Fee" enabled */}
+      <Dialog open={showActivationQuestionDialog} onOpenChange={setShowActivationQuestionDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Does this package require an activation fee?</DialogTitle>
+            <DialogDescription>
+              This plan doesn&apos;t have &quot;Requires Activation Fee&quot; enabled in its settings. Choose how to proceed with this subscription.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedTransaction && (
+            <div className="space-y-2 text-sm">
+              <p>
+                <span className="font-medium">User: </span>
+                {(selectedTransaction.users as any)?.full_name || (selectedTransaction.users as any)?.email}
+              </p>
+              <p>
+                <span className="font-medium">Plan: </span>
+                {(selectedTransaction.plans as any)?.name}
+              </p>
+            </div>
+          )}
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => handleActivationQuestionAnswer(false)}
+              disabled={loading}
+              className="w-full sm:w-auto"
+            >
+              No - No Activation Fee
+            </Button>
+            <Button
+              onClick={() => handleActivationQuestionAnswer(true)}
+              disabled={loading}
+              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Yes - Activation Fee Required'
               )}
             </Button>
           </DialogFooter>

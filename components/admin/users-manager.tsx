@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
-import { Search, Plus, Power, PowerOff } from 'lucide-react'
+import { Search, Plus, Power, PowerOff, Download } from 'lucide-react'
 import { Database } from '@/types/database'
 import { format } from 'date-fns'
 
@@ -272,6 +272,46 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
     }
   }
 
+  const getSubscriptionStatusLabel = (user: any) => {
+    const subscriptions = user.user_subscriptions || []
+    if (subscriptions.length === 0) return 'No subscription'
+    return subscriptions
+      .map((sub: any) => `${sub.plan?.name || 'Unknown Plan'} (${sub.plan_status})`)
+      .join('; ')
+  }
+
+  const escapeCsvField = (value: string) => {
+    if (/[",\n]/.test(value)) {
+      return `"${value.replace(/"/g, '""')}"`
+    }
+    return value
+  }
+
+  const handleExportCsv = () => {
+    const header = ['Name', 'Email', 'Date', 'Subscription Status']
+    const rows = filteredUsers.map((user) => [
+      user.full_name || 'N/A',
+      user.email || '',
+      user.created_at ? format(new Date(user.created_at), 'MMM dd, yyyy') : 'N/A',
+      getSubscriptionStatusLabel(user),
+    ])
+
+    const csvContent = [header, ...rows]
+      .map((row) => row.map((field) => escapeCsvField(String(field))).join(','))
+      .join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `users-export-${format(new Date(), 'yyyy-MM-dd')}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    toast.success('Users exported to CSV')
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -282,14 +322,20 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
               Total: {users.length} users | Subscribers: {subscribers.length} | Normal: {normalUsers.length} | Showing: {filteredUsers.length} users
             </CardDescription>
           </div>
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search by name, email, or country..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search by name, email, or country..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Button variant="outline" onClick={handleExportCsv}>
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
           </div>
         </div>
       </CardHeader>

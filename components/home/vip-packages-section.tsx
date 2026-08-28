@@ -289,7 +289,7 @@ export function VIPPackagesSection() {
                               /{billingPeriod === 'weekly' ? 'week' : 'mo'}
                             </p>
                             {plan.requires_activation && (
-                              <p className="text-xs text-gray-500">+ Activation Fee</p>
+                              <p className="text-xs text-gray-500">+ Activation</p>
                             )}
                           </div>
                         ) : (

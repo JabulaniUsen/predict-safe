@@ -288,10 +288,10 @@ export function DashboardContent({
                           </div>
                         )}
                         
-                        {isPendingActivation && plan?.slug === 'correct-score' && (
+                        {isPendingActivation && plan?.requires_activation && (
                           <div className="rounded-lg bg-orange-50 p-2 lg:p-3 text-xs lg:text-sm text-orange-800 border border-orange-200">
                             <p className="font-medium mb-1">Locked, pay activation fee to unlock</p>
-                            <p>Your subscription is active but requires an activation fee to unlock predictions.</p>
+                            <p>Your payment has been confirmed, but your subscription requires an activation fee before predictions unlock.</p>
                           </div>
                         )}
                         
@@ -309,7 +309,7 @@ export function DashboardContent({
                               View Predictions
                             </Button>
                           )}
-                          {isPendingActivation && plan?.slug === 'correct-score' && (
+                          {isPendingActivation && plan?.requires_activation && (
                             <Button
                               size="sm"
                               variant="outline"

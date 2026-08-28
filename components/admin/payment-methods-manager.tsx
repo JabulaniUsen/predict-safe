@@ -53,6 +53,7 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
     is_active: true,
     display_order: 0,
     logo_url: null as string | null,
+    payment_link: '',
   })
 
   // Bank transfer form fields
@@ -128,6 +129,7 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
       is_active: true,
       display_order: 0,
       logo_url: null,
+      payment_link: '',
     })
     setSelectedCountries([])
     setAvailableForAllCountries(false)
@@ -190,6 +192,7 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
       is_active: method.is_active,
       display_order: method.display_order,
       logo_url: method.logo_url,
+      payment_link: (method as any).payment_link || '',
     })
     setLogoPreview(method.logo_url || null)
 
@@ -462,6 +465,7 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
         display_order: methodForm.display_order,
         countries: countriesArray.length > 0 ? countriesArray : null,
         logo_url: logoUrl,
+        payment_link: methodForm.payment_link.trim() || null,
       }
 
       if (editingMethod) {
@@ -816,6 +820,21 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
                   </Label>
                 </div>
               )}
+            </div>
+
+            {/* Payment Link */}
+            <div className="space-y-2">
+              <Label htmlFor="payment_link">Payment Link / URL (Optional)</Label>
+              <Input
+                id="payment_link"
+                type="url"
+                placeholder="https://..."
+                value={methodForm.payment_link}
+                onChange={(e) => setMethodForm({ ...methodForm, payment_link: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                If provided, users will see a clickable link/button to open this payment page in a new tab.
+              </p>
             </div>
 
             {methodForm.type === 'crypto' && (

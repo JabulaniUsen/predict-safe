@@ -442,8 +442,44 @@ export const emailTemplates = {
     `,
   })},
 
-  paymentApproved: (planName: string) => {
+  paymentApproved: (planName: string, requiresActivation?: boolean) => {
     const safePlanName = escapeHtml(planName)
+    if (requiresActivation) {
+      return ({
+        subject: `Payment Confirmed - ${planName}`,
+        html: `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <style>${getEmailStyles(BRAND_COLORS.green, BRAND_COLORS.greenDark)}</style>
+            </head>
+            <body>
+              <div style="padding: 20px;">
+                <div class="email-wrapper">
+                <div class="header">
+                  <h1>✅ Payment Confirmed</h1>
+                </div>
+                <div class="content">
+                  <p>Hello,</p>
+                  <p>Your subscription payment for <strong style="color: ${BRAND_COLORS.green};">${safePlanName}</strong> has been successfully confirmed. However, your subscription is <strong>not yet active</strong>.</p>
+                  <p>Please log in to your dashboard and complete the required security/activation fee. Once the activation fee is confirmed, your subscription will be activated.</p>
+                  <div style="text-align: center;">
+                    <a href="${SITE_URL}/dashboard" class="button">Go to Dashboard</a>
+                  </div>
+                  </div>
+                  <div class="footer">
+                    <p><strong>Best regards,</strong></p>
+                    <p>The PredictSafe Team</p>
+                  </div>
+                </div>
+              </div>
+            </body>
+          </html>
+        `,
+      })
+    }
     return ({
     subject: `Payment Approved - ${planName}`,
     html: `

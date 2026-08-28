@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { type, userId, planName, userEmail, userName, planType, currency, amount, duration } = body
+    const { type, userId, planName, userEmail, userName, planType, currency, amount, duration, requiresActivation } = body
 
     // Get user email if not provided
     let recipientEmail = userEmail
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
         if (!planName) {
           return NextResponse.json({ error: 'Plan name required' }, { status: 400 })
         }
-        emailData = emailTemplates.paymentApproved(planName)
+        emailData = emailTemplates.paymentApproved(planName, requiresActivation)
         break
       case 'admin_new_payment':
         if (!planName || !userEmail || !userName || !amount || !currency) {

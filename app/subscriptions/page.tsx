@@ -313,7 +313,7 @@ export default function SubscriptionsPage() {
                           </div>
                         </div>
                         {plan.requires_activation && (
-                          <p className="text-xs text-gray-500 mt-2 text-center">+ Activation Fee</p>
+                          <p className="text-xs text-gray-500 mt-2 text-center">+ Activation</p>
                         )}
                       </div>
 
@@ -448,7 +448,7 @@ export default function SubscriptionsPage() {
                           </div>
                         </div>
                         {plan.requires_activation && (
-                          <p className="text-xs text-gray-500 mt-2 text-center">+ Activation Fee</p>
+                          <p className="text-xs text-gray-500 mt-2 text-center">+ Activation</p>
                         )}
                       </div>
 
