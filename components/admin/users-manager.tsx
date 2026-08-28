@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -33,6 +33,21 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
   const [selectedSubscriptionToDeactivate, setSelectedSubscriptionToDeactivate] = useState<string>('')
   const [selectedDuration, setSelectedDuration] = useState<number>(30)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  const [exportFromDate, setExportFromDate] = useState('')
+  const [exportToDate, setExportToDate] = useState('')
+  const [lastExportAt, setLastExportAt] = useState<string | null>(null)
+
+  const LAST_EXPORT_STORAGE_KEY = 'predictsafe_admin_users_last_export_at'
+
+  // Loaded client-side only (avoids an SSR/hydration mismatch on localStorage)
+  useEffect(() => {
+    try {
+      setLastExportAt(localStorage.getItem(LAST_EXPORT_STORAGE_KEY))
+    } catch {
+      // localStorage unavailable (private browsing, etc) - just skip the "last exported" hint
+    }
+  }, [])
 
   // Separate users into subscribers and normal users
   const { subscribers, normalUsers } = useMemo(() => {
@@ -287,9 +302,32 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
     return value
   }
 
+  // Users to export = the currently filtered/searched list, further narrowed by an
+  // optional joined-date range - lets an admin export just the users who joined
+  // since their last export instead of re-exporting everyone every time.
+  const exportCandidateUsers = useMemo(() => {
+    if (!exportFromDate && !exportToDate) return filteredUsers
+
+    const fromTime = exportFromDate ? new Date(`${exportFromDate}T00:00:00`).getTime() : null
+    const toTime = exportToDate ? new Date(`${exportToDate}T23:59:59.999`).getTime() : null
+
+    return filteredUsers.filter((user) => {
+      if (!user.created_at) return false
+      const created = new Date(user.created_at).getTime()
+      if (fromTime !== null && created < fromTime) return false
+      if (toTime !== null && created > toTime) return false
+      return true
+    })
+  }, [filteredUsers, exportFromDate, exportToDate])
+
+  const handleUseLastExportAsFrom = () => {
+    if (!lastExportAt) return
+    setExportFromDate(format(new Date(lastExportAt), 'yyyy-MM-dd'))
+  }
+
   const handleExportCsv = () => {
     const header = ['Name', 'Email', 'Date', 'Subscription Status']
-    const rows = filteredUsers.map((user) => [
+    const rows = exportCandidateUsers.map((user) => [
       user.full_name || 'N/A',
       user.email || '',
       user.created_at ? format(new Date(user.created_at), 'MMM dd, yyyy') : 'N/A',
@@ -309,7 +347,16 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
-    toast.success('Users exported to CSV')
+
+    const now = new Date().toISOString()
+    try {
+      localStorage.setItem(LAST_EXPORT_STORAGE_KEY, now)
+    } catch {
+      // localStorage unavailable - export still succeeded, just no "last exported" memory
+    }
+    setLastExportAt(now)
+    setExportDialogOpen(false)
+    toast.success(`Exported ${exportCandidateUsers.length} user${exportCandidateUsers.length === 1 ? '' : 's'} to CSV`)
   }
 
   return (
@@ -332,7 +379,14 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
                 className="pl-10"
               />
             </div>
-            <Button variant="outline" onClick={handleExportCsv}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setExportFromDate('')
+                setExportToDate('')
+                setExportDialogOpen(true)
+              }}
+            >
               <Download className="h-4 w-4 mr-2" />
               Export CSV
             </Button>
@@ -998,6 +1052,64 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
             >
               <PowerOff className="h-4 w-4 mr-2" />
               Deactivate Subscription
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Export CSV Dialog */}
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Export Users to CSV</DialogTitle>
+            <DialogDescription>
+              Optionally narrow by joined-date range so you only export new users, instead of the full list every time.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {lastExportAt && (
+              <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800 flex items-center justify-between gap-2 flex-wrap">
+                <span>Last exported: {format(new Date(lastExportAt), 'MMM dd, yyyy, h:mm a')}</span>
+                <Button type="button" size="sm" variant="outline" onClick={handleUseLastExportAsFrom}>
+                  Export only new since then
+                </Button>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="export-from">Joined From (optional)</Label>
+                <Input
+                  id="export-from"
+                  type="date"
+                  value={exportFromDate}
+                  onChange={(e) => setExportFromDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="export-to">Joined To (optional)</Label>
+                <Input
+                  id="export-to"
+                  type="date"
+                  value={exportToDate}
+                  onChange={(e) => setExportToDate(e.target.value)}
+                />
+              </div>
+            </div>
+            {(exportFromDate || exportToDate) && (
+              <Button type="button" size="sm" variant="ghost" onClick={() => { setExportFromDate(''); setExportToDate('') }}>
+                Clear date range (export all {filteredUsers.length} shown)
+              </Button>
+            )}
+            <p className="text-sm text-muted-foreground">
+              {exportCandidateUsers.length} user{exportCandidateUsers.length === 1 ? '' : 's'} will be exported.
+            </p>
+            <Button
+              onClick={handleExportCsv}
+              className="w-full"
+              disabled={exportCandidateUsers.length === 0}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download CSV
             </Button>
           </div>
         </DialogContent>

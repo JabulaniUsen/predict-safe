@@ -3,6 +3,12 @@ import withPWA from "next-pwa";
 
 const nextConfig: NextConfig = {
   images: {
+    // The Cloudflare hosting plan this site runs on doesn't have Cloudflare
+    // Images enabled, so Next's built-in /_next/image optimizer 402s on every
+    // request ("OPTIMIZED_IMAGE_REQUEST_PAYMENT_REQUIRED") - breaking every
+    // <Image> on the site (logo, team badges, blog images, etc). Serve images
+    // unoptimized/direct instead, which works fine on this host.
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',
