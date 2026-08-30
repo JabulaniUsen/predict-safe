@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -37,6 +38,30 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
   const [exportFromDate, setExportFromDate] = useState('')
   const [exportToDate, setExportToDate] = useState('')
   const [lastExportAt, setLastExportAt] = useState<string | null>(null)
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set())
+  const [exportOnlySelected, setExportOnlySelected] = useState(false)
+
+  const toggleUserSelection = (userId: string) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(userId)) next.delete(userId)
+      else next.add(userId)
+      return next
+    })
+  }
+
+  const toggleSelectAllVisible = (visibleUsers: any[]) => {
+    setSelectedUserIds((prev) => {
+      const allSelected = visibleUsers.length > 0 && visibleUsers.every((u) => prev.has(u.id))
+      const next = new Set(prev)
+      if (allSelected) {
+        visibleUsers.forEach((u) => next.delete(u.id))
+      } else {
+        visibleUsers.forEach((u) => next.add(u.id))
+      }
+      return next
+    })
+  }
 
   const LAST_EXPORT_STORAGE_KEY = 'predictsafe_admin_users_last_export_at'
 
@@ -302,10 +327,15 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
     return value
   }
 
-  // Users to export = the currently filtered/searched list, further narrowed by an
-  // optional joined-date range - lets an admin export just the users who joined
-  // since their last export instead of re-exporting everyone every time.
+  // Users to export. Either the manually checked rows, or the currently
+  // filtered/searched list further narrowed by an optional joined-date range -
+  // lets an admin export just the users who joined since their last export
+  // instead of re-exporting everyone every time.
   const exportCandidateUsers = useMemo(() => {
+    if (exportOnlySelected) {
+      return users.filter((user) => selectedUserIds.has(user.id))
+    }
+
     if (!exportFromDate && !exportToDate) return filteredUsers
 
     const fromTime = exportFromDate ? new Date(`${exportFromDate}T00:00:00`).getTime() : null
@@ -318,7 +348,7 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
       if (toTime !== null && created > toTime) return false
       return true
     })
-  }, [filteredUsers, exportFromDate, exportToDate])
+  }, [filteredUsers, exportFromDate, exportToDate, exportOnlySelected, selectedUserIds, users])
 
   const handleUseLastExportAsFrom = () => {
     if (!lastExportAt) return
@@ -367,6 +397,7 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
             <CardTitle>All Users</CardTitle>
             <CardDescription>
               Total: {users.length} users | Subscribers: {subscribers.length} | Normal: {normalUsers.length} | Showing: {filteredUsers.length} users
+              {selectedUserIds.size > 0 && ` | Selected: ${selectedUserIds.size}`}
             </CardDescription>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -379,11 +410,17 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
                 className="pl-10"
               />
             </div>
+            {selectedUserIds.size > 0 && (
+              <Button variant="ghost" onClick={() => setSelectedUserIds(new Set())}>
+                Clear selection
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={() => {
                 setExportFromDate('')
                 setExportToDate('')
+                setExportOnlySelected(selectedUserIds.size > 0)
                 setExportDialogOpen(true)
               }}
             >
@@ -412,6 +449,13 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={filteredUsers.length > 0 && filteredUsers.every((u) => selectedUserIds.has(u.id))}
+                        onCheckedChange={() => toggleSelectAllVisible(filteredUsers)}
+                        aria-label="Select all visible users"
+                      />
+                    </TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Country</TableHead>
@@ -423,7 +467,7 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
                 <TableBody>
                   {filteredUsers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                         No users found matching your search.
                       </TableCell>
                     </TableRow>
@@ -436,6 +480,13 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
 
                       return (
                         <TableRow key={user.id}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedUserIds.has(user.id)}
+                              onCheckedChange={() => toggleUserSelection(user.id)}
+                              aria-label={`Select ${user.full_name || user.email}`}
+                            />
+                          </TableCell>
                           <TableCell>{user.full_name || 'N/A'}</TableCell>
                           <TableCell>{user.email}</TableCell>
                           <TableCell>
@@ -615,6 +666,13 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={filteredUsers.length > 0 && filteredUsers.every((u) => selectedUserIds.has(u.id))}
+                        onCheckedChange={() => toggleSelectAllVisible(filteredUsers)}
+                        aria-label="Select all visible users"
+                      />
+                    </TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Country</TableHead>
@@ -626,7 +684,7 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
                 <TableBody>
                   {filteredUsers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                         No users found matching your search.
                       </TableCell>
                     </TableRow>
@@ -639,6 +697,13 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
 
                       return (
                         <TableRow key={user.id}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedUserIds.has(user.id)}
+                              onCheckedChange={() => toggleUserSelection(user.id)}
+                              aria-label={`Select ${user.full_name || user.email}`}
+                            />
+                          </TableCell>
                           <TableCell>{user.full_name || 'N/A'}</TableCell>
                           <TableCell>{user.email}</TableCell>
                           <TableCell>
@@ -818,6 +883,13 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={filteredUsers.length > 0 && filteredUsers.every((u) => selectedUserIds.has(u.id))}
+                        onCheckedChange={() => toggleSelectAllVisible(filteredUsers)}
+                        aria-label="Select all visible users"
+                      />
+                    </TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Country</TableHead>
@@ -829,7 +901,7 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
                 <TableBody>
                   {filteredUsers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                         No users found matching your search.
                       </TableCell>
                     </TableRow>
@@ -842,6 +914,13 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
 
                       return (
                         <TableRow key={user.id}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedUserIds.has(user.id)}
+                              onCheckedChange={() => toggleUserSelection(user.id)}
+                              aria-label={`Select ${user.full_name || user.email}`}
+                            />
+                          </TableCell>
                           <TableCell>{user.full_name || 'N/A'}</TableCell>
                           <TableCell>{user.email}</TableCell>
                           <TableCell>
@@ -1067,38 +1146,54 @@ export function UsersManager({ users, plans }: UsersManagerProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {lastExportAt && (
-              <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800 flex items-center justify-between gap-2 flex-wrap">
-                <span>Last exported: {format(new Date(lastExportAt), 'MMM dd, yyyy, h:mm a')}</span>
-                <Button type="button" size="sm" variant="outline" onClick={handleUseLastExportAsFrom}>
-                  Export only new since then
-                </Button>
+            {selectedUserIds.size > 0 && (
+              <div className="flex items-center gap-2 rounded-lg border p-3">
+                <Checkbox
+                  id="export-only-selected"
+                  checked={exportOnlySelected}
+                  onCheckedChange={(checked) => setExportOnlySelected(checked === true)}
+                />
+                <Label htmlFor="export-only-selected" className="cursor-pointer">
+                  Only export the {selectedUserIds.size} user{selectedUserIds.size === 1 ? '' : 's'} checked in the table
+                </Label>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="export-from">Joined From (optional)</Label>
-                <Input
-                  id="export-from"
-                  type="date"
-                  value={exportFromDate}
-                  onChange={(e) => setExportFromDate(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="export-to">Joined To (optional)</Label>
-                <Input
-                  id="export-to"
-                  type="date"
-                  value={exportToDate}
-                  onChange={(e) => setExportToDate(e.target.value)}
-                />
-              </div>
-            </div>
-            {(exportFromDate || exportToDate) && (
-              <Button type="button" size="sm" variant="ghost" onClick={() => { setExportFromDate(''); setExportToDate('') }}>
-                Clear date range (export all {filteredUsers.length} shown)
-              </Button>
+            {!exportOnlySelected && (
+              <>
+                {lastExportAt && (
+                  <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800 flex items-center justify-between gap-2 flex-wrap">
+                    <span>Last exported: {format(new Date(lastExportAt), 'MMM dd, yyyy, h:mm a')}</span>
+                    <Button type="button" size="sm" variant="outline" onClick={handleUseLastExportAsFrom}>
+                      Export only new since then
+                    </Button>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="export-from">Joined From (optional)</Label>
+                    <Input
+                      id="export-from"
+                      type="date"
+                      value={exportFromDate}
+                      onChange={(e) => setExportFromDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="export-to">Joined To (optional)</Label>
+                    <Input
+                      id="export-to"
+                      type="date"
+                      value={exportToDate}
+                      onChange={(e) => setExportToDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+                {(exportFromDate || exportToDate) && (
+                  <Button type="button" size="sm" variant="ghost" onClick={() => { setExportFromDate(''); setExportToDate('') }}>
+                    Clear date range (export all {filteredUsers.length} shown)
+                  </Button>
+                )}
+              </>
             )}
             <p className="text-sm text-muted-foreground">
               {exportCandidateUsers.length} user{exportCandidateUsers.length === 1 ? '' : 's'} will be exported.
