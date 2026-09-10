@@ -41,3 +41,6 @@ const pwaConfig = withPWA({
 });
 
 export default pwaConfig(nextConfig as any);
+
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+initOpenNextCloudflareForDev();
