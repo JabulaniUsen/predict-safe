@@ -136,7 +136,7 @@ export function Navbar() {
                   <Link href="/dashboard/predictions?plan=daily-2-odds" className="text-gray-900 hover:bg-gray-100">Daily 2 Odds</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/dashboard/predictions?plan=profit-multiplier" className="text-gray-900 hover:bg-gray-100">Profit Multiplier</Link>
+                  <Link href="/dashboard/predictions?plan=daily-50-odds-combo" className="text-gray-900 hover:bg-gray-100">Daily 50 Odds Combo</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/dashboard/predictions?plan=correct-score" className="text-gray-900 hover:bg-gray-100">Correct Score</Link>
@@ -409,11 +409,11 @@ export function Navbar() {
                   Daily 2 Odds
                 </Link>
                 <Link 
-                  href="/dashboard/predictions?plan=profit-multiplier" 
+                  href="/dashboard/predictions?plan=daily-50-odds-combo" 
                   className="px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-[#1e40af] transition-colors"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  Profit Multiplier
+                  Daily 50 Odds Combo
                 </Link>
                 <Link 
                   href="/dashboard/predictions?plan=correct-score" 

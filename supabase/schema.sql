@@ -423,7 +423,7 @@ CREATE POLICY "Admins can update all messages" ON messages
 
 -- Insert default plans
 INSERT INTO plans (name, slug, description, requires_activation, max_predictions_per_day) VALUES
-  ('Profit Multiplier', 'profit-multiplier', 'High-value predictions designed to maximize profit', false, 5),
+  ('Daily 50 Odds Combo', 'daily-50-odds-combo', 'Daily 50 odds combo predictions designed to maximize profit', false, 5),
   ('Daily 2 Odds', 'daily-2-odds', 'Safe, consistent 2+ odds predictions', false, 10),
   ('Standard Package', 'standard', 'Affordable plan for casual bettors', false, 15),
   ('Correct Score', 'correct-score', 'Accurate scoreline predictions', true, 3)

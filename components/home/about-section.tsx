@@ -53,7 +53,7 @@ export function AboutSection() {
                   <span className="text-green-600 font-bold text-lg">✔</span>
                   <div>
                     <p className="font-semibold text-base lg:text-lg">VIP Plans for Every Betting Style</p>
-                    <p className="text-sm sm:text-base text-gray-600 mt-1">From high-odds Profit Multipliers to Daily 2 Odds to Correct Score prediction packages — PredictSafe gives every user a plan tailored to their betting strategy.</p>
+                    <p className="text-sm sm:text-base text-gray-600 mt-1">From high-odds Daily 50 Odds Combos to Daily 2 Odds to Correct Score prediction packages — PredictSafe gives every user a plan tailored to their betting strategy.</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">

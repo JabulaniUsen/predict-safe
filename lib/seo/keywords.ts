@@ -25,7 +25,7 @@ export const pageKeywords: Record<string, string[]> = {
     'premium football tips',
     'correct score predictions subscription',
     'daily 2 odds subscription',
-    'profit multiplier predictions',
+    'daily 50 odds combo predictions',
     'football betting plans',
   ],
   '/blog': [

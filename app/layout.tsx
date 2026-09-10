@@ -5,7 +5,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { InstallPrompt } from "@/components/pwa/install-prompt";
 import { PWAHead } from "@/components/pwa/pwa-head";
-import { CustomerCareChatButton } from "@/components/layout/customer-care-chat-button";
+import { SupportWidget } from "@/components/layout/support-widget";
 
 const rajdhani = Rajdhani({
   variable: "--font-rajdhani",
@@ -115,7 +115,7 @@ export default function RootLayout({
         {children}
         <Toaster />
         <InstallPrompt />
-        <CustomerCareChatButton />
+        <SupportWidget />
         {/* CleverCore ad network integration */}
         <Script
           id="clever-core"

@@ -70,7 +70,7 @@ export function SyncPredictionsButton() {
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
               <option value="free">Free</option>
-              <option value="profit_multiplier">Profit Multiplier</option>
+              <option value="profit_multiplier">Daily 50 Odds Combo</option>
               <option value="daily_2_odds">Daily 2 Odds</option>
               <option value="standard">Standard</option>
             </select>

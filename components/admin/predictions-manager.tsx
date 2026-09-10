@@ -47,6 +47,7 @@ interface TeamLogoCache {
 // Map plan slug to plan_type
 function getPlanTypeFromSlug(slug: string): string | null {
   const mapping: Record<string, string> = {
+    'daily-50-odds-combo': 'profit_multiplier',
     'profit-multiplier': 'profit_multiplier',
     'daily-2-odds': 'daily_2_odds',
     'standard': 'standard',
@@ -486,7 +487,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
       {/* Regular Plan Tabs */}
       {regularPlans.map((plan) => {
         const planPredictions = getPredictionsForPlan(plan.slug) as Prediction[]
-        const isProfitMultiplier = plan.slug === 'profit-multiplier'
+        const isProfitMultiplier = plan.slug === 'daily-50-odds-combo' || plan.slug === 'profit-multiplier'
         const isDaily2Odds = plan.slug === 'daily-2-odds'
         const isStandard = plan.slug === 'standard'
         const showAddWithAPI = isProfitMultiplier || isDaily2Odds || isStandard

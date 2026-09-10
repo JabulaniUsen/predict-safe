@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
     // Map plan_type to plan slug to get plan ID
     const planTypeToSlug: Record<string, string> = {
-      'profit_multiplier': 'profit-multiplier',
+      'profit_multiplier': 'daily-50-odds-combo',
       'daily_2_odds': 'daily-2-odds',
       'standard': 'standard',
       'free': 'free',

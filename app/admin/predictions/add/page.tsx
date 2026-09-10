@@ -131,6 +131,7 @@ function AddPredictionContent() {
   // Map plan slug to plan_type
   const getPlanTypeFromSlug = (slug: string): string => {
     const mapping: Record<string, string> = {
+      'daily-50-odds-combo': 'profit_multiplier',
       'profit-multiplier': 'profit_multiplier',
       'daily-2-odds': 'daily_2_odds',
       'standard': 'standard',
@@ -262,7 +263,7 @@ function AddPredictionContent() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="free">Free</SelectItem>
-                        <SelectItem value="profit_multiplier">Profit Multiplier</SelectItem>
+                        <SelectItem value="profit_multiplier">Daily 50 Odds Combo</SelectItem>
                         <SelectItem value="daily_2_odds">Daily 2 Odds</SelectItem>
                         <SelectItem value="standard">Standard</SelectItem>
                       </SelectContent>

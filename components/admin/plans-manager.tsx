@@ -803,7 +803,7 @@ export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
                     id="name"
                     value={planForm.name}
                     onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
-                    placeholder="e.g., Profit Multiplier"
+                    placeholder="e.g., Daily 50 Odds Combo"
                   />
                 </div>
                 <div className="space-y-2">
@@ -812,7 +812,7 @@ export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
                     id="slug"
                     value={planForm.slug}
                     onChange={(e) => setPlanForm({ ...planForm, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') })}
-                    placeholder="e.g., profit-multiplier"
+                    placeholder="e.g., daily-50-odds-combo"
                   />
                 </div>
               </div>

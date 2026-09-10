@@ -39,7 +39,7 @@ interface PreviewPrediction {
 function AddPredictionWithAPIContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const planSlug = searchParams.get('plan') || 'profit-multiplier'
+  const planSlug = searchParams.get('plan') || 'daily-50-odds-combo'
   
   const [loading, setLoading] = useState(false)
   const [updating, setUpdating] = useState(false)
@@ -100,6 +100,7 @@ function AddPredictionWithAPIContent() {
   // Map plan slug to plan_type
   const getPlanTypeFromSlug = (slug: string): string => {
     const mapping: Record<string, string> = {
+      'daily-50-odds-combo': 'profit_multiplier',
       'profit-multiplier': 'profit_multiplier',
       'daily-2-odds': 'daily_2_odds',
       'standard': 'standard',

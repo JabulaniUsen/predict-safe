@@ -23,7 +23,7 @@ export default function DisclaimerPage() {
           <section>
             <h2 className="text-2xl font-bold text-[#1e40af] mt-8 mb-4">1. Not Betting Advice</h2>
             <p className="text-base lg:text-lg leading-relaxed mb-4">
-              All content on PredictSafe — including predictions, correct scores, VIP tips, profit multiplier picks, analyses, and insights — is NOT gambling advice, financial advice, or a guarantee of outcomes.
+              All content on PredictSafe — including predictions, correct scores, VIP tips, daily 50 odds combo picks, analyses, and insights — is NOT gambling advice, financial advice, or a guarantee of outcomes.
             </p>
             <p className="text-base lg:text-lg leading-relaxed mb-4">PredictSafe does not:</p>
             <ul className="list-disc list-inside space-y-2 text-base lg:text-lg ml-4">

@@ -75,7 +75,7 @@ export function WhatWeOfferSection() {
                   <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
                     <TrendingUp className="h-6 w-6 text-purple-600" />
                   </div>
-                  <CardTitle className="text-lg font-semibold text-gray-900">3. Profit Multiplier Plan (VIP)</CardTitle>
+                  <CardTitle className="text-lg font-semibold text-gray-900">3. Daily 50 Odds Combo Plan (VIP)</CardTitle>
                 </div>
                 <CardDescription className="text-sm text-gray-600">
                   High-value predictions for higher returns.
@@ -180,7 +180,7 @@ export function WhatWeOfferSection() {
           <div className="mt-12 p-6 bg-white/10 backdrop-blur-sm border-2 border-white/20 rounded-lg text-white text-center">
             <h3 className="text-2xl lg:text-3xl font-bold mb-4">Ready to Start Winning Smarter?</h3>
             <p className="text-base lg:text-lg mb-6 opacity-90">
-              Whether you want Free daily tips, High-accuracy VIP predictions, High-odds Profit Multiplier, Steady Daily 2 Odds, Or precise Correct Score predictions
+              Whether you want Free daily tips, High-accuracy VIP predictions, High-odds Daily 50 Odds Combo, Steady Daily 2 Odds, Or precise Correct Score predictions
             </p>
             <p className="text-lg lg:text-xl font-semibold">
               PredictSafe.com gives you everything you need to win — consistently.

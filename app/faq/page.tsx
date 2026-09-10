@@ -60,7 +60,7 @@ export default function FAQPage() {
                   <p className="text-sm lg:text-base text-gray-600">What it includes: Daily predictions of 2+ total odds, Expert-analyzed picks, Focus on safety and consistency, Stable results ideal for small bankroll growth.</p>
                 </div>
                 <div>
-                  <p className="font-semibold text-base lg:text-lg mb-2">⭐ 3. Profit Multiplier Plan</p>
+                  <p className="font-semibold text-base lg:text-lg mb-2">⭐ 3. Daily 50 Odds Combo Plan</p>
                   <p className="text-sm lg:text-base text-gray-700 mb-2">Our high-odds, high-value VIP plan for aggressive bettors.</p>
                   <p className="text-sm lg:text-base text-gray-600">What it includes: Carefully selected accumulator predictions, High-value odds with strong accuracy, Expert breakdown and reasoning, Access to historical win records, Priority support for subscribers. Perfect for users looking for big winning potential.</p>
                 </div>
@@ -81,7 +81,7 @@ export default function FAQPage() {
                 <ul className="list-disc list-inside space-y-2 text-base lg:text-lg text-gray-700 ml-4">
                   <li>Standard Package: 80–85%</li>
                   <li>Daily 2 Odds Package: 85–90%</li>
-                  <li>Profit Multiplier: 80–90% depending on accumulator size</li>
+                  <li>Daily 50 Odds Combo: 80–90% depending on accumulator size</li>
                   <li>Correct Score Premium: Up to 95% accuracy</li>
                 </ul>
               </CardContent>
@@ -111,7 +111,7 @@ export default function FAQPage() {
                 <ul className="list-disc list-inside space-y-2 text-base lg:text-lg text-gray-700 ml-4">
                   <li>Standard: Daily</li>
                   <li>Daily 2 Odds: Daily</li>
-                  <li>Profit Multiplier: Uploaded when high-value opportunities appear</li>
+                  <li>Daily 50 Odds Combo: Uploaded when high-value opportunities appear</li>
                   <li>Correct Score: Uploaded based on expert verification schedule</li>
                 </ul>
                 <p className="text-base lg:text-lg text-gray-700 mt-4">You will see updates directly in your dashboard.</p>

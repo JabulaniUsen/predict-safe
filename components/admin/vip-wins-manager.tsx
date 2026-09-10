@@ -243,7 +243,7 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
   const getPlanNameFromType = (planType: string) => {
     const plan = plans.find((p) => {
       const slug = p.slug || ''
-      if (planType === 'profit_multiplier' && slug === 'profit-multiplier') return true
+      if (planType === 'profit_multiplier' && (slug === 'daily-50-odds-combo' || slug === 'profit-multiplier')) return true
       if (planType === 'daily_2_odds' && slug === 'daily-2-odds') return true
       if (planType === 'standard' && slug === 'standard') return true
       if (planType === 'correct_score' && slug === 'correct-score') return true
@@ -255,7 +255,7 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
   const getPlanIdFromType = (planType: string) => {
     const plan = plans.find((p) => {
       const slug = p.slug || ''
-      if (planType === 'profit_multiplier' && slug === 'profit-multiplier') return true
+      if (planType === 'profit_multiplier' && (slug === 'daily-50-odds-combo' || slug === 'profit-multiplier')) return true
       if (planType === 'daily_2_odds' && slug === 'daily-2-odds') return true
       if (planType === 'standard' && slug === 'standard') return true
       if (planType === 'correct_score' && slug === 'correct-score') return true

@@ -35,6 +35,7 @@ const mapCountryToOption = (countryName: string): CountryOption => {
 // Helper function to get plan type from plan slug
 const getPlanTypeFromSlug = (slug: string): string | null => {
   const mapping: Record<string, string> = {
+    'daily-50-odds-combo': 'profit_multiplier',
     'profit-multiplier': 'profit_multiplier',
     'daily-2-odds': 'daily_2_odds',
     'standard': 'standard',

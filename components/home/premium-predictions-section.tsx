@@ -67,7 +67,7 @@ export function PremiumPredictionsSection() {
   const [correctScorePredictions, setCorrectScorePredictions] = useState<PremiumPrediction[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Separate date navigation for Profit Multiplier
+  // Separate date navigation for Daily 50 Odds Combo
   const [profitMultiplierDateType, setProfitMultiplierDateType] = useState<'previous' | 'today' | 'tomorrow' | 'custom'>('today')
   const [profitMultiplierCustomDate, setProfitMultiplierCustomDate] = useState<string>('')
   const [profitMultiplierDaysBack, setProfitMultiplierDaysBack] = useState<number>(0)
@@ -119,7 +119,7 @@ export function PremiumPredictionsSection() {
       ])
 
       if (profitMultiplierResult.error) {
-        console.error('❌ Profit Multiplier Query Error:', profitMultiplierResult.error)
+        console.error('❌ Daily 50 Odds Combo Query Error:', profitMultiplierResult.error)
       }
 
       if (correctScoreResult.error) {
@@ -373,10 +373,10 @@ export function PremiumPredictionsSection() {
 
         {loading ? (
           <>
-            {/* Profit Multiplier Loading */}
+            {/* Daily 50 Odds Combo Loading */}
             <div className="mb-8">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-                <h3 className="text-xl sm:text-2xl font-bold text-yellow-400">Profit Multiplier</h3>
+                <h3 className="text-xl sm:text-2xl font-bold text-yellow-400">Daily 50 Odds Combo</h3>
                 <div className="flex gap-1 bg-gray-800 border border-yellow-600/30 p-1 rounded-lg">
                   <div className="px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium bg-gray-700 animate-pulse h-8 w-20" />
                   <div className="px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium bg-gray-700 animate-pulse h-8 w-16" />
@@ -571,10 +571,10 @@ export function PremiumPredictionsSection() {
           </>
         ) : (
           <>
-            {/* Profit Multiplier Section */}
+            {/* Daily 50 Odds Combo Section */}
             <div className="mb-8">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-                <h3 className="text-xl sm:text-2xl font-bold text-yellow-400">Profit Multiplier</h3>
+                <h3 className="text-xl sm:text-2xl font-bold text-yellow-400">Daily 50 Odds Combo</h3>
                 <div className="flex gap-1 bg-gray-800 border border-yellow-600/30 p-1 rounded-lg">
                   <Popover>
                     <PopoverTrigger asChild>

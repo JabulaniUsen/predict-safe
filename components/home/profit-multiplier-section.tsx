@@ -58,7 +58,7 @@ export function ProfitMultiplierSection() {
     if (!user) {
       router.push('/login')
     } else {
-      router.push('/subscribe?plan=profit-multiplier')
+      router.push('/subscribe?plan=daily-50-odds-combo')
     }
   }
 
@@ -67,7 +67,7 @@ export function ProfitMultiplierSection() {
       <div className="container mx-auto px-4">
         <div className="mb-4 lg:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 lg:gap-0">
           <div>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[#1e40af] mb-1 lg:mb-2">Profit Multiplier</h2>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[#1e40af] mb-1 lg:mb-2">Daily 50 Odds Combo</h2>
             <p className="text-sm lg:text-base text-gray-600">Premium high-odds predictions (Locked Preview)</p>
           </div>
           <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
@@ -123,7 +123,7 @@ export function ProfitMultiplierSection() {
               <div className="text-center p-8">
                 <Lock className="mx-auto mb-4 h-16 w-16 text-[#f97316]" />
                 <h3 className="text-xl font-bold text-white mb-2">Premium Content Locked</h3>
-                <p className="text-gray-200 mb-6">Subscribe to unlock Profit Multiplier predictions</p>
+                <p className="text-gray-200 mb-6">Subscribe to unlock Daily 50 Odds Combo predictions</p>
                 <Button 
                   onClick={handleSubscribe} 
                   className="bg-gradient-to-r from-[#f97316] to-[#ea580c] hover:from-[#ea580c] hover:to-[#f97316] text-white font-bold px-8 py-3 rounded-lg text-lg"

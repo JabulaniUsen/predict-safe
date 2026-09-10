@@ -299,7 +299,7 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
       // Fetch regular predictions
       let planType: 'profit_multiplier' | 'daily_2_odds' | 'standard' = 'standard'
       
-      if (selectedPlan.slug === 'profit-multiplier') planType = 'profit_multiplier'
+      if (selectedPlan.slug === 'daily-50-odds-combo' || selectedPlan.slug === 'profit-multiplier') planType = 'profit_multiplier'
       else if (selectedPlan.slug === 'daily-2-odds') planType = 'daily_2_odds'
 
       let query = supabase

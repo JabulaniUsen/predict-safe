@@ -81,7 +81,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 The schema includes initial data for:
 - Countries (Nigeria, Ghana, Kenya, United States)
-- Default plans (Profit Multiplier, Daily 2 Odds, Standard, Correct Score)
+- Default plans (Daily 50 Odds Combo, Daily 2 Odds, Standard, Correct Score)
 - Default site configuration
 
 ### 5. Create Admin User
@@ -151,7 +151,7 @@ predict-safe/
 
 ### Plan-Specific Filtering
 
-- **Profit Multiplier**: Odds 2.80-4.30, Confidence 60-100
+- **Daily 50 Odds Combo**: Odds 2.80-4.30, Confidence 60-100
 - **Daily 2 Odds**: Minimum 2+ odds, Confidence 60-100
 - **Standard Plan**: Confidence 60-100
 - **Correct Score**: Manual admin uploads only
