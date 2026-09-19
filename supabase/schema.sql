@@ -7,7 +7,9 @@ CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email VARCHAR(255) NOT NULL UNIQUE,
   full_name VARCHAR(255),
-  country VARCHAR(100) DEFAULT 'Nigeria',
+  -- The user's actual country. NULL means "not stated yet" - deliberately not
+  -- defaulted to any one country (see migration 029).
+  country VARCHAR(100),
   avatar_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -35,7 +37,7 @@ CREATE TABLE IF NOT EXISTS plans (
 CREATE TABLE IF NOT EXISTS plan_prices (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   plan_id UUID REFERENCES plans(id) ON DELETE CASCADE,
-  country VARCHAR(100) NOT NULL DEFAULT 'Nigeria',
+  country VARCHAR(100) NOT NULL,
   duration_days INTEGER NOT NULL CHECK (duration_days IN (7, 30)),
   price DECIMAL(10, 2) NOT NULL,
   activation_fee DECIMAL(10, 2),
@@ -71,6 +73,14 @@ CREATE TABLE IF NOT EXISTS predictions (
   odds DECIMAL(5, 2) NOT NULL,
   confidence INTEGER NOT NULL CHECK (confidence >= 0 AND confidence <= 100),
   kickoff_time TIMESTAMP WITH TIME ZONE NOT NULL,
+  -- The day this prediction was provided for. Written once at creation and
+  -- never re-derived, so every section of the site agrees on which predictions
+  -- belong to a given date regardless of the viewer's timezone.
+  prediction_date DATE NOT NULL,
+  match_id VARCHAR(50),
+  league_id VARCHAR(50),
+  home_team_id VARCHAR(50),
+  away_team_id VARCHAR(50),
   status VARCHAR(20) DEFAULT 'not_started' CHECK (status IN ('not_started', 'live', 'finished')),
   result VARCHAR(10) CHECK (result IN ('win', 'loss', 'pending')),
   home_score INTEGER,
@@ -89,6 +99,8 @@ CREATE TABLE IF NOT EXISTS correct_score_predictions (
   score_prediction VARCHAR(10) NOT NULL,
   odds DECIMAL(5, 2),
   kickoff_time TIMESTAMP WITH TIME ZONE NOT NULL,
+  prediction_date DATE,
+  match_id VARCHAR(50),
   status VARCHAR(20) DEFAULT 'not_started' CHECK (status IN ('not_started', 'live', 'finished')),
   result VARCHAR(10) CHECK (result IN ('win', 'loss', 'pending')),
   home_score INTEGER,
@@ -105,9 +117,36 @@ CREATE TABLE IF NOT EXISTS vip_winnings (
   home_team VARCHAR(255) NOT NULL,
   away_team VARCHAR(255) NOT NULL,
   prediction_type VARCHAR(100),
+  -- Everything needed to render the win as a betting ticket: the tip, the
+  -- price taken, and how the match actually finished.
+  odds DECIMAL(6, 2),
+  home_score INTEGER,
+  away_score INTEGER,
+  league VARCHAR(255),
+  league_id VARCHAR(50),
+  match_id VARCHAR(50),
+  kickoff_time TIMESTAMP WITH TIME ZONE,
+  prediction_id UUID REFERENCES predictions(id) ON DELETE SET NULL,
+  plan_id UUID REFERENCES plans(id) ON DELETE SET NULL,
   result VARCHAR(10) NOT NULL CHECK (result IN ('win', 'loss')),
   date DATE NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Generated free picks
+-- Free/Safe picks are built once per (date, filter) on the server and stored
+-- here, so every visitor is served the identical set instead of each browser
+-- generating its own from the odds provider on page load.
+CREATE TABLE IF NOT EXISTS generated_free_picks (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  prediction_date DATE NOT NULL,
+  filter_id VARCHAR(50) NOT NULL,
+  picks JSONB NOT NULL,
+  leagues_total INTEGER NOT NULL DEFAULT 0,
+  leagues_succeeded INTEGER NOT NULL DEFAULT 0,
+  generated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(prediction_date, filter_id)
 );
 
 -- Blog posts table
@@ -183,6 +222,9 @@ CREATE INDEX IF NOT EXISTS idx_user_subscriptions_plan_id ON user_subscriptions(
 CREATE INDEX IF NOT EXISTS idx_user_subscriptions_status ON user_subscriptions(plan_status);
 CREATE INDEX IF NOT EXISTS idx_predictions_plan_type ON predictions(plan_type);
 CREATE INDEX IF NOT EXISTS idx_predictions_kickoff_time ON predictions(kickoff_time);
+CREATE INDEX IF NOT EXISTS idx_predictions_prediction_date ON predictions(prediction_date);
+CREATE INDEX IF NOT EXISTS idx_predictions_date_plan ON predictions(prediction_date, plan_type);
+CREATE INDEX IF NOT EXISTS idx_predictions_match_id ON predictions(match_id);
 CREATE INDEX IF NOT EXISTS idx_correct_score_kickoff_time ON correct_score_predictions(kickoff_time);
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);

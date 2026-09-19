@@ -13,6 +13,9 @@ Disallow: /payment/
 Disallow: /subscribe/
 Disallow: /login
 Disallow: /signup
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /auth/
 
 # Allow public pages
 Allow: /

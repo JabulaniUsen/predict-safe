@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
+import { predictionsForDate, predictionDateOf } from '@/lib/queries/predictions'
+import { findFixtureForPrediction } from '@/lib/utils/fixture-match'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Lock, CalendarIcon, Loader2 } from 'lucide-react'
@@ -25,6 +27,8 @@ interface PremiumPrediction {
   odds: number
   confidence?: number
   kickoff_time: string
+  prediction_date: string
+  match_id?: string | null
   status: 'not_started' | 'live' | 'finished'
   type: 'profit_multiplier' | 'correct_score'
   home_team_logo?: string | null
@@ -45,12 +49,15 @@ interface PredictionRow {
   odds: number | string | null
   confidence: number | null
   kickoff_time: string
+  prediction_date: string | null
+  match_id: string | null
   status: PredictionStatus | null
   home_score: number | string | null
   away_score: number | string | null
 }
 
 interface FixtureData {
+  match_id?: string | null
   match_hometeam_name?: string | null
   match_awayteam_name?: string | null
   team_home_badge?: string | null
@@ -88,34 +95,24 @@ export function PremiumPredictionsSection() {
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
 
-      // Get separate date ranges for each section
+      // Each section has its own date picker, but both resolve the selection the
+      // same way and both read the stored prediction_date - so 23 August here
+      // is the same 23 August the admin dashboard and the VIP history show.
       const profitMultiplierDateRange = getDateRange(profitMultiplierDateType, profitMultiplierCustomDate || undefined, profitMultiplierDaysBack)
       const correctScoreDateRange = getDateRange(correctScoreDateType, correctScoreCustomDate || undefined, correctScoreDaysBack)
 
-      const profitMultiplierFromTimestamp = `${profitMultiplierDateRange.from}T00:00:00.000Z`
-      const profitMultiplierToTimestamp = `${profitMultiplierDateRange.to}T23:59:59.999Z`
-
-      const correctScoreFromTimestamp = `${correctScoreDateRange.from}T00:00:00.000Z`
-      const correctScoreToTimestamp = `${correctScoreDateRange.to}T23:59:59.999Z`
-
       const [profitMultiplierResult, correctScoreResult] = await Promise.all([
-        supabase
-          .from('predictions')
-          .select('*')
-          .eq('plan_type', 'profit_multiplier')
-          .gte('kickoff_time', profitMultiplierFromTimestamp)
-          .lte('kickoff_time', profitMultiplierToTimestamp)
-          .order('kickoff_time', { ascending: true })
-          .limit(5),
-        // Correct score predictions are stored in the main predictions table with plan_type = 'correct_score'
-        supabase
-          .from('predictions')
-          .select('*')
-          .eq('plan_type', 'correct_score')
-          .gte('kickoff_time', correctScoreFromTimestamp)
-          .lte('kickoff_time', correctScoreToTimestamp)
-          .order('kickoff_time', { ascending: true })
-          .limit(5)
+        predictionsForDate(supabase, {
+          date: profitMultiplierDateRange.from,
+          planType: 'profit_multiplier',
+          limit: 5,
+        }),
+        // Correct score predictions live in the main predictions table with plan_type = 'correct_score'
+        predictionsForDate(supabase, {
+          date: correctScoreDateRange.from,
+          planType: 'correct_score',
+          limit: 5,
+        }),
       ])
 
       if (profitMultiplierResult.error) {
@@ -141,6 +138,8 @@ export function PremiumPredictionsSection() {
             odds: Number(pred.odds) || 0,
             confidence: pred.confidence ?? undefined,
             kickoff_time: pred.kickoff_time,
+            prediction_date: predictionDateOf(pred),
+            match_id: pred.match_id,
             status: pred.status || 'not_started',
             type: 'profit_multiplier',
             home_score: pred.home_score === null || pred.home_score === undefined ? null : String(pred.home_score),
@@ -166,6 +165,8 @@ export function PremiumPredictionsSection() {
             // Preserve confidence from the predictions table so we can display it on the home page
             confidence: pred.confidence ?? undefined,
             kickoff_time: pred.kickoff_time,
+            prediction_date: predictionDateOf(pred),
+            match_id: pred.match_id,
             status: pred.status || 'not_started',
             type: 'correct_score',
             home_score: pred.home_score === null || pred.home_score === undefined ? null : String(pred.home_score),
@@ -191,13 +192,13 @@ export function PremiumPredictionsSection() {
       if (allPredictions.length > 0) {
         const predictionsByDate = new Map<string, PremiumPrediction[]>()
         allPredictions.forEach((pred) => {
-          // kickoff_time is stored as "YYYY-MM-DD HH:MM:SS" in UTC; take the date
-          // portion directly to avoid local-timezone date shifts near midnight UTC
-          const kickoffDate = pred.kickoff_time.split(' ')[0]
-          if (!predictionsByDate.has(kickoffDate)) {
-            predictionsByDate.set(kickoffDate, [])
+          // Group by the stored prediction date so the fixtures we fetch to
+          // enrich these rows are the ones for the same day the user asked for.
+          const predDate = pred.prediction_date
+          if (!predictionsByDate.has(predDate)) {
+            predictionsByDate.set(predDate, [])
           }
-          predictionsByDate.get(kickoffDate)!.push(pred)
+          predictionsByDate.get(predDate)!.push(pred)
         })
 
         try {
@@ -236,17 +237,7 @@ export function PremiumPredictionsSection() {
             const fixtures = fixturesByDate.get(date) || []
 
             datePredictions.forEach((pred) => {
-              const fixture = fixtures.find((f) => {
-                const homeMatch = f.match_hometeam_name?.toLowerCase() === pred.home_team.toLowerCase() ||
-                  f.match_hometeam_name?.toLowerCase().includes(pred.home_team.toLowerCase()) ||
-                  pred.home_team.toLowerCase().includes(f.match_hometeam_name?.toLowerCase() || '')
-
-                const awayMatch = f.match_awayteam_name?.toLowerCase() === pred.away_team.toLowerCase() ||
-                  f.match_awayteam_name?.toLowerCase().includes(pred.away_team.toLowerCase()) ||
-                  pred.away_team.toLowerCase().includes(f.match_awayteam_name?.toLowerCase() || '')
-
-                return homeMatch && awayMatch
-              })
+              const fixture = findFixtureForPrediction(fixtures, pred)
 
               if (fixture) {
                 // Update logos

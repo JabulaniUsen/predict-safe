@@ -51,11 +51,17 @@ Create a `.env.local` file in the root directory:
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# Required. The free/safe picks for each date are generated once on the server
+# and stored in `generated_free_picks`, so that every visitor is served the
+# identical set. That write goes through the service role. Without this key the
+# picks are rebuilt per request instead of being cached, and the guarantee that
+# two devices see the same thing is weaker.
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
-# API Football
-API_FOOTBALL_KEY=2039aa84e45a691207351f44eb5f8a8fc7eb516a77bdbf789cebf2a98aa4ca4a
-API_FOOTBALL_BASE_URL=https://apifootball.com/api
+# API Football (API-Sports v3)
+API_FOOTBALL_KEY=your_api_football_key
+API_FOOTBALL_BASE_URL=https://v3.football.api-sports.io
 
 # Payment Gateways (Optional for development)
 FLUTTERWAVE_PUBLIC_KEY=your_flutterwave_public_key
@@ -76,6 +82,14 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 2. Navigate to SQL Editor
 3. Run the SQL script from `supabase/schema.sql`
 4. This will create all necessary tables, indexes, triggers, and RLS policies
+5. For an existing database, apply the files in `supabase/migrations/` in
+   numerical order. Migrations 028 and 029 are required by the current code:
+   - `028_prediction_date_and_ticket_fields.sql` adds `predictions.prediction_date`
+     (the single source of truth every section filters on), the provider ids
+     used to match a prediction back to its fixture, the odds/score columns
+     behind the VIP betting-ticket display, and the `generated_free_picks` table.
+   - `029_remove_nigeria_country_default.sql` stops defaulting every user's
+     country to Nigeria.
 
 ### 4. Initial Data
 

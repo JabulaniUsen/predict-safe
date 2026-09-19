@@ -14,6 +14,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { PredictionSchema } from '@/components/seo/prediction-schema'
 import { createClient } from '@/lib/supabase/server'
+import { DeferUntilVisible } from '@/components/ui/defer-until-visible'
 
 export const metadata: Metadata = {
   title: "Free Football Predictions Today | Accurate Betting Tips & Expert Analysis",
@@ -95,8 +96,18 @@ export default async function HomePage() {
         <Suspense fallback={<div className="py-8"><div className="container mx-auto px-4">Loading predictions...</div></div>}>
           <FreePredictionsSection />
         </Suspense>
-        <VIPWinningsSection showSeeMoreLink />
-        <PremiumPredictionsSection />
+        {/*
+          These sections fetch their own data on mount, so none of their
+          content is in the server HTML anyway. Holding them back until the
+          reader scrolls towards them keeps the initial load from firing
+          every request at once.
+        */}
+        <DeferUntilVisible minHeight={420}>
+          <VIPWinningsSection showSeeMoreLink />
+        </DeferUntilVisible>
+        <DeferUntilVisible minHeight={520}>
+          <PremiumPredictionsSection />
+        </DeferUntilVisible>
         <WhatWeOfferSection />
         
         {/* CTA Buttons Section */}
@@ -124,8 +135,12 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <BlogSection />
-        <LeagueTableSection />
+        <DeferUntilVisible minHeight={400}>
+          <BlogSection />
+        </DeferUntilVisible>
+        <DeferUntilVisible minHeight={480}>
+          <LeagueTableSection />
+        </DeferUntilVisible>
         <AboutSection />
       </main>
       <Footer />

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { predictionsForDate } from '@/lib/queries/predictions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -26,21 +27,16 @@ export function ProfitMultiplierSection() {
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
 
-      // Fetch profit multiplier predictions (limited preview)
-      const { from, to } = getDateRange(dateType)
-      const fromTimestamp = `${from}T00:00:00.000Z`
-      const toTimestamp = `${to}T23:59:59.999Z`
-      
-      const { data, error } = await supabase
-        .from('predictions')
-        .select('*')
-        .eq('plan_type', 'profit_multiplier')
-        .gte('kickoff_time', fromTimestamp)
-        .lte('kickoff_time', toTimestamp)
-        .gte('odds', 2.8)
-        .lte('odds', 4.3)
-        .order('kickoff_time', { ascending: true })
-        .limit(3)
+      // Preview of the Daily 50 Odds Combo predictions provided for this date.
+      // No odds-range filter: this used to show only 2.8-4.3, which meant the
+      // homepage preview and the admin dashboard disagreed about what was
+      // provided on a given day. It's now the first few of the same set.
+      const { from } = getDateRange(dateType)
+      const { data, error } = await predictionsForDate(supabase, {
+        date: from,
+        planType: 'profit_multiplier',
+        limit: 3,
+      })
 
       if (error) {
         console.error('Error fetching predictions:', error)

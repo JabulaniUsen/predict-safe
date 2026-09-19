@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getFixtures, Fixture } from '@/lib/api-football'
+import { getFixtures } from '@/lib/api-football'
 import { Prediction } from '@/types'
 import { Database } from '@/types/database'
+import { predictionsForDate } from '@/lib/queries/predictions'
+import { findFixtureForPrediction } from '@/lib/utils/fixture-match'
 
 // Helper function to determine if a prediction is correct based on actual scores
 function determineResult(
@@ -82,31 +84,6 @@ function determineResult(
 }
 
 // Helper function to match team names (fuzzy matching)
-function matchTeams(predHome: string, predAway: string, fixtureHome: string, fixtureAway: string): boolean {
-  const normalize = (name: string) => name.toLowerCase().trim().replace(/\s+/g, ' ')
-  
-  const predHomeNorm = normalize(predHome)
-  const predAwayNorm = normalize(predAway)
-  const fixtureHomeNorm = normalize(fixtureHome)
-  const fixtureAwayNorm = normalize(fixtureAway)
-  
-  // Exact match
-  if (predHomeNorm === fixtureHomeNorm && predAwayNorm === fixtureAwayNorm) {
-    return true
-  }
-  
-  // Check if one contains the other (for partial matches)
-  const homeMatch = predHomeNorm === fixtureHomeNorm || 
-                   predHomeNorm.includes(fixtureHomeNorm) || 
-                   fixtureHomeNorm.includes(predHomeNorm)
-  
-  const awayMatch = predAwayNorm === fixtureAwayNorm || 
-                   predAwayNorm.includes(fixtureAwayNorm) || 
-                   fixtureAwayNorm.includes(predAwayNorm)
-  
-  return homeMatch && awayMatch
-}
-
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -144,56 +121,21 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Parse date string (format: YYYY-MM-DD) and create UTC date range
-    // Treat the date as UTC date to match how date-fns formats dates in UTC
-    const dateParts = date.split('-')
-    if (dateParts.length !== 3) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return NextResponse.json({ error: 'Invalid date format. Expected YYYY-MM-DD' }, { status: 400 })
     }
 
-    const year = parseInt(dateParts[0], 10)
-    const month = parseInt(dateParts[1], 10) - 1 // Month is 0-indexed
-    const day = parseInt(dateParts[2], 10)
-
-    // Create UTC date boundaries for the entire day
-    // This ensures we match all predictions for this date regardless of timezone
-    const startOfDayUTC = new Date(Date.UTC(year, month, day, 0, 0, 0, 0))
-    const endOfDayUTC = new Date(Date.UTC(year, month, day, 23, 59, 59, 999))
-
-    console.log('📅 Date filtering for update:', {
-      inputDate: date,
-      utcStart: startOfDayUTC.toISOString(),
-      utcEnd: endOfDayUTC.toISOString(),
-      year,
-      month: month + 1,
-      day,
+    // Select on the stored prediction_date. This used to rebuild a UTC window
+    // from the date and filter on kickoff_time, which quietly missed any
+    // prediction whose kickoff fell outside that window - a late kickoff filed
+    // under one day but starting after midnight UTC, for instance.
+    const { data: predictions, error: predictionsError } = await predictionsForDate(supabase, {
+      date,
     })
-
-    const { data: predictions, error: predictionsError } = await supabase
-      .from('predictions')
-      .select('*')
-      .gte('kickoff_time', startOfDayUTC.toISOString())
-      .lte('kickoff_time', endOfDayUTC.toISOString())
 
     if (predictionsError) {
       throw predictionsError
     }
-
-    console.log('📊 Predictions retrieved from DB:', {
-      date,
-      count: predictions?.length || 0,
-      predictions: (predictions as Prediction[])?.map(p => ({
-        id: p.id,
-        home_team: p.home_team,
-        away_team: p.away_team,
-        prediction_type: p.prediction_type,
-        status: p.status,
-        home_score: p.home_score,
-        away_score: p.away_score,
-        result: p.result,
-        kickoff_time: p.kickoff_time
-      }))
-    })
 
     if (!predictions || predictions.length === 0) {
       return NextResponse.json({ 
@@ -206,15 +148,9 @@ export async function POST(request: NextRequest) {
 
     // Match predictions to fixtures and update scores
     for (const prediction of predictions as Prediction[]) {
-      // Find matching fixture
-      const fixture = fixtures.find((f: Fixture) => 
-        matchTeams(
-          prediction.home_team,
-          prediction.away_team,
-          f.match_hometeam_name,
-          f.match_awayteam_name
-        )
-      )
+      // Prefer the stored provider match_id; fall back to name matching for
+      // predictions created before that was saved.
+      const fixture = findFixtureForPrediction(fixtures, prediction)
 
       if (!fixture) {
         continue

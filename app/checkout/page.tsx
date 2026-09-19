@@ -56,10 +56,13 @@ function CheckoutContent() {
   const [selectedPrice, setSelectedPrice] = useState<PlanPrice | null>(null)
   const [selectedDuration, setSelectedDuration] = useState<number>(durationParam ? parseInt(durationParam) : 30)
   const [user, setUser] = useState<any>(null)
-  const [userCountry, setUserCountry] = useState<string>('Nigeria')
-  const [selectedCountry, setSelectedCountry] = useState<string>('Nigeria')
+  // Empty, not 'Nigeria'. PredictSafe is global; assuming a country and then
+  // asking someone in Rwanda to pay against a Nigerian form is what made the
+  // checkout look broken.
+  const [userCountry, setUserCountry] = useState<string>('')
+  const [selectedCountry, setSelectedCountry] = useState<string>('')
   const [showCountryDialog, setShowCountryDialog] = useState(false)
-  const [tempCountry, setTempCountry] = useState<string>('Nigeria')
+  const [tempCountry, setTempCountry] = useState<string>('')
   const [countries, setCountries] = useState<Array<{ value: string; label: string }>>([])
   const [loadingCountries, setLoadingCountries] = useState(true)
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
@@ -117,21 +120,27 @@ function CheckoutContent() {
 
       const userProfile = result.data as UserProfile | null
 
-      // Priority: URL parameter > User profile country > Default
-      let initialCountry = 'Nigeria'
-      
+      // URL parameter (carried over from the subscriptions page) beats the
+      // stored profile country. If we have neither, we ask rather than guess -
+      // the old code fell through to 'Nigeria', and mapped a stored 'Other'
+      // to Nigeria as well.
+      let initialCountry = ''
+
       if (countryParam) {
-        // Use country from URL parameter (from subscriptions page selection)
         initialCountry = decodeURIComponent(countryParam)
-      } else if (userProfile?.country) {
-        // Fallback to user's stored country
-        const countryOption = userProfile.country as CountryOption
-        initialCountry = countryOption === 'Other' ? 'Nigeria' : countryOption
+      } else if (userProfile?.country && userProfile.country !== 'Other') {
+        initialCountry = userProfile.country
       }
-      
+
       setUserCountry(initialCountry)
       setSelectedCountry(initialCountry)
       setTempCountry(initialCountry)
+
+      // Nothing on file: open the country picker straight away so the user
+      // chooses before seeing any prices or payment details.
+      if (!initialCountry) {
+        setShowCountryDialog(true)
+      }
 
       // Fetch support chat URL from site config
       const { data: configData } = await supabase
@@ -184,7 +193,8 @@ function CheckoutContent() {
               if (countryOptionPrice) {
                 setSelectedPrice(countryOptionPrice)
               } else {
-                // Third priority: If Nigeria, look for Nigeria-specific price
+                // Third priority: an explicit Nigeria price row, only when
+                // Nigeria is actually the selected country.
                 if (initialCountry === 'Nigeria' || countryOption === 'Nigeria') {
                   const nigeriaPrice = pricesData.find(
                     (p: any) => p.duration_days === selectedDuration && p.country === 'Nigeria'
@@ -830,20 +840,23 @@ function CheckoutContent() {
           {/* Country Display with Change Button */}
           <div className="flex flex-wrap items-center justify-center gap-3 mb-2">
             <span className="text-red-600 font-semibold">
-              Payment Options available in {selectedCountry}!
+              {selectedCountry
+                ? `Payment options available in ${selectedCountry}`
+                : 'Select your country to see payment options'}
             </span>
             <Dialog open={showCountryDialog} onOpenChange={setShowCountryDialog}>
               <DialogTrigger asChild>
                 <Button variant="link" className="text-blue-600 hover:text-blue-700 p-0 h-auto">
                   <Globe className="h-4 w-4 mr-1" />
-                  Not your country? Change country
+                  {selectedCountry ? 'Not your country? Change country' : 'Choose your country'}
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Change Country</DialogTitle>
+                  <DialogTitle>{selectedCountry ? 'Change Country' : 'Select Your Country'}</DialogTitle>
                   <DialogDescription>
-                    Select your country to see available payment methods
+                    We use this to show the right prices and payment methods. PredictSafe accepts
+                    payments from anywhere.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
@@ -860,12 +873,14 @@ function CheckoutContent() {
                     />
                   )}
                   <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setShowCountryDialog(false)}>
-                      Cancel
-                  </Button>
-                    <Button onClick={handleCountryChange} disabled={loadingCountries}>
-                      Change Country
-                  </Button>
+                    {selectedCountry && (
+                      <Button variant="outline" onClick={() => setShowCountryDialog(false)}>
+                        Cancel
+                      </Button>
+                    )}
+                    <Button onClick={handleCountryChange} disabled={loadingCountries || !tempCountry}>
+                      {selectedCountry ? 'Change Country' : 'Continue'}
+                    </Button>
                   </div>
                 </div>
               </DialogContent>
@@ -874,7 +889,14 @@ function CheckoutContent() {
               </div>
 
         {/* Payment Methods Grid */}
-        {paymentMethods.length === 0 ? (
+        {!selectedCountry ? (
+          <div className="text-center py-12 border rounded-lg bg-gray-50">
+            <p className="text-lg text-gray-600 mb-2">Select your country to continue</p>
+            <p className="text-sm text-gray-500">
+              We&apos;ll show you the prices and payment methods that apply to you.
+            </p>
+          </div>
+        ) : paymentMethods.length === 0 ? (
           <div className="text-center py-12 border rounded-lg bg-gray-50">
             <p className="text-lg text-gray-600 mb-2">No payment methods available for {selectedCountry}</p>
             <p className="text-sm text-gray-500">Please change your country to see available payment methods</p>
@@ -1099,9 +1121,36 @@ function CheckoutContent() {
                       </>
                     )}
 
+                        {/*
+                          The instructions the admin writes against each payment
+                          method. These were being saved but never shown, which
+                          left international users staring at a mobile-money
+                          number from another country with no explanation of
+                          which network to use or what reference to include.
+                        */}
+                        {(method.details as any)?.instructions && (
+                          <div className="border-t border-gray-300 pt-3 mt-3">
+                            <p className="text-sm font-semibold mb-1">Payment instructions</p>
+                            <p className="text-sm whitespace-pre-line">
+                              {(method.details as any).instructions}
+                            </p>
+                          </div>
+                        )}
+
+                        {(method as any).country && (method as any).country !== selectedCountry && (
+                          <div className="border-t border-gray-300 pt-3 mt-3">
+                            <p className="text-sm">
+                              This is an international transfer to{' '}
+                              <span className="font-semibold">{(method as any).country}</span>. Your
+                              mobile money or bank app can send to it from {selectedCountry} - the
+                              number below is correct as shown.
+                            </p>
+                          </div>
+                        )}
+
                         <div className="border-t border-gray-300 pt-3 mt-3">
                           <p className="text-sm">
-                            After successful payment, kindly click on the "I have made payment" button at the bottom of this page.
+                            After successful payment, kindly click on the &quot;I have made payment&quot; button at the bottom of this page.
                         </p>
                       </div>
                       </>

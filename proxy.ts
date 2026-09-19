@@ -28,7 +28,7 @@ async function lookupBlogSlugById(id: string): Promise<string | null> {
   }
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const uuidMatch = request.nextUrl.pathname.match(BLOG_UUID_PATH)
   if (uuidMatch) {
     const slug = await lookupBlogSlugById(uuidMatch[1])
@@ -49,8 +49,9 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
+     * - sw.js / offline.html (the service worker must be served untouched)
      * - public folder
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|offline\\.html|manifest\\.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

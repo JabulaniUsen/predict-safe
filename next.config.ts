@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import withPWA from "next-pwa";
 
 const nextConfig: NextConfig = {
   images: {
@@ -27,20 +26,39 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // Add empty turbopack config to silence the warning
-  // next-pwa requires webpack, so we're explicitly using webpack
   turbopack: {},
+
+  async headers() {
+    return [
+      {
+        // The service worker itself must never be cached, or a browser can
+        // keep re-installing the same stale worker and the kill-switch in
+        // public/sw.js never reaches it.
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
+      {
+        source: "/manifest.json",
+        headers: [{ key: "Cache-Control", value: "public, max-age=3600" }],
+      },
+    ];
+  },
 };
 
-const pwaConfig = withPWA({
-  dest: "public",
-  register: true,
-  skipWaiting: true,
-  disable: process.env.NODE_ENV === "development",
-  buildExcludes: [/app-manifest\.json$/],
-});
-
-export default pwaConfig(nextConfig as any);
+/*
+ * next-pwa has been removed.
+ *
+ * It is unmaintained, expects webpack (which is why this project couldn't use
+ * Turbopack), and its stock Workbox config precached a build manifest and
+ * applied NetworkFirst to `/api/*`. Between them those produced the stale-data
+ * and "site can't be reached until I clear my browser" reports. The service
+ * worker is now hand-written in public/sw.js and registered by
+ * components/pwa/service-worker-manager.tsx.
+ */
+export default nextConfig;
 
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 initOpenNextCloudflareForDev();

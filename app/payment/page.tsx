@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { getCurrencySymbol as getCurrencySymbolUtil } from '@/lib/utils/currency'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plan, PlanPrice, Country } from '@/types'
@@ -27,7 +28,6 @@ function PaymentContent() {
 
   const [plan, setPlan] = useState<Plan | null>(null)
   const [price, setPrice] = useState<PlanPrice | null>(null)
-  const [userCountry, setUserCountry] = useState<CountryOption>('Nigeria')
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
 
@@ -42,18 +42,6 @@ function PaymentContent() {
         return
       }
 
-      // Get user country
-      const result = await supabase
-        .from('users')
-        .select('country')
-        .eq('id', user.id)
-        .maybeSingle()
-      
-      const userProfile = result.data as UserProfile | null
-
-      if (userProfile?.country && ['Nigeria', 'Ghana', 'Kenya', 'Other'].includes(userProfile.country)) {
-        setUserCountry(userProfile.country as CountryOption)
-      }
 
       // Get plan
       if (planId) {
@@ -314,18 +302,11 @@ function PaymentContent() {
     )
   }
 
-  // Determine currency symbol based on country
-  const getCurrencySymbol = () => {
-    if (userCountry === 'Nigeria' || userCountry === 'Other') {
-      return '₦'
-    } else if (userCountry === 'Ghana') {
-      return '₵'
-    } else if (userCountry === 'Kenya') {
-      return 'KSh'
-    }
-    return price?.currency || '₦' // Default to price currency or Naira
-  }
-  const currency = getCurrencySymbol()
+  // The price row already carries the currency it is denominated in - use it
+  // rather than inferring one from the country. The previous version mapped
+  // 'Other' (i.e. everyone outside Nigeria, Ghana and Kenya) to the naira sign,
+  // so an international user was shown a USD amount labelled in naira.
+  const currency = getCurrencySymbolUtil(price.currency)
   const amount = paymentType === 'activation' ? price.activation_fee! : price.price
 
   return (

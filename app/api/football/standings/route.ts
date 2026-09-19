@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       // See football/fixtures/route.ts for why CDN caching is safe here
       // alongside force-dynamic. Standings only change after full-time
       // results are processed, so this can be cached longer.
-      headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' },
+      headers: { 'Cache-Control': 'public, max-age=120, s-maxage=300, stale-while-revalidate=600' },
     })
   } catch (error: any) {
     console.error('API Football Error:', error)

@@ -4,13 +4,14 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
+import { predictionsForDate } from '@/lib/queries/predictions'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Lock, CalendarIcon, Loader2 } from 'lucide-react'
 import { Prediction, CorrectScorePrediction, UserSubscriptionWithPlan, Plan } from '@/types'
-import { formatTime, getDateRange } from '@/lib/utils/date'
+import { formatTime, getDateRange, toDateKey } from '@/lib/utils/date'
 import { toast } from 'sonner'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import { cn } from '@/lib/utils'
@@ -232,49 +233,25 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
       return
     }
 
-    const customDateStr = customDate ? format(customDate, 'yyyy-MM-dd') : undefined
-    const { from, to } = getDateRange(dateType, customDateStr)
-    const fromTimestamp = `${from}T00:00:00.000Z`
-    const toTimestamp = `${to}T23:59:59.999Z`
+    const customDateStr = customDate ? toDateKey(customDate) : undefined
+    const { from } = getDateRange(dateType, customDateStr)
 
     const isUnlockedForFetch = isPlanUnlocked(selectedPlan.id)
 
-    console.log('🔍 Fetching Predictions:', {
-      planSlug: selectedPlan.slug,
-      planName: selectedPlan.name,
-      planId: selectedPlan.id,
-      dateType,
-      dateRange: { from, to, fromTimestamp, toTimestamp },
-      isUnlocked: isUnlockedForFetch,
-      maxPredictionsPerDay: selectedPlan.max_predictions_per_day
-    })
-
     if (selectedPlan.slug === 'correct-score') {
       // Fetch correct score predictions from predictions table where plan_type = 'correct_score'
-      let query = supabase
-        .from('predictions')
-        .select('*')
-        .eq('plan_type', 'correct_score')
-        .gte('kickoff_time', fromTimestamp)
-        .lte('kickoff_time', toTimestamp)
-        .order('kickoff_time', { ascending: true })
-
-      // Limit to 3 for preview if locked
-      if (!isUnlockedForFetch) {
-        query = query.limit(3)
-      }
-
-      const { data, error } = await query
+      // A locked plan shows fewer rows, but they are the first rows of the same
+      // set - never a different selection.
+      const { data, error } = await predictionsForDate(supabase, {
+        date: from,
+        planType: 'correct_score',
+        limit: isUnlockedForFetch ? undefined : 3,
+      })
 
       if (error) {
         console.error('Error fetching correct score predictions:', error)
         toast.error('Failed to load correct score predictions. Please try again.')
       } else {
-        console.log('✅ Correct Score Predictions Data:', data)
-        console.log('📊 Total Correct Score Predictions:', data?.length || 0)
-        if (data && data.length > 0) {
-          console.log('📋 First Prediction Sample:', data[0])
-        }
         // Transform predictions table data to match CorrectScorePrediction format
         const transformedData = (data || []).map((pred: any) => ({
           id: pred.id,
@@ -302,50 +279,23 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
       if (selectedPlan.slug === 'daily-50-odds-combo' || selectedPlan.slug === 'profit-multiplier') planType = 'profit_multiplier'
       else if (selectedPlan.slug === 'daily-2-odds') planType = 'daily_2_odds'
 
-      let query = supabase
-        .from('predictions')
-        .select('*')
-        .eq('plan_type', planType)
-        .gte('kickoff_time', fromTimestamp)
-        .lte('kickoff_time', toTimestamp)
-        .order('kickoff_time', { ascending: true })
+      // The preview used to narrow by odds/confidence as well as by count, so a
+      // locked visitor and the admin saw genuinely different games for the same
+      // date. The paywall is now purely a row limit: same predictions, fewer of
+      // them.
+      const limit = isUnlockedForFetch
+        ? selectedPlan.max_predictions_per_day ?? undefined
+        : 3
 
-      // Apply plan-specific filters ONLY for preview/locked plans
-      // For subscribed users, show ALL predictions added by admin regardless of filters
-      if (!isUnlockedForFetch) {
-        // Only apply filters for locked/preview content
-        if (planType === 'profit_multiplier') {
-          query = query.gte('odds', 2.8).lte('odds', 4.3)
-        } else if (planType === 'daily_2_odds') {
-          query = query.gte('odds', 2.0)
-        } else {
-          // Apply confidence filter for standard plan preview
-          query = query.gte('confidence', 60).lte('confidence', 100)
-        }
-      }
-      // For unlocked/subscribed users, no filters applied - show all admin-added predictions
-
-      // Apply daily limit if set and unlocked, or limit to 3 for preview if locked
-      if (isUnlockedForFetch && selectedPlan.max_predictions_per_day) {
-        query = query.limit(selectedPlan.max_predictions_per_day)
-      } else if (!isUnlockedForFetch) {
-        query = query.limit(3) // Preview limit for locked plans
-      }
-
-      const { data, error } = await query
+      const { data, error } = await predictionsForDate(supabase, {
+        date: from,
+        planType,
+        limit,
+      })
 
       if (error) {
         console.error('Error fetching predictions:', error)
       } else {
-        console.log('✅ Regular Predictions Data:', data)
-        console.log('📊 Total Regular Predictions:', data?.length || 0)
-        console.log('🎯 Plan Type:', planType)
-        console.log('📅 Date Range:', { from: fromTimestamp, to: toTimestamp })
-        console.log('🔓 Is Unlocked:', isUnlockedForFetch)
-        if (data && data.length > 0) {
-          console.log('📋 First Prediction Sample:', data[0])
-          console.log('📋 All Predictions:', JSON.stringify(data, null, 2))
-        }
         setPredictions(data || [])
         setCorrectScorePredictions([])
       }

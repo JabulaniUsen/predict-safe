@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Navbar } from '@/components/layout/navbar'
 import { Footer } from '@/components/layout/footer'
-import { Fixture, getFixtures, TOP_LEAGUES, getLeagueName } from '@/lib/api-football'
+import { Fixture, TOP_LEAGUES, getLeagueName } from '@/lib/api-football'
+import { todayKey } from '@/lib/utils/date'
 import { RefreshCw, Clock, Trophy, Loader2 } from 'lucide-react'
 import Image from 'next/image'
 
@@ -20,47 +21,56 @@ export default function LiveScoresPage() {
   const [selectedLeague, setSelectedLeague] = useState<string>('all')
   const [filter, setFilter] = useState<'all' | 'live' | 'finished' | 'scheduled'>('all')
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
+  const [loadError, setLoadError] = useState(false)
 
   const fetchLiveScores = useCallback(async () => {
     try {
       setRefreshing(true)
-      const today = new Date().toISOString().split('T')[0]
-      
-      // Fetch today's matches
-      const allMatches = await getFixtures(today, selectedLeague === 'all' ? undefined : selectedLeague, today)
-      
-      if (Array.isArray(allMatches)) {
-        // Filter matches based on selected filter
-        let filtered = allMatches
-        
-        if (filter === 'live') {
-          filtered = allMatches.filter((match: any) => match.match_live === '1')
-        } else if (filter === 'finished') {
-          filtered = allMatches.filter((match: any) => 
-            match.match_status === 'Finished' || match.match_status === 'FT'
-          )
-        } else if (filter === 'scheduled') {
-          filtered = allMatches.filter((match: any) => 
-            match.match_status === 'Not Started' || match.match_status === ''
-          )
-        }
-        
-        // Sort: live matches first, then by time
-        filtered.sort((a: any, b: any) => {
-          if (a.match_live === '1' && b.match_live !== '1') return -1
-          if (a.match_live !== '1' && b.match_live === '1') return 1
-          return new Date(`${a.match_date} ${a.match_time}`).getTime() - 
-                 new Date(`${b.match_date} ${b.match_time}`).getTime()
-        })
-        
-        setMatches(filtered)
+      setLoadError(false)
+
+      const params = new URLSearchParams()
+      if (selectedLeague !== 'all') params.set('league_id', selectedLeague)
+
+      if (filter === 'live') {
+        // Ask the provider for what's actually in play rather than pulling the
+        // whole day's fixtures and filtering. A match that kicked off late on
+        // the previous UTC day is still live, and the old date-based query
+        // never returned it.
+        params.set('scope', 'live')
       } else {
-        setMatches([])
+        params.set('scope', 'day')
+        // The viewer's today, not UTC's.
+        params.set('date', todayKey())
       }
-      
+
+      const response = await fetch(`/api/football/livescores?${params.toString()}`)
+      if (!response.ok) throw new Error(`Request failed: ${response.status}`)
+
+      const allMatches = await response.json()
+
+      if (!Array.isArray(allMatches)) {
+        setMatches([])
+        setLastUpdate(new Date())
+        return
+      }
+
+      let filtered = allMatches
+      if (filter === 'finished') {
+        filtered = allMatches.filter(
+          (match: any) => match.match_status === 'Finished' || match.match_status === 'FT'
+        )
+      } else if (filter === 'scheduled') {
+        filtered = allMatches.filter(
+          (match: any) => match.match_status === 'Not Started' || match.match_status === ''
+        )
+      }
+
+      setMatches(filtered)
       setLastUpdate(new Date())
     } catch (error) {
       console.error('Error fetching live scores:', error)
+      setLoadError(true)
+      setMatches([])
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -70,13 +80,13 @@ export default function LiveScoresPage() {
   useEffect(() => {
     fetchLiveScores()
     
-    // Auto-refresh every 2 minutes
+    // In-play scores change quickly; 30s while watching live, slower otherwise.
     const interval = setInterval(() => {
       fetchLiveScores()
-    }, 120000)
+    }, filter === 'live' ? 30000 : 120000)
     
     return () => clearInterval(interval)
-  }, [fetchLiveScores])
+  }, [fetchLiveScores, filter])
 
   const getStatusBadge = (match: any) => {
     if (match.match_live === '1') {
@@ -233,6 +243,20 @@ export default function LiveScoresPage() {
               <Loader2 className="h-8 w-8 animate-spin text-[#1e40af]" />
               <p className="text-gray-600">Loading matches...</p>
             </div>
+          ) : loadError ? (
+            // Not the same as "nothing is on" - say which it is.
+            <Card className="p-8 sm:p-12 text-center">
+              <h3 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2">
+                Couldn&apos;t load scores
+              </h3>
+              <p className="text-gray-600 text-sm sm:text-base mb-4">
+                We couldn&apos;t reach the score feed just now.
+              </p>
+              <Button variant="outline" onClick={() => fetchLiveScores()}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Try again
+              </Button>
+            </Card>
           ) : matches.length === 0 ? (
             <Card className="p-8 sm:p-12 text-center">
               <Trophy className="h-12 w-12 sm:h-16 sm:w-16 text-gray-400 mx-auto mb-4" />

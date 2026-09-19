@@ -14,6 +14,7 @@ import { Navbar } from '@/components/layout/navbar'
 
 function LoginForm() {
   const searchParams = useSearchParams()
+  const authError = searchParams.get('error')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -25,7 +26,7 @@ function LoginForm() {
 
     try {
       const supabase = createClient()
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
@@ -46,6 +47,12 @@ function LoginForm() {
 
   return (
               <form onSubmit={handleLogin} className="p-8 space-y-6">
+                {authError && (
+                  <div className="bg-orange-50 border-l-4 border-orange-400 rounded-lg p-4">
+                    <p className="text-sm text-orange-800">{authError}</p>
+                  </div>
+                )}
+
                 <div className="space-y-1.5">
                   <Label htmlFor="email" className="text-sm font-medium text-gray-700 ml-1">
                     Email Address
@@ -62,9 +69,17 @@ function LoginForm() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="password" className="text-sm font-medium text-gray-700 ml-1">
-                    Password
-                  </Label>
+                  <div className="flex items-center justify-between ml-1">
+                    <Label htmlFor="password" className="text-sm font-medium text-gray-700">
+                      Password
+                    </Label>
+                    <Link
+                      href="/forgot-password"
+                      className="text-sm text-[#1e40af] font-semibold hover:text-[#1e3a8a] transition-colors"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
                   <div className="relative">
                     <Input
                       id="password"
@@ -99,7 +114,7 @@ function LoginForm() {
 
                 <div className="text-center pt-4">
                   <p className="text-sm text-gray-600">
-                    Don't have an account?{' '}
+                    Don&apos;t have an account?{' '}
                     <Link href="/signup" className="text-[#1e40af] font-semibold hover:text-[#1e3a8a] transition-colors">
                       Sign up
                     </Link>
@@ -119,7 +134,7 @@ export default function LoginPage() {
         <div className="hidden lg:block lg:w-1/2 relative">
           <div className="absolute inset-0">
             <Image
-              src="/hero-pics/hero-bg2.jpeg"
+              src="/hero-pics/hero-bg2-1920.jpg"
               alt="Football stadium background"
               fill
               className="object-cover"
@@ -165,9 +180,20 @@ export default function LoginPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-sm font-medium text-gray-700 ml-1">
-                      Password
-                    </Label>
+                    {/* Mirrors the real form so the skeleton doesn't shift when
+                        it hydrates, and so the recovery link is present in the
+                        server-rendered HTML too. */}
+                    <div className="flex items-center justify-between ml-1">
+                      <Label className="text-sm font-medium text-gray-700">
+                        Password
+                      </Label>
+                      <Link
+                        href="/forgot-password"
+                        className="text-sm text-[#1e40af] font-semibold hover:text-[#1e3a8a] transition-colors"
+                      >
+                        Forgot password?
+                      </Link>
+                    </div>
                     <Input
                       type="password"
                       placeholder="Enter your password"

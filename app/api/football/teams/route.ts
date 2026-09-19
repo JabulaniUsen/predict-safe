@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
         // See football/fixtures/route.ts for why CDN caching is safe here
         // alongside force-dynamic. Team reference data barely changes,
         // so this can be cached for a long time.
-        'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+        'Cache-Control': 'public, max-age=600, s-maxage=3600, stale-while-revalidate=86400',
       },
     })
   } catch (error: any) {

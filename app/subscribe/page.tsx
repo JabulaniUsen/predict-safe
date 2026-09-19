@@ -38,8 +38,8 @@ function SubscribeContent() {
   const [selectedDuration, setSelectedDuration] = useState<number>(7)
   const [selectedPrice, setSelectedPrice] = useState<PlanPrice | null>(null)
   const [user, setUser] = useState<any>(null)
-  const [userCountry, setUserCountry] = useState<string>('Nigeria')
-  const [selectedCountry, setSelectedCountry] = useState<string>('Nigeria')
+  const [userCountry, setUserCountry] = useState<string>('')
+  const [selectedCountry, setSelectedCountry] = useState<string>('')
   const [countries, setCountries] = useState<Array<{ value: string; label: string }>>([])
   const [loadingCountries, setLoadingCountries] = useState(true)
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
@@ -109,8 +109,8 @@ function SubscribeContent() {
         if (planData) {
           setPlan(planData)
 
-          // Get prices for user's country
-          const userCountry = userProfile?.country || 'Nigeria'
+          // Get prices for the user's own country, if we know it.
+          const userCountry = userProfile?.country?.trim() || ''
           const { data: pricesData } = await supabase
             .from('plan_prices')
             .select('*')
@@ -119,14 +119,22 @@ function SubscribeContent() {
 
           if (pricesData && pricesData.length > 0) {
             setPrices(pricesData)
-            // Prefer country-specific price, fallback to Nigeria, then any price
-            const countryPrice = pricesData.find((p: any) => p.country === userCountry)
-            if (countryPrice) {
-              setSelectedPrice(countryPrice)
-            } else {
-              const nigeriaPrice = pricesData.find((p: any) => p.country === 'Nigeria')
-              setSelectedPrice(nigeriaPrice || pricesData[0])
-            }
+
+            // Country-specific price first, then the international USD tier.
+            // Falling back to the *Nigerian* price, as this used to, quoted a
+            // user in another country a price in naira.
+            const countryPrice = userCountry
+              ? pricesData.find(
+                  (p: any) =>
+                    p.country && p.country.trim().toLowerCase() === userCountry.toLowerCase()
+                )
+              : undefined
+
+            const internationalPrice = pricesData.find(
+              (p: any) => p.country === 'Other' || p.currency === 'USD'
+            )
+
+            setSelectedPrice(countryPrice || internationalPrice || pricesData[0])
           }
         }
       }

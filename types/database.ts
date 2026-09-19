@@ -14,7 +14,7 @@ export interface Database {
           id: string
           email: string
           full_name: string | null
-          country: string
+          country: string | null
           avatar_url: string | null
           created_at: string
           updated_at: string
@@ -24,7 +24,7 @@ export interface Database {
           id: string
           email: string
           full_name?: string | null
-          country?: string
+          country?: string | null
           avatar_url?: string | null
           created_at?: string
           updated_at?: string
@@ -34,7 +34,7 @@ export interface Database {
           id?: string
           email?: string
           full_name?: string | null
-          country?: string
+          country?: string | null
           avatar_url?: string | null
           created_at?: string
           updated_at?: string
@@ -155,7 +155,7 @@ export interface Database {
       predictions: {
         Row: {
           id: string
-          plan_type: 'profit_multiplier' | 'daily_2_odds' | 'standard' | 'free'
+          plan_type: 'profit_multiplier' | 'daily_2_odds' | 'standard' | 'free' | 'correct_score'
           home_team: string
           away_team: string
           league: string
@@ -163,18 +163,23 @@ export interface Database {
           odds: number
           confidence: number
           kickoff_time: string
+          /** The day the prediction was provided for. Filter on this, never on kickoff_time. */
+          prediction_date: string
           status: 'not_started' | 'live' | 'finished'
           result: 'win' | 'loss' | 'pending' | null
           home_score: number | null
           away_score: number | null
           admin_notes: string | null
           league_id: string | null
+          match_id: string | null
+          home_team_id: string | null
+          away_team_id: string | null
           created_at: string
           updated_at: string
         }
         Insert: {
           id?: string
-          plan_type: 'profit_multiplier' | 'daily_2_odds' | 'standard' | 'free'
+          plan_type: 'profit_multiplier' | 'daily_2_odds' | 'standard' | 'free' | 'correct_score'
           home_team: string
           away_team: string
           league: string
@@ -182,18 +187,22 @@ export interface Database {
           odds: number
           confidence: number
           kickoff_time: string
+          prediction_date: string
           status?: 'not_started' | 'live' | 'finished'
           result?: 'win' | 'loss' | 'pending' | null
           home_score?: number | null
           away_score?: number | null
           admin_notes?: string | null
           league_id?: string | null
+          match_id?: string | null
+          home_team_id?: string | null
+          away_team_id?: string | null
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
-          plan_type?: 'profit_multiplier' | 'daily_2_odds' | 'standard' | 'free'
+          plan_type?: 'profit_multiplier' | 'daily_2_odds' | 'standard' | 'free' | 'correct_score'
           home_team?: string
           away_team?: string
           league?: string
@@ -201,13 +210,49 @@ export interface Database {
           odds?: number
           confidence?: number
           kickoff_time?: string
+          prediction_date?: string
           status?: 'not_started' | 'live' | 'finished'
           result?: 'win' | 'loss' | 'pending' | null
           home_score?: number | null
           away_score?: number | null
           admin_notes?: string | null
           league_id?: string | null
+          match_id?: string | null
+          home_team_id?: string | null
+          away_team_id?: string | null
           created_at?: string
+          updated_at?: string
+        }
+      }
+      generated_free_picks: {
+        Row: {
+          id: string
+          prediction_date: string
+          filter_id: string
+          picks: Json
+          leagues_total: number
+          leagues_succeeded: number
+          generated_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          prediction_date: string
+          filter_id: string
+          picks: Json
+          leagues_total?: number
+          leagues_succeeded?: number
+          generated_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          prediction_date?: string
+          filter_id?: string
+          picks?: Json
+          leagues_total?: number
+          leagues_succeeded?: number
+          generated_at?: string
           updated_at?: string
         }
       }
@@ -270,6 +315,13 @@ export interface Database {
           home_team: string
           away_team: string
           prediction_type: string | null
+          odds: number | null
+          home_score: number | null
+          away_score: number | null
+          league_id: string | null
+          match_id: string | null
+          kickoff_time: string | null
+          prediction_id: string | null
           result: 'win' | 'loss'
           date: string
           created_at: string
@@ -282,6 +334,13 @@ export interface Database {
           home_team: string
           away_team: string
           prediction_type: string | null
+          odds?: number | null
+          home_score?: number | null
+          away_score?: number | null
+          league_id?: string | null
+          match_id?: string | null
+          kickoff_time?: string | null
+          prediction_id?: string | null
           result: 'win' | 'loss'
           date: string
           created_at?: string
@@ -294,6 +353,13 @@ export interface Database {
           home_team?: string
           away_team?: string
           prediction_type?: string | null
+          odds?: number | null
+          home_score?: number | null
+          away_score?: number | null
+          league_id?: string | null
+          match_id?: string | null
+          kickoff_time?: string | null
+          prediction_id?: string | null
           result?: 'win' | 'loss'
           date?: string
           created_at?: string

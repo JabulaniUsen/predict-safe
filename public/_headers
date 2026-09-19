@@ -1,2 +1,23 @@
 /_next/static/*
   Cache-Control: public,max-age=31536000,immutable
+
+# The service worker must always be revalidated. A cached sw.js is how a
+# browser gets stuck on an old worker - and an old worker is how it gets stuck
+# on an old build.
+/sw.js
+  Cache-Control: public,max-age=0,must-revalidate
+  Service-Worker-Allowed: /
+
+/offline.html
+  Cache-Control: public,max-age=0,must-revalidate
+
+/manifest.json
+  Cache-Control: public,max-age=3600
+
+# Optimized hero variants are content-addressed by name (the -960/-1920
+# suffixes change when the image does), so they're safe to keep for a while.
+/hero-pics/*
+  Cache-Control: public,max-age=604800
+
+/icons/*
+  Cache-Control: public,max-age=604800

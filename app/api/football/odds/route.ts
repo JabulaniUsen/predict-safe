@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
       headers: {
         // See fixtures/route.ts for why CDN caching is safe here alongside
         // force-dynamic. Kept short since odds can move before kickoff.
-        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+        'Cache-Control': 'public, max-age=30, s-maxage=60, stale-while-revalidate=120',
       },
     })
   } catch (error: unknown) {

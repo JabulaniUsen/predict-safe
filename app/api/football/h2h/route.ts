@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
       headers: {
         // See football/fixtures/route.ts for why CDN caching is safe here
         // alongside force-dynamic. Head-to-head history rarely changes.
-        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+        'Cache-Control': 'public, max-age=120, s-maxage=300, stale-while-revalidate=600',
       },
     })
   } catch (error: any) {

@@ -667,6 +667,18 @@ export function ActivationFeeModal({
                               )}
                             </div>
                           )}
+                          {details?.instructions && (
+                            // Saved by the admin per payment method but never
+                            // previously shown to the user paying.
+                            <div className="mt-2 rounded-md bg-blue-50 border border-blue-100 p-2">
+                              <p className="text-xs font-semibold text-blue-900 mb-0.5">
+                                Payment instructions
+                              </p>
+                              <p className="text-xs text-blue-900/90 whitespace-pre-line">
+                                {details.instructions}
+                              </p>
+                            </div>
+                          )}
                           {(method as any).payment_link && (
                             <a
                               href={(method as any).payment_link}

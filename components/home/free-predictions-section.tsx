@@ -5,9 +5,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { formatDate, formatTime, getDateRange } from '@/lib/utils/date'
-import { Fixture, Odds, getFixtures, getOddsByLeague, FREE_PLAN_LEAGUES } from '@/lib/api-football'
-import { mapWithConcurrency } from '@/lib/utils/concurrency'
+import { formatDate, formatTime, getDateRange, parseDateKey, toDateKey } from '@/lib/utils/date'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
@@ -47,54 +45,6 @@ interface FreePrediction {
   match_id?: string
 }
 
-// Fixtures skew heavily toward leagues with only 1-2 matches that day
-// (especially outside the big European season). Bookmakers rarely price
-// those, so pulling fixtures in raw order wastes odds calls on leagues that
-// almost never have coverage. Sorting so the busiest leagues come first
-// means the fixture slice we actually process is concentrated in the
-// leagues most likely to have odds — fewer wasted calls and more predictions.
-function prioritizeByLeagueSize(fixtures: Fixture[]): Fixture[] {
-  const byLeague = new Map<string, Fixture[]>()
-  fixtures.forEach((f) => {
-    const key = f.league_id || 'unknown'
-    const list = byLeague.get(key)
-    if (list) list.push(f)
-    else byLeague.set(key, [f])
-  })
-  return Array.from(byLeague.values())
-    .sort((a, b) => b.length - a.length)
-    .flat()
-}
-
-// Fetches odds for a batch of fixtures with a handful of requests (one per
-// distinct league/date pair, each covering every fixture in that league on
-// that date) instead of one request per fixture — this is what removes the
-// multi-second wait before the homepage predictions can display.
-async function fetchOddsMap(fixtures: Fixture[]): Promise<Map<string, Odds>> {
-  const leagueDatePairs = new Map<string, { leagueId: string; date: string }>()
-  fixtures.forEach((f) => {
-    if (!f.league_id || !f.match_date) return
-    leagueDatePairs.set(`${f.league_id}|${f.match_date}`, { leagueId: f.league_id, date: f.match_date })
-  })
-
-  const results = await mapWithConcurrency(
-    Array.from(leagueDatePairs.values()),
-    6,
-    async ({ leagueId, date }) => {
-      try {
-        return await getOddsByLeague(leagueId, date)
-      } catch {
-        return [] as Odds[]
-      }
-    }
-  )
-
-  const oddsMap = new Map<string, Odds>()
-  results.flat().forEach((odds) => {
-    if (odds.match_id) oddsMap.set(odds.match_id, odds)
-  })
-  return oddsMap
-}
 
 export function FreePredictionsSection() {
   const [predictions, setPredictions] = useState<FreePrediction[]>([])
@@ -103,341 +53,49 @@ export function FreePredictionsSection() {
   const [customDate, setCustomDate] = useState<string>('')
   const [daysBack, setDaysBack] = useState<number>(1) // 1 = yesterday when dateType is 'previous'
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [retryToken, setRetryToken] = useState(0)
 
   useEffect(() => {
+    let cancelled = false
+
     const fetchPredictions = async () => {
       setLoading(true)
+      setLoadError(false)
       try {
-        const { from, to } = getDateRange(dateType, customDate, daysBack)
-        const selectedFilterLabel = FILTERS.find((f) => f.id === selectedFilter)?.label || selectedFilter
+        const { from } = getDateRange(dateType, customDate, daysBack)
 
-        console.log(`[Free Predictions] ${selectedFilterLabel} - fetching`, { from, to, dateType })
-        
-        // Fetch fixtures from API Football — top leagues first
-        // Each league is fetched independently so one with no games doesn't crash the other
-        const leagueFixtures = await Promise.all(
-          FREE_PLAN_LEAGUES.map(leagueId =>
-            getFixtures(from, leagueId, to).catch(() => [] as Fixture[])
-          )
+        // The picks are built and stored once on the server for each
+        // (date, filter). Every device gets that same stored set, instead of
+        // each browser assembling its own from the odds provider - which is
+        // what made the same date show a different number of games on
+        // different phones, and change again on refresh.
+        const response = await fetch(
+          `/api/predictions/free?date=${encodeURIComponent(from)}&filter=${encodeURIComponent(selectedFilter)}`
         )
-        let fixtures: Fixture[] = leagueFixtures.flatMap(f => Array.isArray(f) ? f : [])
+        if (!response.ok) throw new Error(`Request failed: ${response.status}`)
 
-        // Fallback: if the curated leagues have no fixtures for this date (e.g.
-        // off-season or international tournament windows) — or every one of
-        // their fixtures for the day has already finished, which happens once
-        // that day's slate wraps up but there's more time left before the date
-        // rolls over — pull from every league so there's always something to
-        // show instead of going dry until "tomorrow" is clicked. Skip this for
-        // dates fully in the past, where "all finished" is expected, not a gap.
-        const todayStr = new Date().toISOString().split('T')[0]
-        const hasUpcoming = fixtures.some((f) => f.match_status !== 'Finished')
-        if (fixtures.length === 0 || (!hasUpcoming && to >= todayStr)) {
-          const allFixtures = await getFixtures(from, undefined, to).catch(() => [] as Fixture[])
-          if (allFixtures.length > 0) fixtures = allFixtures
-        }
+        const data = await response.json()
+        if (cancelled) return
 
-        if (!Array.isArray(fixtures) || fixtures.length === 0) {
-          console.log(`[Free Predictions] ${selectedFilterLabel} - no fixtures returned from API`, { from, to })
-          setPredictions([])
-          setLoading(false)
-          return
-        }
-
-        // Convert fixtures to predictions
-        const allPredictions: FreePrediction[] = []
-        
-        // Determine max predictions based on filter
-        // "free" (Safe Picks) should have minimum 5 games, but we'll collect more to ensure we have enough after filtering
-        const maxPredictions = selectedFilter === 'free' ? 5 : 15
-        const minPredictions = selectedFilter === 'free' ? 5 : 0 // Minimum required for free filter
-        
-        // Track which prediction types we've used to ensure variety
-        // Safe free picks only use: Super Single, Double Chance, Home Win, Away Win, 1.5 Goals
-        const typeRotation = selectedFilter === 'free'
-          ? ['Home Win', 'Away Win', 'Over 1.5', 'Double Chance']
-          : ['Home Win', 'Away Win', 'Over 2.5', 'Over 1.5', 'BTTS', 'Double Chance']
-        let typeIndex = 0
-        
-        // For "all" filter, we need to collect all predictions from all filters
-        if (selectedFilter === 'all') {
-          // Limit fixtures to process (increase to ensure we find enough matches with specific odds)
-          const fixturesToProcess = prioritizeByLeagueSize(fixtures).slice(0, 60)
-
-          // Fetch odds in bulk per league/date to avoid a slow one-request-per-fixture wait
-          const oddsMap = await fetchOddsMap(fixturesToProcess)
-
-          // Process all fixtures and create predictions for all available types
-          for (const fixture of fixturesToProcess) {
-            try {
-              // Get odds from the map
-              const oddsData = oddsMap.get(fixture.match_id) || null
-
-              // Create predictions for all available types
-              const predictionTypes: Array<{ type: string, odds: number }> = []
-              
-              if (oddsData) {
-                const isUsableOdd = (odd: string | undefined) => {
-                  if (!odd) return false
-                  const val = parseFloat(odd)
-                  return Number.isFinite(val) && val > 1
-                }
-
-                if (isUsableOdd(oddsData.odd_1)) predictionTypes.push({ type: 'Home Win', odds: parseFloat(oddsData.odd_1!) })
-                if (isUsableOdd(oddsData.odd_2)) predictionTypes.push({ type: 'Away Win', odds: parseFloat(oddsData.odd_2!) })
-                if (isUsableOdd(oddsData['o+2.5'])) predictionTypes.push({ type: 'Over 2.5', odds: parseFloat(oddsData['o+2.5']!) })
-                if (isUsableOdd(oddsData['o+1.5'])) predictionTypes.push({ type: 'Over 1.5', odds: parseFloat(oddsData['o+1.5']!) })
-                if (isUsableOdd(oddsData.bts_yes)) predictionTypes.push({ type: 'BTTS', odds: parseFloat(oddsData.bts_yes!) })
-                if (isUsableOdd(oddsData.odd_1x)) predictionTypes.push({ type: 'Double Chance', odds: parseFloat(oddsData.odd_1x!) })
-              } else {
-                // API-only mode: if odds are unavailable for this fixture, skip it
-                continue
-              }
-
-              // Create a prediction for each available type
-              for (const { type: predictionType, odds: typeOdds } of predictionTypes) {
-                const confidence = Math.min(95, Math.max(60, 100 - (typeOdds - 1) * 20))
-                
-                allPredictions.push({
-                  id: `${fixture.match_id}-${predictionType}`,
-                  home_team: fixture.match_hometeam_name || 'Home Team',
-                  away_team: fixture.match_awayteam_name || 'Away Team',
-                  league: fixture.league_name || 'Unknown League',
-                  prediction_type: predictionType,
-                  odds: typeOdds,
-                  confidence: confidence,
-                  kickoff_time: `${fixture.match_date} ${fixture.match_time || '00:00'}`,
-                  status: fixture.match_status === 'Finished' ? 'finished' : 
-                          fixture.match_live === '1' ? 'live' : 'not_started',
-                  home_team_logo: fixture.team_home_badge,
-                  away_team_logo: fixture.team_away_badge,
-                  home_score: fixture.match_hometeam_score !== '' ? fixture.match_hometeam_score : undefined,
-                  away_score: fixture.match_awayteam_score !== '' ? fixture.match_awayteam_score : undefined,
-                  match_id: fixture.match_id,
-                })
-              }
-            } catch (error) {
-              console.error(`Error processing fixture ${fixture.match_id}:`, error)
-            }
-          }
-        } else {
-          // For other filters, process fixtures until we have enough predictions
-          // Increase buffer to find enough matches with the odds criteria
-          // For safe free picks, use larger buffer to ensure we get minimum 5 games
-          // Process more fixtures to account for filtering (odds range, prediction types)
-          const buffer = selectedFilter === 'free' ? 80 : 60
-          const fixturesToProcess = prioritizeByLeagueSize(fixtures).slice(0, maxPredictions + buffer)
-
-          // Fetch odds in bulk per league/date to avoid a slow one-request-per-fixture wait
-          const oddsMap = await fetchOddsMap(fixturesToProcess)
-          
-          for (const fixture of fixturesToProcess) {
-            // For free filter, continue collecting until we have enough valid predictions
-            // For other filters, stop when we reach maxPredictions
-            if (selectedFilter !== 'free' && allPredictions.length >= maxPredictions) {
-            break
-          }
-            // For free filter, we'll continue processing all fixtures in the buffer
-            // and filter later to ensure we get at least 5 valid predictions
-          
-          try {
-            // Get odds from the map
-            const oddsData = oddsMap.get(fixture.match_id) || null
-
-            // Determine prediction types based on filter
-            const availableTypes: string[] = []
-            let predictionType: string
-            
-            if (selectedFilter === 'free') {
-                // Safe free picks: Only include specific categories
-                // Categories: Super Single, Double Chance, Home Win, Away Win, 1.5 Goals
-                // Filter by odds range 1.2 - 1.7
-                const isInRange = (odd: string | undefined) => {
-                  if (!odd) return false
-                  const val = parseFloat(odd)
-                  return val >= 1.2 && val <= 1.7
-                }
-
-              if (oddsData) {
-                  // Only add allowed prediction types for safe free picks
-                  if (isInRange(oddsData.odd_1)) availableTypes.push('Home Win')
-                  if (isInRange(oddsData.odd_2)) availableTypes.push('Away Win')
-                  if (isInRange(oddsData['o+1.5'])) availableTypes.push('Over 1.5')
-                  if (isInRange(oddsData.odd_1x)) availableTypes.push('Double Chance')
-                  // Note: Super Single will be the highest odd among Home Win, Away Win, Over 1.5
-              } else {
-                  // API-only mode: skip fixtures with no odds
-                  continue
-              }
-              
-              // Select prediction type from rotation to ensure variety
-              let selectedType: string | null = null
-              
-              // Try to find a type from rotation that's available
-              for (let i = 0; i < typeRotation.length; i++) {
-                const rotatedType = typeRotation[(typeIndex + i) % typeRotation.length]
-                if (availableTypes.includes(rotatedType)) {
-                  selectedType = rotatedType
-                  typeIndex = (typeIndex + i + 1) % typeRotation.length
-                  break
-                }
-              }
-              
-              // If no match from rotation, use first available
-              if (!selectedType && availableTypes.length > 0) {
-                selectedType = availableTypes[0]
-              } else if (!selectedType) {
-                  // No valid API odds for safe free picks in this fixture
-                  continue
-              }
-              
-              predictionType = selectedType
-            } else {
-              // Filter-specific predictions
-                const isUsableOdd = (odd: string | undefined) => {
-                  if (!odd) return false
-                  const val = parseFloat(odd)
-                  return Number.isFinite(val) && val > 1
-                }
-
-                if (selectedFilter === 'home_win' && isUsableOdd(oddsData?.odd_1)) {
-                availableTypes.push('Home Win')
-                } else if (selectedFilter === 'away_win' && isUsableOdd(oddsData?.odd_2)) {
-                availableTypes.push('Away Win')
-                } else if (selectedFilter === 'over_2_5' && isUsableOdd(oddsData?.['o+2.5'])) {
-                availableTypes.push('Over 2.5')
-                } else if (selectedFilter === 'over_1_5' && isUsableOdd(oddsData?.['o+1.5'])) {
-                availableTypes.push('Over 1.5')
-                } else if (selectedFilter === 'btts' && isUsableOdd(oddsData?.bts_yes)) {
-                availableTypes.push('BTTS')
-                } else if (selectedFilter === 'double_chance' && isUsableOdd(oddsData?.odd_1x)) {
-                availableTypes.push('Double Chance')
-              } else if (selectedFilter === 'super_single') {
-                  // Super single - pick the best available API odd
-                if (oddsData) {
-                    // Find the highest odd from API
-                    const validOptions = [
-                      { type: 'Home Win', odd: parseFloat(oddsData.odd_1 || '0') },
-                      { type: 'Away Win', odd: parseFloat(oddsData.odd_2 || '0') },
-                      { type: 'Over 2.5', odd: parseFloat(oddsData['o+2.5'] || '0') }
-                    ].filter(opt => Number.isFinite(opt.odd) && opt.odd > 1)
-
-                    // Sort by odds descending to get the "super" single (highest valid odd)
-                    validOptions.sort((a, b) => b.odd - a.odd)
-
-                    if (validOptions.length > 0) {
-                      availableTypes.push(validOptions[0].type)
-                  }
-                  }
-                }
-
-                // If we found a valid type, use it
-                if (availableTypes.length > 0) {
-                  predictionType = availableTypes[0]
-                } else {
-                  // API-only mode: no valid odds for this filter
-                  continue
-                }
-            }
-            
-            let odds = 0
-            let confidence = 75
-
-            // Get odds for this prediction type
-            if (oddsData) {
-              if (predictionType === 'Home Win' && oddsData.odd_1) {
-                odds = parseFloat(oddsData.odd_1)
-                confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
-              } else if (predictionType === 'Away Win' && oddsData.odd_2) {
-                odds = parseFloat(oddsData.odd_2)
-                confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
-              } else if (predictionType === 'Over 2.5' && oddsData['o+2.5']) {
-                odds = parseFloat(oddsData['o+2.5'])
-                confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
-              } else if (predictionType === 'Over 1.5' && oddsData['o+1.5']) {
-                odds = parseFloat(oddsData['o+1.5'])
-                confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
-              } else if (predictionType === 'BTTS' && oddsData.bts_yes) {
-                odds = parseFloat(oddsData.bts_yes)
-                confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
-              } else if (predictionType === 'Double Chance' && oddsData.odd_1x) {
-                odds = parseFloat(oddsData.odd_1x)
-                confidence = Math.min(95, Math.max(60, 100 - (odds - 1) * 20))
-              }
-            }
-
-            if (!Number.isFinite(odds) || odds <= 1) {
-              continue
-            }
-
-            allPredictions.push({
-              id: `${fixture.match_id}-${predictionType}`,
-              home_team: fixture.match_hometeam_name || 'Home Team',
-              away_team: fixture.match_awayteam_name || 'Away Team',
-              league: fixture.league_name || 'Unknown League',
-              prediction_type: predictionType,
-              odds: odds,
-              confidence: confidence,
-              kickoff_time: `${fixture.match_date} ${fixture.match_time || '00:00'}`,
-              status: fixture.match_status === 'Finished' ? 'finished' : 
-                      fixture.match_live === '1' ? 'live' : 'not_started',
-              home_team_logo: fixture.team_home_badge,
-              away_team_logo: fixture.team_away_badge,
-              home_score: fixture.match_hometeam_score || undefined,
-              away_score: fixture.match_awayteam_score || undefined,
-              match_id: fixture.match_id,
-            })
-          } catch (error) {
-            console.error(`Error processing fixture ${fixture.match_id}:`, error)
-          }
-        }
-        }
-
-        // API-only: keep predictions with valid API odds
-        let filteredPredictions = allPredictions.filter(
-          (pred) => Number.isFinite(pred.odds) && pred.odds > 1
-        )
-
-        // For safe free picks, ensure we only have allowed prediction types
-        if (selectedFilter === 'free') {
-          const allowedTypes = ['Home Win', 'Away Win', 'Over 1.5', 'Double Chance']
-          filteredPredictions = filteredPredictions.filter(pred =>
-            allowedTypes.includes(pred.prediction_type)
-          )
-        }
-
-        // For "free" filter, ensure we have at least 5 games, then limit to 5
-        // For others, use all collected predictions
-        let finalPredictions: FreePrediction[]
-        if (selectedFilter === 'free') {
-          // Ensure we have at least 5 predictions for free filter
-          if (filteredPredictions.length >= minPredictions) {
-            finalPredictions = filteredPredictions.slice(0, 5)
-          } else {
-            // If we don't have enough, use what we have (but log a warning)
-            console.warn(`Only found ${filteredPredictions.length} valid free predictions, minimum is ${minPredictions}`)
-            finalPredictions = filteredPredictions
-          }
-        } else {
-          finalPredictions = filteredPredictions
-        }
-
-        console.log(`[Free Predictions] ${selectedFilterLabel} - ready`, {
-          fixtures: fixtures.length,
-          generated: allPredictions.length,
-          displayed: finalPredictions.length,
-        })
-
-        setPredictions(finalPredictions)
+        setPredictions(Array.isArray(data.picks) ? data.picks : [])
       } catch (error) {
-        console.error('Error fetching predictions:', error)
+        console.error('Error fetching free predictions:', error)
+        if (cancelled) return
+        // Surface the failure rather than rendering an empty list, which reads
+        // as "no games today" when it actually means "we could not load them".
+        setLoadError(true)
         setPredictions([])
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
 
     fetchPredictions()
-  }, [selectedFilter, dateType, customDate, daysBack])
+    return () => {
+      cancelled = true
+    }
+  }, [selectedFilter, dateType, customDate, daysBack, retryToken])
 
   const getFilterLabel = () => {
     const filter = FILTERS.find((f) => f.id === selectedFilter)
@@ -457,7 +115,7 @@ export function FreePredictionsSection() {
       return formatDate(previousDate)
     }
     if (dateType === 'custom' && customDate) {
-      return formatDate(new Date(customDate))
+      return formatDate(parseDateKey(customDate))
     }
     const yesterday = new Date()
     yesterday.setDate(yesterday.getDate() - 1)
@@ -477,7 +135,7 @@ export function FreePredictionsSection() {
       return previousDate
     }
     if (dateType === 'custom' && customDate) {
-      return new Date(customDate)
+      return parseDateKey(customDate)
     }
     return new Date()
   }
@@ -503,13 +161,13 @@ export function FreePredictionsSection() {
                   )}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {customDate ? format(new Date(customDate), 'MMM dd') : 'Select Date'}
+                  {customDate ? format(parseDateKey(customDate), 'MMM dd') : 'Select Date'}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
                 <Calendar
                   mode="single"
-                  selected={customDate ? new Date(customDate) : undefined}
+                  selected={customDate ? parseDateKey(customDate) : undefined}
                   onSelect={(date) => {
                     if (date) {
                       setCustomDate(format(date, 'yyyy-MM-dd'))
@@ -589,13 +247,13 @@ export function FreePredictionsSection() {
                   )}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {customDate ? format(new Date(customDate), 'MMM dd') : 'Select Date'}
+                  {customDate ? format(parseDateKey(customDate), 'MMM dd') : 'Select Date'}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
                 <Calendar
                   mode="single"
-                  selected={customDate ? new Date(customDate) : undefined}
+                  selected={customDate ? parseDateKey(customDate) : undefined}
                   onSelect={(date) => {
                     if (date) {
                       setCustomDate(format(date, 'yyyy-MM-dd'))
@@ -732,6 +390,20 @@ export function FreePredictionsSection() {
             ))}
           </div>
           </>
+        ) : loadError ? (
+          // "Couldn't load" and "nothing scheduled" are different things, and
+          // showing the latter for the former is what made the site look like
+          // it had no games when the request had simply failed.
+          <Card>
+            <CardContent className="py-12 text-center space-y-3">
+              <p className="text-muted-foreground">
+                We couldn&apos;t load predictions right now.
+              </p>
+              <Button variant="outline" onClick={() => setRetryToken((n) => n + 1)}>
+                Try again
+              </Button>
+            </CardContent>
+          </Card>
         ) : predictions.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">

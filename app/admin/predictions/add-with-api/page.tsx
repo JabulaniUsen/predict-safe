@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { todayKey } from '@/lib/utils/date'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -20,8 +21,50 @@ import Image from 'next/image'
 
 type UserProfile = Pick<Database['public']['Tables']['users']['Row'], 'is_admin'>
 
+/**
+ * Market groupings offered in the UI. `markets` matches
+ * `PredictionCandidate.market` in lib/predictions/generate.ts; `undefined`
+ * means "consider everything and pick the best".
+ */
+const MARKET_GROUPS: Array<{ id: string; label: string; markets?: string[] }> = [
+  { id: 'all', label: 'Best available (all markets)' },
+  { id: 'result', label: 'Match result (1X2)', markets: ['home_win', 'away_win', 'draw'] },
+  {
+    id: 'double_chance',
+    label: 'Double chance',
+    markets: ['double_chance_1x', 'double_chance_x2', 'double_chance_12'],
+  },
+  {
+    id: 'goals',
+    label: 'Total goals (over/under)',
+    markets: [
+      'over_0_5', 'over_1_5', 'over_2_5', 'over_3_5',
+      'under_0_5', 'under_1_5', 'under_2_5', 'under_3_5',
+    ],
+  },
+  { id: 'btts', label: 'Both teams to score', markets: ['btts', 'btts_no'] },
+  {
+    id: 'first_half',
+    label: 'First half',
+    markets: [
+      'ht_home_win', 'ht_draw', 'ht_away_win',
+      'fh_over_0_5', 'fh_over_1_5', 'fh_under_0_5', 'fh_under_1_5',
+    ],
+  },
+  {
+    id: 'team_goals',
+    label: 'Team goals',
+    markets: [
+      'home_over_0_5', 'home_over_1_5', 'home_under_0_5', 'home_under_1_5',
+      'away_over_0_5', 'away_over_1_5', 'away_under_0_5', 'away_under_1_5',
+    ],
+  },
+]
+
 interface PreviewPrediction {
   plan_type: string
+  prediction_date: string
+  market?: string
   home_team: string
   away_team: string
   league: string
@@ -44,11 +87,15 @@ function AddPredictionWithAPIContent() {
   const [loading, setLoading] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [checkingAuth, setCheckingAuth] = useState(true)
-  const [date, setDate] = useState(() => {
-    const today = new Date()
-    return today.toISOString().split('T')[0]
-  })
-  const [minConfidence, setMinConfidence] = useState([70]) // Default minimum confidence: 70%
+  // The admin's own today, not UTC's - otherwise the form opens on tomorrow
+  // for anyone east of UTC late in the day.
+  const [date, setDate] = useState(() => todayKey())
+  // Confidence is now the vig-adjusted implied probability of the selection,
+  // not a random number, so the useful range sits lower than it used to. 55%
+  // is roughly an even-money shot.
+  const [minConfidence, setMinConfidence] = useState([55])
+  const [marketGroup, setMarketGroup] = useState<string>('all')
+  const [perFixture, setPerFixture] = useState<string>('1')
   const [minOdds, setMinOdds] = useState<string>('') // Optional minimum odds
   const [maxOdds, setMaxOdds] = useState<string>('') // Optional maximum odds
   const [previewPredictions, setPreviewPredictions] = useState<PreviewPrediction[]>([])
@@ -129,6 +176,8 @@ function AddPredictionWithAPIContent() {
           minConfidence: minConfidence[0],
           minOdds: minOdds ? parseFloat(minOdds) : undefined,
           maxOdds: maxOdds ? parseFloat(maxOdds) : undefined,
+          markets: MARKET_GROUPS.find((g) => g.id === marketGroup)?.markets,
+          perFixture: parseInt(perFixture, 10),
           preview: true, // Enable preview mode
         }),
       })
@@ -144,24 +193,18 @@ function AddPredictionWithAPIContent() {
         // Select all by default
         setSelectedPredictions(new Set(data.predictions.map((_: any, index: number) => index)))
         
-        let filterMessage = ''
-        const filters: string[] = []
-        if (data.minConfidence) {
-          filters.push(`confidence < ${data.minConfidence}%`)
+        if (data.predictions.length === 0) {
+          toast.info(
+            `No selections met your filters. ${data.fixturesPriced} of ${data.fixturesConsidered} matches had odds` +
+              (data.leaguesFailed ? ` (${data.leaguesFailed} leagues did not respond)` : '') +
+              '. Try lowering the minimum confidence or widening the odds range.'
+          )
+        } else {
+          toast.success(
+            `Found ${data.predictions.length} predictions from ${data.fixturesPriced} priced matches` +
+              (data.leaguesFailed ? ` (${data.leaguesFailed} leagues did not respond)` : '')
+          )
         }
-        if (data.minOdds !== null && data.minOdds !== undefined) {
-          filters.push(`odds < ${data.minOdds}`)
-        }
-        if (data.maxOdds !== null && data.maxOdds !== undefined) {
-          filters.push(`odds > ${data.maxOdds}`)
-        }
-        
-        if (data.filtered > 0 && filters.length > 0) {
-          filterMessage = ` ${data.filtered} predictions were filtered out (${filters.join(', ')})`
-        }
-        
-        const message = `Found ${data.predictions.length} predictions!${filterMessage}`
-        toast.success(message)
       } else {
         toast.info('No predictions found for the selected date')
       }
@@ -244,13 +287,38 @@ function AddPredictionWithAPIContent() {
     })
 
     try {
-      // Fetch fixture details
-      // kickoff_time is stored as "YYYY-MM-DD HH:MM:SS" in UTC; take the date portion
-      // directly rather than going through Date (which parses space-separated
-      // datetimes as local time and can shift the date for matches near midnight UTC)
+      // Fetch fixture, odds, H2H, and standings concurrently — none of these
+      // depend on each other's results (odds/H2H/standings key off the
+      // prediction's own match_id/team ids/league_id, not the fetched
+      // fixture), so awaiting them one after another was needlessly summing
+      // four provider round-trips into a 20+ second wait for this dialog.
+      // kickoff_time is stored as "YYYY-MM-DD HH:MM:SS" in UTC; take the date
+      // portion directly rather than going through Date (which parses
+      // space-separated datetimes as local time and can shift the date for
+      // matches near midnight UTC)
       const date = prediction.kickoff_time.split(' ')[0]
-      const fixtures = await getFixtures(date)
-      const fixture = Array.isArray(fixtures) 
+
+      const [fixtures, odds, h2hData, standingsData] = await Promise.all([
+        getFixtures(date),
+        getOdds(prediction.match_id).catch((oddsError) => {
+          console.error('Error fetching odds:', oddsError)
+          return [] as Odds[]
+        }),
+        prediction.home_team_id && prediction.away_team_id
+          ? getH2H(prediction.home_team_id, prediction.away_team_id).catch((h2hError) => {
+              console.error('Error fetching H2H:', h2hError)
+              return null
+            })
+          : Promise.resolve(null),
+        prediction.league_id
+          ? getStandings(prediction.league_id).catch((standingsError) => {
+              console.error('Error fetching standings:', standingsError)
+              return [] as any[]
+            })
+          : Promise.resolve([] as any[]),
+      ])
+
+      const fixture = Array.isArray(fixtures)
         ? fixtures.find((f: any) => f.match_id === prediction.match_id)
         : null
 
@@ -258,36 +326,7 @@ function AddPredictionWithAPIContent() {
         throw new Error('Fixture not found')
       }
 
-      // Fetch odds
-      let oddsData: Odds | null = null
-      try {
-        const odds = await getOdds(prediction.match_id)
-        if (Array.isArray(odds) && odds.length > 0) {
-          oddsData = odds[0]
-        }
-      } catch (oddsError) {
-        console.error('Error fetching odds:', oddsError)
-      }
-
-      // Fetch H2H if team IDs are available
-      let h2hData: H2HData | null = null
-      if (prediction.home_team_id && prediction.away_team_id) {
-        try {
-          h2hData = await getH2H(prediction.home_team_id, prediction.away_team_id)
-        } catch (h2hError) {
-          console.error('Error fetching H2H:', h2hError)
-        }
-      }
-
-      // Fetch standings if league ID is available
-      let standingsData: any[] = []
-      if (prediction.league_id) {
-        try {
-          standingsData = await getStandings(prediction.league_id)
-        } catch (standingsError) {
-          console.error('Error fetching standings:', standingsError)
-        }
-      }
+      const oddsData: Odds | null = Array.isArray(odds) && odds.length > 0 ? odds[0] : null
 
       setGameDetails({
         fixture: fixture as Fixture,
@@ -361,25 +400,59 @@ function AddPredictionWithAPIContent() {
                     <input
                       id="confidence"
                       type="range"
-                      min={50}
-                      max={100}
+                      min={40}
+                      max={95}
                       step={5}
                       value={minConfidence[0]}
                       onChange={(e) => setMinConfidence([parseInt(e.target.value)])}
                       className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer range-slider"
                       style={{
-                        background: `linear-gradient(to right, #1e40af 0%, #1e40af ${((minConfidence[0] - 50) / 50) * 100}%, #e5e7eb ${((minConfidence[0] - 50) / 50) * 100}%, #e5e7eb 100%)`
+                        background: `linear-gradient(to right, #1e40af 0%, #1e40af ${((minConfidence[0] - 40) / 55) * 100}%, #e5e7eb ${((minConfidence[0] - 40) / 55) * 100}%, #e5e7eb 100%)`
                       }}
                     />
                   </div>
                   <div className="flex justify-between text-xs text-muted-foreground px-1">
-                    <span>50%</span>
-                    <span>75%</span>
-                    <span>100%</span>
+                    <span>40%</span>
+                    <span>67%</span>
+                    <span>95%</span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Only predictions with confidence level of <strong>{minConfidence[0]}%</strong> or higher will be synced
+                    Only selections the bookmaker prices at <strong>{minConfidence[0]}%</strong> or better will be
+                    included. This is the real implied probability with the bookmaker&apos;s margin removed, so a
+                    higher setting returns fewer but shorter-priced tips.
                   </p>
+                </div>
+
+                <div className="space-y-3 border-t pt-4">
+                  <Label htmlFor="marketGroup">Prediction Markets</Label>
+                  <select
+                    id="marketGroup"
+                    value={marketGroup}
+                    onChange={(e) => setMarketGroup(e.target.value)}
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    {MARKET_GROUPS.map((group) => (
+                      <option key={group.id} value={group.id}>{group.label}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Leave on <strong>Best available</strong> to let each match contribute whichever market the odds
+                    most support, or narrow it to a specific market.
+                  </p>
+
+                  <div className="space-y-2 pt-2">
+                    <Label htmlFor="perFixture" className="text-xs">Tips per match</Label>
+                    <select
+                      id="perFixture"
+                      value={perFixture}
+                      onChange={(e) => setPerFixture(e.target.value)}
+                      className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      <option value="1">1 - strongest selection only</option>
+                      <option value="2">2</option>
+                      <option value="3">3</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div className="space-y-3 border-t pt-4">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -20,7 +20,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { getDateRange } from '@/lib/utils/date'
+import { getDateRange, parseDateKey } from '@/lib/utils/date'
+import { predictionsForDate, predictionDateOf } from '@/lib/queries/predictions'
 import { format } from 'date-fns'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import { formatTime } from '@/lib/utils/date'
@@ -56,8 +57,20 @@ function getPlanTypeFromSlug(slug: string): string | null {
   return mapping[slug] || null
 }
 
-export function PredictionsManager({ plans, predictions }: PredictionsManagerProps) {
+export function PredictionsManager({ plans, predictions: initialPredictions }: PredictionsManagerProps) {
   const router = useRouter()
+
+  // Predictions for every date the admin has looked at in this session, keyed
+  // by prediction_date.
+  //
+  // This page used to receive the 250 most recently *created* predictions and
+  // filter them down in the browser. Once more than 250 predictions had been
+  // added since a given day, that day dropped out of the payload entirely and
+  // the dashboard reported "no predictions for this date" for predictions that
+  // were sitting in the database the whole time. Dates are now fetched on
+  // demand, so going back as far as you like always finds what was provided.
+  const [predictionsByDate, setPredictionsByDate] = useState<Record<string, Prediction[]>>({})
+  const [loadingDates, setLoadingDates] = useState<Record<string, boolean>>({})
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [predictionToDelete, setPredictionToDelete] = useState<{ id: string; type: 'regular' | 'correct-score' } | null>(null)
@@ -96,53 +109,32 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
     return dateFilters[planSlug]
   }
 
-  // Filter predictions by plan type and date for each plan
+  /** The single calendar day a plan's tab is currently showing. */
+  const getSelectedDate = (planSlug: string): string => {
+    const dateFilter = getDateFilter(planSlug)
+    return getDateRange(dateFilter.dateType, dateFilter.customDate || undefined, dateFilter.daysBack).from
+  }
+
+  // Filter predictions by plan type for the date that plan's tab is showing.
+  // The date itself is no longer re-derived from kickoff_time - the rows were
+  // fetched by prediction_date, which is the same column every other section
+  // of the site filters on.
   const getPredictionsForPlan = (planSlug: string) => {
-    let filtered: Prediction[] = []
-    
+    const forDate = predictionsByDate[getSelectedDate(planSlug)] || []
+
     if (planSlug === 'correct-score') {
-      // Get correct score predictions from predictions table (identified by plan_type === 'correct_score')
-      filtered = predictions.filter(pred => 
-        String(pred.plan_type) === 'correct_score'
-      )
-    } else {
-      const planType = getPlanTypeFromSlug(planSlug)
-      if (!planType) return []
-      
-      // For regular plans, exclude correct score predictions
-      filtered = predictions.filter(pred => 
-        pred.plan_type === planType && String(pred.plan_type) !== 'correct_score'
-      )
+      return forDate.filter((pred) => String(pred.plan_type) === 'correct_score')
     }
 
-    // Apply date filter - always filter by the selected date
-    const dateFilter = getDateFilter(planSlug)
-    const { from, to } = getDateRange(dateFilter.dateType, dateFilter.customDate || undefined, dateFilter.daysBack)
-    
-    // Normalize the target date to YYYY-MM-DD format for comparison
-    const targetDateStr = from // from and to should be the same for single day filters
-    
-    // Parse target date to UTC for consistent comparison
-    const targetDateParts = targetDateStr.split('-')
-    const targetYear = parseInt(targetDateParts[0], 10)
-    const targetMonth = parseInt(targetDateParts[1], 10) - 1
-    const targetDay = parseInt(targetDateParts[2], 10)
-    
-    filtered = filtered.filter(pred => {
-      const kickoffTime = new Date(pred.kickoff_time)
-      
-      // Extract UTC date components to avoid timezone issues
-      // This ensures we compare dates correctly regardless of timezone
-      const utcYear = kickoffTime.getUTCFullYear()
-      const utcMonth = kickoffTime.getUTCMonth()
-      const utcDay = kickoffTime.getUTCDate()
-      
-      // Compare UTC date components with target date
-      return utcYear === targetYear && utcMonth === targetMonth && utcDay === targetDay
-    })
+    const planType = getPlanTypeFromSlug(planSlug)
+    if (!planType) return []
 
-    return filtered
+    return forDate.filter(
+      (pred) => pred.plan_type === planType && String(pred.plan_type) !== 'correct_score'
+    )
   }
+
+  const isLoadingPlan = (planSlug: string) => Boolean(loadingDates[getSelectedDate(planSlug)])
 
   const handleDateTypeChange = (planSlug: string, type: 'previous' | 'today' | 'tomorrow' | 'custom') => {
     setDateFilters(prev => ({
@@ -200,23 +192,22 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
     if (predictionsNeedingLogos.length === 0) return
 
     // Group predictions by date to minimize API calls
-    const predictionsByDate = new Map<string, Prediction[]>()
-    
+    const logoLookupsByDate = new Map<string, Prediction[]>()
+
     predictionsNeedingLogos.forEach((pred) => {
-      // kickoff_time is stored as "YYYY-MM-DD HH:MM:SS" in UTC; take the date
-      // portion directly to avoid local-timezone date shifts near midnight UTC
-      const kickoffDate = pred.kickoff_time.split(' ')[0]
-      if (!predictionsByDate.has(kickoffDate)) {
-        predictionsByDate.set(kickoffDate, [])
+      const predDate = predictionDateOf(pred)
+      if (!predDate) return
+      if (!logoLookupsByDate.has(predDate)) {
+        logoLookupsByDate.set(predDate, [])
       }
-      predictionsByDate.get(kickoffDate)!.push(pred)
+      logoLookupsByDate.get(predDate)!.push(pred)
     })
 
     try {
       const newLogos: TeamLogoCache = {}
       
       // Fetch fixtures for each date
-      for (const [date, datePredictions] of predictionsByDate.entries()) {
+      for (const [date, datePredictions] of logoLookupsByDate.entries()) {
         try {
           // Fetch fixtures for this date
           const response = await fetch(`/api/football/fixtures?from=${date}&to=${date}`)
@@ -285,27 +276,70 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
     }
   }
 
-  // Fetch logos when predictions change or when component mounts
-  useEffect(() => {
-    if (predictions.length > 0) {
-      // Fetch logos for all predictions to ensure we have them for all tabs
-      fetchTeamLogos(predictions)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [predictions])
-
-  // Also fetch logos when switching tabs to ensure current tab's predictions have logos
   const [activeTab, setActiveTab] = useState<string>(defaultTab)
-  
+
+  /**
+   * Loads every prediction provided on `date`, regardless of how long ago it
+   * was created, and caches it under that date.
+   */
+  const loadPredictionsForDate = useCallback(async (date: string, { force = false } = {}) => {
+    if (!date) return
+    if (!force && (predictionsByDate[date] || loadingDates[date])) return
+
+    setLoadingDates((prev) => ({ ...prev, [date]: true }))
+    try {
+      const supabase = createClient()
+      const { data, error } = await predictionsForDate(supabase, { date })
+      if (error) throw error
+      setPredictionsByDate((prev) => ({ ...prev, [date]: (data || []) as Prediction[] }))
+    } catch (error) {
+      console.error(`Error loading predictions for ${date}:`, error)
+      toast.error('Failed to load predictions for that date')
+      // Leave the date unset so a retry (tab switch, date re-pick) tries again
+      // rather than showing an empty day as though nothing was provided.
+      setPredictionsByDate((prev) => {
+        const next = { ...prev }
+        delete next[date]
+        return next
+      })
+    } finally {
+      setLoadingDates((prev) => {
+        const next = { ...prev }
+        delete next[date]
+        return next
+      })
+    }
+  }, [predictionsByDate, loadingDates])
+
+  // Seed the store with the predictions the server already sent, so the
+  // default (today) tab paints without a second round-trip.
   useEffect(() => {
-    if (predictions.length > 0 && activeTab) {
-      const tabPredictions = getPredictionsForPlan(activeTab)
-      if (tabPredictions.length > 0) {
-        fetchTeamLogos(tabPredictions)
-      }
+    if (initialPredictions.length === 0) return
+    const seeded: Record<string, Prediction[]> = {}
+    initialPredictions.forEach((pred) => {
+      const date = predictionDateOf(pred)
+      if (!date) return
+      if (!seeded[date]) seeded[date] = []
+      seeded[date].push(pred)
+    })
+    setPredictionsByDate((prev) => ({ ...seeded, ...prev }))
+  }, [initialPredictions])
+
+  // Load whichever date the visible tab is asking for.
+  const activeDate = getSelectedDate(activeTab)
+  useEffect(() => {
+    loadPredictionsForDate(activeDate)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDate, activeTab])
+
+  // Fetch badges for whatever the current tab ended up showing.
+  useEffect(() => {
+    const tabPredictions = getPredictionsForPlan(activeTab)
+    if (tabPredictions.length > 0) {
+      fetchTeamLogos(tabPredictions)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab])
+  }, [activeTab, activeDate, predictionsByDate])
 
   // Manual update scores for a specific date
   const updateScoresForDate = async (date: string, planSlug: string) => {
@@ -329,7 +363,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
 
       if (data.updated > 0) {
         toast.success(`Updated ${data.updated} prediction(s) with actual scores`)
-        // Refresh the page to show updated data
+        await loadPredictionsForDate(date, { force: true })
         router.refresh()
       } else {
         toast.info('No predictions were updated. They may already be up to date or no matches found.')
@@ -372,6 +406,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
       if (error) throw error
 
       toast.success('Prediction deleted successfully')
+      await loadPredictionsForDate(getSelectedDate(activeTab), { force: true })
       router.refresh()
     } catch (error: any) {
       toast.error(error.message || 'Failed to delete prediction')
@@ -422,6 +457,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
       }
 
       toast.success(`All ${planToDeleteAll.name} predictions deleted successfully`)
+      await loadPredictionsForDate(getSelectedDate(activeTab), { force: true })
       router.refresh()
     } catch (error: any) {
       toast.error(error.message || 'Failed to delete all predictions')
@@ -437,21 +473,31 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
     try {
       const supabase = createClient()
       
-      // Get the date from kickoff_time
-      const kickoffDate = new Date(prediction.kickoff_time)
-      const dateStr = kickoffDate.toISOString().split('T')[0]
+      // The win inherits the prediction's own date, so "Previous Winning" for
+      // a date and "the predictions given on that date" can't drift apart.
+      const dateStr = predictionDateOf(prediction)
       
       // Determine result - if status is finished and result exists, use it, otherwise default to 'win'
       const result = prediction.result === 'loss' ? 'loss' : 'win'
       
-      // Insert into vip_winnings
+      // Carry the whole ticket across - the tip, the price taken, the league
+      // and the final score - so the public winning history reads as a real
+      // betting record rather than just "team vs team: won".
       const { error } = await supabase
         .from('vip_winnings')
         .insert({
           plan_name: planName,
+          prediction_id: prediction.id,
           home_team: prediction.home_team,
           away_team: prediction.away_team,
           prediction_type: prediction.prediction_type || null,
+          odds: prediction.odds ?? null,
+          home_score: prediction.home_score ?? null,
+          away_score: prediction.away_score ?? null,
+          league: prediction.league || null,
+          league_id: (prediction as any).league_id || null,
+          match_id: (prediction as any).match_id || null,
+          kickoff_time: prediction.kickoff_time || null,
           result: result,
           date: dateStr,
         } as any)
@@ -611,7 +657,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                       const isUpdating = updatingScores[key]
                       const today = new Date()
                       today.setHours(0, 0, 0, 0)
-                      const targetDate = new Date(from)
+                      const targetDate = parseDateKey(from)
                       targetDate.setHours(0, 0, 0, 0)
                       const isPastDate = targetDate < today
                       
@@ -1105,7 +1151,7 @@ export function PredictionsManager({ plans, predictions }: PredictionsManagerPro
                       const isUpdating = updatingScores[key]
                       const today = new Date()
                       today.setHours(0, 0, 0, 0)
-                      const targetDate = new Date(from)
+                      const targetDate = parseDateKey(from)
                       targetDate.setHours(0, 0, 0, 0)
                       const isPastDate = targetDate < today
                       

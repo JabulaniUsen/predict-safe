@@ -69,6 +69,26 @@ export interface Odds {
   'u+5.5'?: string
   bts_yes?: string
   bts_no?: string
+
+  // First-half result
+  ht_1?: string
+  ht_x?: string
+  ht_2?: string
+
+  // First-half goal lines, e.g. fh_o+0.5
+  // Team goal lines, e.g. home_o+1.5 / away_u+1.5
+
+  // Total goals odd/even
+  goals_odd?: string
+  goals_even?: string
+
+  // Clean sheet / win to nil
+  home_cs_yes?: string
+  away_cs_yes?: string
+
+  /** Correct-score market, sorted most likely first. */
+  exact_score?: Array<{ score: string; odd: string }>
+
   [key: string]: any // Allow additional dynamic properties like ah-* odds
 }
 
@@ -250,6 +270,63 @@ function mapOdds(fixtureId: string, response: any[]): Odds {
   odds.bts_yes = findValue(btts, 'Yes')
   odds.bts_no = findValue(btts, 'No')
 
+  // Everything below was previously left on the table. The provider prices
+  // these markets on the same request we're already paying for, so reading
+  // them costs nothing extra and gives the prediction generator something
+  // other than Over 2.5 to choose from.
+
+  const firstHalf = findBet(bookmaker.bets, 'First Half Winner')
+  odds.ht_1 = findValue(firstHalf, 'Home')
+  odds.ht_x = findValue(firstHalf, 'Draw')
+  odds.ht_2 = findValue(firstHalf, 'Away')
+
+  const firstHalfGoals = findBet(bookmaker.bets, 'Goals Over/Under First Half')
+  if (firstHalfGoals) {
+    for (const line of ['0.5', '1.5', '2.5']) {
+      const over = findValue(firstHalfGoals, `Over ${line}`)
+      const under = findValue(firstHalfGoals, `Under ${line}`)
+      if (over) odds[`fh_o+${line}`] = over
+      if (under) odds[`fh_u+${line}`] = under
+    }
+  }
+
+  for (const [betName, prefix] of [
+    ['Total - Home', 'home'],
+    ['Total - Away', 'away'],
+  ] as const) {
+    const teamTotals = findBet(bookmaker.bets, betName)
+    if (!teamTotals) continue
+    for (const line of ['0.5', '1.5', '2.5']) {
+      const over = findValue(teamTotals, `Over ${line}`)
+      const under = findValue(teamTotals, `Under ${line}`)
+      if (over) odds[`${prefix}_o+${line}`] = over
+      if (under) odds[`${prefix}_u+${line}`] = under
+    }
+  }
+
+  const oddEven = findBet(bookmaker.bets, 'Odd/Even') || findBet(bookmaker.bets, 'Goals Odd/Even')
+  odds.goals_odd = findValue(oddEven, 'Odd')
+  odds.goals_even = findValue(oddEven, 'Even')
+
+  const homeCleanSheet = findBet(bookmaker.bets, 'Clean Sheet - Home')
+  odds.home_cs_yes = findValue(homeCleanSheet, 'Yes')
+  const awayCleanSheet = findBet(bookmaker.bets, 'Clean Sheet - Away')
+  odds.away_cs_yes = findValue(awayCleanSheet, 'Yes')
+
+  // Correct score - the market the Correct Score plan actually needs. Sorted
+  // shortest-priced first, i.e. most likely first.
+  const exactScore = findBet(bookmaker.bets, 'Exact Score') || findBet(bookmaker.bets, 'Correct Score')
+  if (exactScore) {
+    const scores = exactScore
+      .filter((v: any) => typeof v?.value === 'string' && /^\d+\s*[:-]\s*\d+$/.test(v.value) && v.odd)
+      .map((v: any) => ({
+        score: String(v.value).replace(/\s/g, '').replace(':', '-'),
+        odd: String(v.odd),
+      }))
+      .sort((a: { odd: string }, b: { odd: string }) => parseFloat(a.odd) - parseFloat(b.odd))
+    if (scores.length > 0) odds.exact_score = scores
+  }
+
   return odds
 }
 
@@ -414,6 +491,29 @@ export async function getFixtures(date?: string, leagueId?: string, toDate?: str
     fixtures.push(...(data.response || []).map(mapFixture))
   }
   return fixtures
+}
+
+/**
+ * Fixtures that are in play right now.
+ *
+ * The live scores page used to ask for every fixture on today's *UTC* date and
+ * filter in the browser. That meant downloading the entire worldwide slate -
+ * often over a thousand fixtures - to show the handful in play, and it missed
+ * matches that had kicked off late on the previous UTC day but were still
+ * running. The provider has a dedicated live endpoint; this uses it.
+ */
+export async function getLiveFixtures(leagueId?: string) {
+  if (!isServer()) {
+    const params: Record<string, string> = {}
+    if (leagueId) params.league_id = leagueId
+    return callClient('/api/football/livescores', params) as Promise<Fixture[]>
+  }
+
+  const data = await callProvider('fixtures', {
+    live: leagueId ? leagueId : 'all',
+  })
+
+  return (data.response || []).map(mapFixture) as Fixture[]
 }
 
 export async function getOdds(fixtureId: string) {

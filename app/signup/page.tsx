@@ -77,24 +77,27 @@ export default function SignupPage() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!selectedCountry) {
+      toast.error('Please select your country')
+      return
+    }
+
     setLoading(true)
 
     try {
       const supabase = createClient()
       
-        // Map selected country code to country name using the already-fetched
-        // list (avoids a second network round-trip, and a second point of failure)
-        let countryName = 'Nigeria' // Default
-        if (selectedCountry) {
-          const countryCommonName = countries.find((c) => c.value === selectedCountry)?.label || ''
-
-          // Map to our supported countries
-          if (['Nigeria', 'Ghana', 'Kenya'].includes(countryCommonName)) {
-            countryName = countryCommonName
-          } else {
-            countryName = 'Other' // For any other country
-          }
-        }
+        // Store the country the user actually picked.
+        //
+        // This used to collapse everything outside Nigeria/Ghana/Kenya into
+        // 'Other' and default a blank selection to 'Nigeria', so a user in
+        // Rwanda was recorded as 'Other' and then shown Nigeria at checkout.
+        // Pricing still falls back to the USD ("Other") tier for countries
+        // without their own price row - that mapping now lives at the point of
+        // pricing rather than being baked into the user's profile.
+        const countryName =
+          countries.find((c) => c.value === selectedCountry)?.label?.trim() || ''
 
       // Sign up user with metadata (database trigger will create user record)
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -375,7 +378,7 @@ export default function SignupPage() {
       <div className="hidden lg:block lg:w-1/2 relative">
         <div className="absolute inset-0">
           <Image
-            src="/hero-pics/hero-bg1.jpg"
+            src="/hero-pics/hero-bg1-1920.jpg"
             alt="Football stadium background"
             fill
             className="object-cover"

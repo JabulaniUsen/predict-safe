@@ -45,12 +45,17 @@ export default async function AdminPredictionsPage() {
     .eq('is_active', true)
     .order('created_at')
 
-  // Get all predictions (including correct score predictions)
+  // Seed the manager with today's predictions so the default tab paints
+  // immediately. Other dates are fetched on demand by prediction_date - this
+  // page used to send the 250 most recently created rows instead, which meant
+  // any date older than the last 250 additions looked empty in the dashboard
+  // even though its predictions were still in the database.
+  const today = new Date().toISOString().slice(0, 10)
   const { data: predictions } = await supabase
     .from('predictions')
     .select('*')
-    .order('created_at', { ascending: false })
-    .limit(250)
+    .eq('prediction_date', today)
+    .order('kickoff_time', { ascending: true })
 
   return (
     <AdminLayout>

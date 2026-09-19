@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { notifyPredictionDropped } from '@/lib/notifications'
 import { PLAN_TYPE_TO_SLUG } from '@/lib/constants'
+import { PREDICTION_INSERT_COLUMNS } from '@/lib/predictions/columns'
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
 
     // Prepare all predictions for the predictions table
     // Correct score predictions are identified by plan_type === 'correct_score'
-    const validColumns = ['plan_type', 'home_team', 'away_team', 'league', 'league_id', 'prediction_type', 'odds', 'confidence', 'kickoff_time', 'status', 'result', 'admin_notes']
+    const validColumns = PREDICTION_INSERT_COLUMNS
     const cleanedPredictions = predictions.map((pred: any) => {
       const cleaned: any = {}
       
@@ -74,7 +75,15 @@ export async function POST(request: NextRequest) {
           }
         }
       })
-      
+
+      // Every prediction must be filed under a date. The generator supplies
+      // one; fall back to the kickoff day only for payloads built by an older
+      // client, so a missing date can never become a NOT NULL violation.
+      if (!cleaned.prediction_date) {
+        const kickoff = typeof pred.kickoff_time === 'string' ? pred.kickoff_time : ''
+        cleaned.prediction_date = kickoff.slice(0, 10) || new Date().toISOString().slice(0, 10)
+      }
+
       return cleaned
     })
 

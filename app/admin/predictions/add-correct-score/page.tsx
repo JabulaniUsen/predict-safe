@@ -20,6 +20,7 @@ type MatchStatus = 'not_started' | 'finished'
 
 interface CorrectScorePredictionRow {
   prediction_type: string | null
+  prediction_date: string | null
   odds: number | null
   kickoff_time: string | null
   status: string | null
@@ -129,7 +130,11 @@ function AddCorrectScoreContent() {
         setFormData({
           score_prediction: score,
           odds: prediction.odds?.toString() || '',
-          kickoff_date: kickoffDateTime ? kickoffDateTime.toISOString().slice(0, 10) : '',
+          kickoff_date: prediction.prediction_date
+            ? String(prediction.prediction_date).slice(0, 10)
+            : kickoffDateTime
+              ? kickoffDateTime.toISOString().slice(0, 10)
+              : '',
           kickoff_time: kickoffDateTime ? kickoffDateTime.toISOString().slice(11, 16) : '',
           match_status: prediction.status === 'finished' ? 'finished' : 'not_started',
           home_score: prediction.home_score !== null && prediction.home_score !== undefined ? prediction.home_score.toString() : '',
@@ -180,6 +185,8 @@ function AddCorrectScoreContent() {
 
     const predictionData: Record<string, unknown> = {
       plan_type: 'correct_score', // Use correct_score as plan_type
+      // Stored once, never re-derived - see app/admin/predictions/add/page.tsx
+      prediction_date: kickoffDate,
       home_team: (homeTeam || formDataObj.get('home_team')) as string,
       away_team: (awayTeam || formDataObj.get('away_team')) as string,
       league: (leagueName || formDataObj.get('league')) as string,

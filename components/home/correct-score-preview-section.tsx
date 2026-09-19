@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { predictionsForDate } from '@/lib/queries/predictions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -26,18 +27,15 @@ export function CorrectScorePreviewSection() {
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
 
-      // Fetch correct score predictions from predictions table (limited preview)
-      const { from, to } = getDateRange(dateType)
-      const fromTimestamp = `${from}T00:00:00.000Z`
-      const toTimestamp = `${to}T23:59:59.999Z`
-      const { data, error } = await supabase
-        .from('predictions')
-        .select('*')
-        .eq('plan_type', 'correct_score')
-        .gte('kickoff_time', fromTimestamp)
-        .lte('kickoff_time', toTimestamp)
-        .order('kickoff_time', { ascending: true })
-        .limit(3)
+      // Preview of the correct-score predictions provided for this date. It's
+      // the first few of exactly the same set the admin dashboard and a
+      // subscribed user see - only the count differs.
+      const { from } = getDateRange(dateType)
+      const { data, error } = await predictionsForDate(supabase, {
+        date: from,
+        planType: 'correct_score',
+        limit: 3,
+      })
 
       if (error) {
         console.error('Error fetching predictions:', error)

@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner'
 import { Database } from '@/types/database'
 import { Plus, Edit, Trash2 } from 'lucide-react'
-import { formatDate, getDateRange } from '@/lib/utils/date'
+import { formatDate, getDateRange, todayKey } from '@/lib/utils/date'
 import { LeagueSelector } from '@/components/admin/league-selector'
 import { TeamSelector } from '@/components/admin/team-selector'
 import Link from 'next/link'
@@ -28,6 +28,14 @@ type VIPWinningUpdate = Database['public']['Tables']['vip_winnings']['Update']
 interface VIPWinsManagerProps {
   winnings: any[]
   plans: any[]
+}
+
+/** Blank inputs mean "not recorded", which is a null column rather than a 0. */
+function toNumberOrNull(value: string): number | null {
+  const trimmed = value.trim()
+  if (trimmed === '') return null
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsManagerProps) {
@@ -54,8 +62,11 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
     home_team: '',
     away_team: '',
     prediction_type: '',
+    odds: '',
+    home_score: '',
+    away_score: '',
     result: 'win' as 'win' | 'loss',
-    date: new Date().toISOString().split('T')[0],
+    date: todayKey(),
   })
 
   useEffect(() => {
@@ -106,7 +117,10 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
     )
     
     return winnings.filter((winning) => {
-      const winningDate = new Date(winning.date).toISOString().split('T')[0]
+      // vip_winnings.date is a Postgres `date`, so it arrives as YYYY-MM-DD
+      // already - re-parsing it through Date shifted it a day in timezones
+      // behind UTC.
+      const winningDate = String(winning.date).slice(0, 10)
       return winningDate === from
     })
   })()
@@ -121,8 +135,11 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
       home_team: winning.home_team || '',
       away_team: winning.away_team || '',
       prediction_type: winning.prediction_type || '',
+      odds: winning.odds != null ? String(winning.odds) : '',
+      home_score: winning.home_score != null ? String(winning.home_score) : '',
+      away_score: winning.away_score != null ? String(winning.away_score) : '',
       result: winning.result || 'win',
-      date: winning.date ? new Date(winning.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      date: winning.date ? String(winning.date).slice(0, 10) : todayKey(),
     })
     setShowDialog(true)
   }
@@ -163,9 +180,13 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
           plan_id: form.plan_id || null,
           plan_name: form.plan_name,
           league: form.league_name || null,
+          league_id: form.league_id || null,
           home_team: form.home_team,
           away_team: form.away_team,
           prediction_type: form.prediction_type || null,
+          odds: toNumberOrNull(form.odds),
+          home_score: toNumberOrNull(form.home_score),
+          away_score: toNumberOrNull(form.away_score),
           result: form.result,
           date: form.date,
         }
@@ -184,9 +205,13 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
           plan_id: form.plan_id || null,
           plan_name: form.plan_name,
           league: form.league_name || null,
+          league_id: form.league_id || null,
           home_team: form.home_team,
           away_team: form.away_team,
           prediction_type: form.prediction_type,
+          odds: toNumberOrNull(form.odds),
+          home_score: toNumberOrNull(form.home_score),
+          away_score: toNumberOrNull(form.away_score),
           result: form.result,
           date: form.date,
         }
@@ -400,7 +425,9 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
                     <TableHead>Plan</TableHead>
                     <TableHead>League</TableHead>
                     <TableHead>Match</TableHead>
+                    <TableHead>Score</TableHead>
                     <TableHead>Prediction</TableHead>
+                    <TableHead>Odds</TableHead>
                     <TableHead>Result</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -420,7 +447,13 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
                       <TableCell>
                         {winning.home_team} vs {winning.away_team}
                       </TableCell>
+                      <TableCell className="font-semibold">
+                        {winning.home_score != null && winning.away_score != null
+                          ? `${winning.home_score} - ${winning.away_score}`
+                          : '-'}
+                      </TableCell>
                       <TableCell>{winning.prediction_type}</TableCell>
+                      <TableCell>{winning.odds != null ? Number(winning.odds).toFixed(2) : '-'}</TableCell>
                       <TableCell>
                         <Badge
                           className={
@@ -535,6 +568,42 @@ export function VIPWinsManager({ winnings: initialWinnings, plans }: VIPWinsMana
                   value={form.prediction_type}
                   onChange={(e) => setForm({ ...form, prediction_type: e.target.value })}
                   placeholder="e.g., Over 1.5, BTTS, Banker"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="odds">Odds</Label>
+                <Input
+                  id="odds"
+                  type="number"
+                  step="0.01"
+                  min="1"
+                  value={form.odds}
+                  onChange={(e) => setForm({ ...form, odds: e.target.value })}
+                  placeholder="e.g., 1.85"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="home_score">Home Score</Label>
+                <Input
+                  id="home_score"
+                  type="number"
+                  min="0"
+                  value={form.home_score}
+                  onChange={(e) => setForm({ ...form, home_score: e.target.value })}
+                  placeholder="e.g., 3"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="away_score">Away Score</Label>
+                <Input
+                  id="away_score"
+                  type="number"
+                  min="0"
+                  value={form.away_score}
+                  onChange={(e) => setForm({ ...form, away_score: e.target.value })}
+                  placeholder="e.g., 1"
                 />
               </div>
               <div className="space-y-2">

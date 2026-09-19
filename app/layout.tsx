@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Rajdhani } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { InstallPrompt } from "@/components/pwa/install-prompt";
 import { PWAHead } from "@/components/pwa/pwa-head";
+import { ServiceWorkerManager } from "@/components/pwa/service-worker-manager";
 import { SupportWidget } from "@/components/layout/support-widget";
 
 const rajdhani = Rajdhani({
@@ -37,7 +38,6 @@ export const metadata: Metadata = {
   creator: "PredictSafe",
   publisher: "PredictSafe",
   manifest: "/manifest.json",
-  themeColor: "#1e40af",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -73,6 +73,14 @@ export const metadata: Metadata = {
   },
 };
 
+// `themeColor` belongs on the viewport export, not on metadata, where it is
+// deprecated.
+export const viewport: Viewport = {
+  themeColor: "#1e40af",
+  width: "device-width",
+  initialScale: 1,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -84,12 +92,19 @@ export default function RootLayout({
         className={`${rajdhani.variable} font-rajdhani antialiased`}
       >
         <PWAHead />
+        <ServiceWorkerManager />
         {/* Google AdSense */}
+        {/*
+          Ad and analytics scripts load after the page is interactive. AdSense
+          was previously `beforeInteractive`, which blocks first render on a
+          third-party request - a large part of why the homepage took 7-16s to
+          load from some regions.
+        */}
         <Script
           async
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8238566133808506"
           crossOrigin="anonymous"
-          strategy="beforeInteractive"
+          strategy="lazyOnload"
         />
         {/* Google Analytics */}
         {process.env.NEXT_PUBLIC_GA_ID && (
@@ -120,7 +135,7 @@ export default function RootLayout({
         <Script
           id="clever-core"
           data-cfasync="false"
-          strategy="afterInteractive"
+          strategy="lazyOnload"
           dangerouslySetInnerHTML={{
             __html: `
               (function (document, window) {

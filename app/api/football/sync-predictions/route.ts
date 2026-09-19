@@ -1,35 +1,55 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getFixtures, getOddsByLeague, Odds } from '@/lib/api-football'
-import { format } from 'date-fns'
 import { notifyPredictionDropped } from '@/lib/notifications'
 import { PLAN_TYPE_TO_SLUG } from '@/lib/constants'
 import { mapWithConcurrency } from '@/lib/utils/concurrency'
+import { buildPredictions } from '@/lib/predictions/generate'
+import { PREDICTION_INSERT_COLUMNS } from '@/lib/predictions/columns'
 
+/**
+ * "Add with API" - builds a day's predictions from the odds provider.
+ *
+ * This used to iterate a handful of markets, assign each one a `Math.random()`
+ * confidence between 70 and 100, and - for any fixture the provider hadn't
+ * priced - fall back to inventing an "Over 2.5 @ 1.85" tip. That fallback is
+ * why the output was overwhelmingly Over 2.5, and the random confidence made
+ * the minimum-confidence filter meaningless.
+ *
+ * Selection now happens in `lib/predictions/generate.ts`: real markets only,
+ * confidence derived from vig-adjusted implied probability, and one best tip
+ * per fixture rather than every market on every fixture.
+ */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { date, planType = 'free', minConfidence = 50, minOdds, maxOdds, preview = false } = body
+    const {
+      date,
+      planType = 'free',
+      minConfidence = 50,
+      minOdds,
+      maxOdds,
+      markets,
+      perFixture = 1,
+      limit,
+      preview = false,
+    } = body
 
-    if (!date) {
-      return NextResponse.json({ error: 'Date is required' }, { status: 400 })
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return NextResponse.json({ error: 'A date (YYYY-MM-DD) is required' }, { status: 400 })
     }
 
-    // Validate minConfidence
-    const confidenceThreshold = Math.max(50, Math.min(100, parseInt(minConfidence) || 50))
-    
-    // Validate odds filters (optional)
+    const confidenceThreshold = Math.max(0, Math.min(100, parseInt(minConfidence) || 0))
+
     const minOddsValue = minOdds !== undefined && minOdds !== null ? parseFloat(minOdds) : null
     const maxOddsValue = maxOdds !== undefined && maxOdds !== null ? parseFloat(maxOdds) : null
-    
-    // Ensure minOdds < maxOdds if both are provided
+
     if (minOddsValue !== null && maxOddsValue !== null && minOddsValue >= maxOddsValue) {
       return NextResponse.json({ error: 'minOdds must be less than maxOdds' }, { status: 400 })
     }
 
     const supabase = await createClient()
-    
-    // Check if user is admin
+
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -45,23 +65,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Fetch fixtures from API Football
     const fixtures = await getFixtures(date)
 
     if (!Array.isArray(fixtures) || fixtures.length === 0) {
       return NextResponse.json({ message: 'No fixtures found', synced: 0 })
     }
 
-    // Fetch odds in bulk per league/date pair instead of one request per
-    // fixture — a busy day can have hundreds of fixtures but only a couple
-    // dozen distinct leagues, so this lets every fixture for the date be
-    // processed (not just a capped first-N slice) in a handful of requests.
+    // Odds come back per league/date rather than per fixture: a busy day has
+    // hundreds of fixtures but only a couple of dozen distinct leagues.
     const leagueDatePairs = new Map<string, { leagueId: string; date: string }>()
     fixtures.forEach((f) => {
       if (!f.league_id || !f.match_date) return
-      leagueDatePairs.set(`${f.league_id}|${f.match_date}`, { leagueId: f.league_id, date: f.match_date })
+      leagueDatePairs.set(`${f.league_id}|${f.match_date}`, {
+        leagueId: f.league_id,
+        date: f.match_date,
+      })
     })
 
+    let leaguesFailed = 0
     const oddsResults = await mapWithConcurrency(
       Array.from(leagueDatePairs.values()),
       6,
@@ -69,6 +90,7 @@ export async function POST(request: NextRequest) {
         try {
           return await getOddsByLeague(leagueId, leagueDate)
         } catch (oddsError) {
+          leaguesFailed++
           console.error(`Error fetching odds for league ${leagueId}:`, oddsError)
           return [] as Odds[]
         }
@@ -80,111 +102,44 @@ export async function POST(request: NextRequest) {
       if (odds.match_id) oddsByMatchId.set(odds.match_id, odds)
     })
 
-    const predictions = []
-    let filteredCount = 0 // Track how many predictions were filtered out
+    const isCorrectScore = planType === 'correct_score'
 
-    for (const fixture of fixtures) {
-      try {
-        // Default odds when the provider has no market priced for this fixture yet
-        let odds = 1.85
-        const foundOdds: Array<{ type: string; odds: number }> = []
+    const generated = buildPredictions(fixtures, oddsByMatchId, {
+      predictionDate: date,
+      minConfidence: confidenceThreshold,
+      minOdds: minOddsValue ?? undefined,
+      maxOdds: maxOddsValue ?? undefined,
+      markets: Array.isArray(markets) && markets.length > 0 ? markets : undefined,
+      correctScoreOnly: isCorrectScore,
+      perFixture: Math.max(1, Math.min(5, Number(perFixture) || 1)),
+      limit: limit !== undefined ? Math.max(1, Number(limit)) : undefined,
+    })
 
-        const matchOdds = oddsByMatchId.get(fixture.match_id)
-        if (matchOdds) {
-          // Extract all available odds for all prediction types (including correct score)
-          if (matchOdds.odd_1) {
-            foundOdds.push({ type: 'Home Win', odds: parseFloat(matchOdds.odd_1) })
-          }
-          if (matchOdds.odd_2) {
-            foundOdds.push({ type: 'Away Win', odds: parseFloat(matchOdds.odd_2) })
-          }
-          if (matchOdds.odd_x) {
-            foundOdds.push({ type: 'Draw', odds: parseFloat(matchOdds.odd_x) })
-          }
-          if (matchOdds['o+2.5']) {
-            foundOdds.push({ type: 'Over 2.5', odds: parseFloat(matchOdds['o+2.5']) })
-          }
-          if (matchOdds['o+1.5']) {
-            foundOdds.push({ type: 'Over 1.5', odds: parseFloat(matchOdds['o+1.5']) })
-          }
-          if (matchOdds['u+2.5']) {
-            foundOdds.push({ type: 'Under 2.5', odds: parseFloat(matchOdds['u+2.5']) })
-          }
-          if (matchOdds.bts_yes) {
-            foundOdds.push({ type: 'BTTS', odds: parseFloat(matchOdds.bts_yes) })
-          }
+    const predictions = generated.map((pred) => ({
+      ...pred,
+      plan_type: planType,
+      // For correct score the "tip" is the scoreline itself, which is already
+      // what `prediction_type` carries.
+      prediction_type: pred.prediction_type,
+    }))
 
-          // Set default odds from first available
-          if (foundOdds.length > 0) {
-            odds = foundOdds[0].odds
-          }
-        }
-
-        // For all plan types (including correct score), use ALL available odds from the API
-        // Only filter by confidence level and odds range
-        const availableOdds = foundOdds.length > 0 ? foundOdds : [{ type: 'Over 2.5', odds: odds }]
-        
-        for (const option of availableOdds) {
-          const confidence = Math.floor(Math.random() * 30) + 70 // 70-100% confidence
-          
-          // Only filter by confidence threshold
-          if (confidence < confidenceThreshold) {
-            filteredCount++
-            continue
-          }
-          
-          // Only filter by odds range
-            if (minOddsValue !== null && option.odds < minOddsValue) {
-              filteredCount++
-              continue
-            }
-            if (maxOddsValue !== null && option.odds > maxOddsValue) {
-              filteredCount++
-              continue
-            }
-            
-              predictions.push({
-                plan_type: planType,
-                home_team: fixture.match_hometeam_name || 'Home Team',
-                away_team: fixture.match_awayteam_name || 'Away Team',
-                league: fixture.league_name || 'Unknown League',
-                prediction_type: option.type,
-                odds: option.odds,
-                confidence: confidence,
-                kickoff_time: `${fixture.match_date} ${fixture.match_time || '00:00'}:00`,
-                status: fixture.match_status === 'Finished' ? 'finished' : 
-                        fixture.match_live === '1' ? 'live' : 'not_started',
-                match_id: fixture.match_id,
-                league_id: fixture.league_id,
-                home_team_id: fixture.match_hometeam_id,
-                away_team_id: fixture.match_awayteam_id,
-              })
-        }
-      } catch (error) {
-        console.error(`Error processing fixture ${fixture.match_id}:`, error)
-        // Continue with next fixture
-      }
-    }
-
-    // If preview mode, return predictions without inserting
     if (preview) {
-      return NextResponse.json({ 
-        message: 'Predictions fetched successfully', 
-        predictions: predictions,
+      return NextResponse.json({
+        message: 'Predictions fetched successfully',
+        predictions,
         preview: true,
-        filtered: filteredCount,
+        fixturesConsidered: fixtures.length,
+        fixturesPriced: oddsByMatchId.size,
+        leaguesFailed,
         minConfidence: confidenceThreshold,
         minOdds: minOddsValue,
-        maxOdds: maxOddsValue
+        maxOdds: maxOddsValue,
       })
     }
 
-    // Filter out fields that don't exist in the database schema before inserting
-    // Only keep valid columns: plan_type, home_team, away_team, league, prediction_type, odds, confidence, kickoff_time, status
-    const validColumns = ['plan_type', 'home_team', 'away_team', 'league', 'prediction_type', 'odds', 'confidence', 'kickoff_time', 'status', 'result', 'admin_notes']
     const cleanedPredictions = predictions.map((pred: any) => {
       const cleaned: any = {}
-      validColumns.forEach(col => {
+      PREDICTION_INSERT_COLUMNS.forEach((col) => {
         if (pred[col] !== undefined && pred[col] !== null) {
           cleaned[col] = pred[col]
         }
@@ -192,7 +147,16 @@ export async function POST(request: NextRequest) {
       return cleaned
     })
 
-    // Insert predictions into database
+    if (cleanedPredictions.length === 0) {
+      return NextResponse.json({
+        message: 'No predictions matched the selected filters',
+        synced: 0,
+        fixturesConsidered: fixtures.length,
+        fixturesPriced: oddsByMatchId.size,
+        leaguesFailed,
+      })
+    }
+
     const { data, error } = await supabase
       .from('predictions')
       .insert(cleanedPredictions as any)
@@ -203,7 +167,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // Notify users subscribed to this plan type
     if (data && data.length > 0) {
       try {
         const planSlug = PLAN_TYPE_TO_SLUG[planType]
@@ -221,21 +184,22 @@ export async function POST(request: NextRequest) {
         }
       } catch (notifyError) {
         console.error('Error notifying users:', notifyError)
-        // Don't fail the request if notification fails
+        // A failed notification must not fail the sync.
       }
     }
 
-    return NextResponse.json({ 
-      message: 'Predictions synced successfully', 
+    return NextResponse.json({
+      message: 'Predictions synced successfully',
       synced: data?.length || 0,
-      filtered: filteredCount,
+      fixturesConsidered: fixtures.length,
+      fixturesPriced: oddsByMatchId.size,
+      leaguesFailed,
       minConfidence: confidenceThreshold,
       minOdds: minOddsValue,
-      maxOdds: maxOddsValue
+      maxOdds: maxOddsValue,
     })
   } catch (error: any) {
     console.error('Sync error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
-

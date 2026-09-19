@@ -103,7 +103,11 @@ function AddPredictionContent() {
           prediction_type: prediction.prediction_type || '',
           odds: prediction.odds?.toString() || '',
           confidence: prediction.confidence?.toString() || '',
-          kickoff_date: kickoffDateTime ? kickoffDateTime.toISOString().slice(0, 10) : '',
+          kickoff_date: prediction.prediction_date
+            ? String(prediction.prediction_date).slice(0, 10)
+            : kickoffDateTime
+              ? kickoffDateTime.toISOString().slice(0, 10)
+              : '',
           kickoff_time: kickoffDateTime ? kickoffDateTime.toISOString().slice(11, 16) : '',
           match_status: prediction.status === 'finished' ? 'finished' : 'not_started',
           home_score: prediction.home_score !== null && prediction.home_score !== undefined ? prediction.home_score.toString() : '',
@@ -169,6 +173,11 @@ function AddPredictionContent() {
 
     const baseData = {
       plan_type: planType as 'profit_multiplier' | 'daily_2_odds' | 'standard' | 'free',
+      // The matchday the admin typed into the form, stored as-is. Every part of
+      // the site filters on this, so a prediction filed under 23 August stays
+      // under 23 August for every viewer in every timezone - it is never
+      // re-derived from kickoff_time at read time.
+      prediction_date: kickoffDate,
       home_team: (homeTeam || formDataObj.get('home_team')) as string,
       away_team: (awayTeam || formDataObj.get('away_team')) as string,
       league: (leagueName || formDataObj.get('league')) as string,

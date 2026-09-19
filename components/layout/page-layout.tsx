@@ -21,7 +21,7 @@ export function PageLayout({ children, title, subtitle }: PageLayoutProps) {
         {/* Background Image with Fallback */}
         <div className="absolute inset-0 z-0 bg-gradient-to-br from-[#1e40af] to-[#1e3a8a]">
           <Image
-            src="/hero-pics/hero.jpg"
+            src="/hero-pics/hero-1920.jpg"
             alt="Background"
             fill
             className="object-cover"

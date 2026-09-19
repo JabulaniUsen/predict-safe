@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { todayKey } from '@/lib/utils/date'
 import { AdminLayout } from '@/components/admin/admin-layout'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,6 +17,14 @@ import { LeagueSelector } from '@/components/admin/league-selector'
 import { TeamSelector } from '@/components/admin/team-selector'
 
 type VIPWinningInsert = Database['public']['Tables']['vip_winnings']['Insert']
+
+/** Blank inputs mean "not recorded", which is a null column rather than a 0. */
+function toNumberOrNull(value: string): number | null {
+  const trimmed = value.trim()
+  if (trimmed === '') return null
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : null
+}
 
 interface AddVIPWinPageProps {
   plans: any[]
@@ -33,8 +42,11 @@ export default function AddVIPWinPage() {
     home_team: '',
     away_team: '',
     prediction_type: '',
+    odds: '',
+    home_score: '',
+    away_score: '',
     result: 'win' as 'win' | 'loss',
-    date: new Date().toISOString().split('T')[0],
+    date: todayKey(),
   })
 
   // Fetch plans on mount
@@ -108,6 +120,10 @@ export default function AddVIPWinPage() {
         home_team: form.home_team,
         away_team: form.away_team,
         prediction_type: form.prediction_type || null,
+        league_id: form.league_id || null,
+        odds: toNumberOrNull(form.odds),
+        home_score: toNumberOrNull(form.home_score),
+        away_score: toNumberOrNull(form.away_score),
         result: form.result,
         date: form.date,
       }
@@ -265,6 +281,43 @@ export default function AddVIPWinPage() {
                     value={form.prediction_type}
                     onChange={(e) => setForm({ ...form, prediction_type: e.target.value })}
                     placeholder="e.g., Over 1.5, BTTS, Banker"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="odds">Odds</Label>
+                  <Input
+                    id="odds"
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    value={form.odds}
+                    onChange={(e) => setForm({ ...form, odds: e.target.value })}
+                    placeholder="e.g., 1.85"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="home_score">Home Score</Label>
+                  <Input
+                    id="home_score"
+                    type="number"
+                    min="0"
+                    value={form.home_score}
+                    onChange={(e) => setForm({ ...form, home_score: e.target.value })}
+                    placeholder="e.g., 3"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="away_score">Away Score</Label>
+                  <Input
+                    id="away_score"
+                    type="number"
+                    min="0"
+                    value={form.away_score}
+                    onChange={(e) => setForm({ ...form, away_score: e.target.value })}
+                    placeholder="e.g., 1"
                   />
                 </div>
                 <div className="space-y-2">

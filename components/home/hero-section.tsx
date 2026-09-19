@@ -5,14 +5,26 @@ import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
 import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import { TrendingUp, Users, Target, Zap } from 'lucide-react'
 
+/**
+ * Hero backgrounds, as pre-sized responsive variants.
+ *
+ * The originals were 5040x2856 and 6000x4000 - 7.4MB and 4.1MB - and all four
+ * were downloaded on every page load, because they all sit in the DOM for the
+ * crossfade. That was roughly 12MB of the homepage's weight on its own.
+ *
+ * `images.unoptimized` is on (Cloudflare Images isn't enabled on this plan, so
+ * Next's optimizer 402s), which means the browser gets exactly the file named
+ * here - no automatic resizing or format negotiation. So we do it ourselves
+ * with a plain <picture>: WebP with a JPEG fallback, at a phone width and a
+ * desktop width. Regenerate with `npm run optimize-images`.
+ */
 const heroImages = [
-  '/hero-pics/hero.jpg',
-  '/hero-pics/hero-bg1.jpg',
-  '/hero-pics/hero-bg2.jpeg',
-  '/hero-pics/hero-bg3.jpeg',
+  { base: '/hero-pics/hero', alt: 'Football stadium at night' },
+  { base: '/hero-pics/hero-bg1', alt: 'Packed football stadium' },
+  { base: '/hero-pics/hero-bg2', alt: 'Football pitch from above' },
+  { base: '/hero-pics/hero-bg3', alt: 'Floodlit football ground' },
 ]
 
 const stats = [
@@ -72,23 +84,37 @@ export function HeroSection({
     <section className="relative min-h-[360px] sm:min-h-[480px] flex flex-col items-center overflow-hidden">
       {/* Background Images with Fade Transition */}
       <div className="absolute inset-0 z-0">
-        {heroImages.map((image, index) => (
-          <div
-            key={image}
-            className={`absolute inset-0 transition-opacity duration-1000 ${
-              index === currentImageIndex ? 'opacity-100' : 'opacity-0'
-            }`}
-          >
-            <Image
-              src={image}
-              alt="Football stadium background"
-              fill
-              className="object-cover"
-              priority={index === 0}
-              quality={90}
-            />
-          </div>
-        ))}
+        {heroImages.map((image, index) => {
+          // Only the first slide is eager. The rest load lazily, so a visitor
+          // who leaves before the carousel advances never pays for them.
+          const isFirst = index === 0
+          return (
+            <div
+              key={image.base}
+              className={`absolute inset-0 transition-opacity duration-1000 ${
+                index === currentImageIndex ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              <picture>
+                <source
+                  type="image/webp"
+                  srcSet={`${image.base}-960.webp 960w, ${image.base}-1920.webp 1920w`}
+                  sizes="100vw"
+                />
+                <img
+                  src={`${image.base}-1920.jpg`}
+                  srcSet={`${image.base}-960.jpg 960w, ${image.base}-1920.jpg 1920w`}
+                  sizes="100vw"
+                  alt={isFirst ? image.alt : ''}
+                  className="absolute inset-0 h-full w-full object-cover"
+                  loading={isFirst ? 'eager' : 'lazy'}
+                  fetchPriority={isFirst ? 'high' : 'low'}
+                  decoding="async"
+                />
+              </picture>
+            </div>
+          )
+        })}
         {/* Layered overlay: dark top + stronger bottom for stats bar */}
         <div className="absolute inset-0 bg-linear-to-b from-black/70 via-black/55 to-black/80" />
       </div>

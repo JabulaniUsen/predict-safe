@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
         // that's what actually cuts serverless invocations for repeat
         // visitors, on top of the in-process cache in lib/api-football.ts.
         // Kept short since fixtures carry live scores/status.
-        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+        'Cache-Control': 'public, max-age=30, s-maxage=60, stale-while-revalidate=120',
       },
     })
   } catch (error: unknown) {
