@@ -52,6 +52,6 @@ export const config = {
      * - sw.js / offline.html (the service worker must be served untouched)
      * - public folder
      */
-    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|offline\\.html|manifest\\.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|offline|manifest\\.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

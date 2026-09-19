@@ -26,7 +26,10 @@
 const CACHE_VERSION = 'v3'
 const ASSET_CACHE = `predictsafe-assets-${CACHE_VERSION}`
 const PAGE_FALLBACK_CACHE = `predictsafe-pages-${CACHE_VERSION}`
-const OFFLINE_URL = '/offline.html'
+// Served from public/offline.html, but the host serves it at the extensionless
+// path and 307s /offline.html -> /offline. Caching a redirected response fails,
+// so the worker must ask for the canonical URL directly.
+const OFFLINE_URL = '/offline'
 
 /**
  * Requests that must always hit the network and must never be stored.

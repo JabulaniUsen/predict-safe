@@ -8,6 +8,9 @@
   Cache-Control: public,max-age=0,must-revalidate
   Service-Worker-Allowed: /
 
+/offline
+  Cache-Control: public,max-age=0,must-revalidate
+
 /offline.html
   Cache-Control: public,max-age=0,must-revalidate
 
