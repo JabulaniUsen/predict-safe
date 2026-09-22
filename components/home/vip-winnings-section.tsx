@@ -8,13 +8,32 @@ import { Badge } from '@/components/ui/badge'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { VIPWinning } from '@/types'
-import { formatDate, formatDateShort } from '@/lib/utils/date'
+import { formatDateShort } from '@/lib/utils/date'
 import { findFixtureForPrediction } from '@/lib/utils/fixture-match'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
-import { CalendarIcon } from 'lucide-react'
+import { ArrowRight, BarChart3, CalendarIcon, Goal, Layers, Star, Trophy } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
+
+/**
+ * Badge icon and accent stripe per plan.
+ *
+ * Keyed on the plan name stored against each win rather than a slug, because
+ * vip_winnings records the display name. Matching is loose so a renamed plan
+ * (Profit Multiplier -> Daily 50 Odds Combo) still resolves, and anything
+ * unrecognised falls back to a trophy rather than rendering nothing.
+ */
+function getPlanStyle(planName: string): { Icon: typeof Trophy; accent: string } {
+  const name = planName.toLowerCase()
+  if (name.includes('correct score')) return { Icon: Goal, accent: 'bg-[#1e40af]' }
+  if (name.includes('2 odds')) return { Icon: BarChart3, accent: 'bg-[#0ea5e9]' }
+  if (name.includes('50 odds') || name.includes('profit multiplier')) {
+    return { Icon: Layers, accent: 'bg-[#6366f1]' }
+  }
+  if (name.includes('standard')) return { Icon: Star, accent: 'bg-[#f97316]' }
+  return { Icon: Trophy, accent: 'bg-[#1e40af]' }
+}
 
 interface VIPWinningsSectionProps {
   planIds?: string[] // Optional: filter by plan IDs
@@ -301,14 +320,6 @@ export function VIPWinningsSection({ planIds, showAll = true, showSeeMoreLink = 
     return teamLogos[teamName] || null
   }
 
-  /** "3 - 1", or null when the result wasn't recorded. */
-  const getFinalScore = (winning: VIPWinning): string | null => {
-    const home = (winning as any).home_score
-    const away = (winning as any).away_score
-    if (home === null || home === undefined || away === null || away === undefined) return null
-    return `${home} - ${away}`
-  }
-
   const getOdds = (winning: VIPWinning): string | null => {
     const odds = (winning as any).odds
     if (odds === null || odds === undefined) return null
@@ -328,385 +339,266 @@ export function VIPWinningsSection({ planIds, showAll = true, showSeeMoreLink = 
     // Default fallback
     return '-'
   }
-
   return (
-    <section className="py-4 lg:py-8 bg-white">
+    <section className="py-6 lg:py-12 bg-white">
       <div className="container mx-auto px-4">
         {/* Header */}
-        <div className="mb-4 lg:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1 lg:mb-2 text-[#1e40af]">VIP Winning History</h2>
-            <p className="text-sm lg:text-base text-gray-600">Track our successful VIP predictions</p>
-            {showSeeMoreLink && (
-              <Button
-                asChild
-                variant="link"
-                className="px-0 h-auto mt-1 text-[#1e40af] font-semibold hover:text-[#1e3a8a]"
-              >
-                <Link href="/previous-wins">See more</Link>
-              </Button>
-            )}
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[#0f172a]">
+              VIP Winning History
+            </h2>
+            <p className="mt-1 text-sm lg:text-base text-gray-500">
+              Track our successful VIP predictions
+            </p>
           </div>
-          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all justify-start text-left",
-                    !selectedDate && "text-gray-600 hover:text-[#1e40af] hover:bg-white",
-                    selectedDate && "bg-[#1e40af] text-white"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-                  {selectedDate ? format(selectedDate, "MMM dd, yyyy") : "Pick date"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={handleDateSelect}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-            <Button
-              variant="outline"
-              onClick={handleLatestClick}
-              className={cn(
-                "px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all",
-                !selectedDate || (selectedDate && format(selectedDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd'))
-                  ? "bg-[#1e40af] text-white"
-                  : "text-gray-600 hover:text-[#1e40af] hover:bg-white"
-              )}
+          {showSeeMoreLink && (
+            <Link
+              href="/previous-wins"
+              className="inline-flex items-center gap-1.5 text-sm lg:text-base font-semibold text-[#1e40af] hover:text-[#1e3a8a] transition-colors"
             >
-              Latest
-            </Button>
-            {selectedDate && (
-              <Button
-                variant="outline"
-                onClick={handleClearDate}
-                className="px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all text-gray-600 hover:text-[#1e40af] hover:bg-white"
-              >
-                Clear
-              </Button>
-            )}
-          </div>
+              See More
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          )}
         </div>
-        
-        {loading ? (
-          <>
-            {/* Mobile Loading State */}
-            <div className="lg:hidden space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="rounded-xl border-2 border-gray-200 overflow-hidden animate-pulse"
-                >
-                  <div className="bg-[#1e40af]/70 h-8" />
-                  <div className="p-3 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-gray-200" />
-                      <div className="h-4 flex-1 bg-gray-200 rounded" />
-                      <div className="h-5 w-5 bg-gray-200 rounded" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-gray-200" />
-                      <div className="h-4 flex-1 bg-gray-200 rounded" />
-                      <div className="h-5 w-5 bg-gray-200 rounded" />
-                    </div>
-                  </div>
-                  <div className="border-t border-dashed border-gray-300 bg-gray-50 p-3 space-y-2">
-                    <div className="h-3 w-full bg-gray-200 rounded" />
-                    <div className="h-3 w-2/3 bg-gray-200 rounded" />
-                  </div>
-                </div>
-              ))}
-            </div>
 
-            {/* Desktop Loading State */}
-            <div className="hidden lg:block space-y-8">
-              {[1, 2].map((planIndex) => (
-                <div key={planIndex} className="space-y-4">
-                  <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
-                  <div className="space-y-0 border rounded-lg overflow-hidden bg-white">
-              <div className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white px-6 py-3 grid grid-cols-12 gap-3 items-center font-semibold text-sm">
-                <div className="col-span-2">Date</div>
-                <div className="col-span-4">Match</div>
-                <div className="col-span-1 text-center">Score</div>
-                <div className="col-span-2 text-center">Prediction</div>
-                <div className="col-span-1 text-center">Odds</div>
-                <div className="col-span-2 text-center">Result</div>
-              </div>
-            {[1, 2, 3].map((i) => (
-                <div key={i} className="px-6 py-4 grid grid-cols-12 gap-4 items-center border-t animate-pulse">
-                  <div className="col-span-2">
-                    <div className="h-4 w-20 bg-gray-200 rounded" />
-                  </div>
-                  <div className="col-span-5">
-                    <div className="h-4 w-32 bg-gray-200 rounded" />
-                  </div>
-                  <div className="col-span-1">
-                    <div className="h-6 w-12 bg-gray-200 rounded mx-auto" />
-                  </div>
-                  <div className="col-span-2">
-                    <div className="h-4 w-16 bg-gray-200 rounded mx-auto" />
-                  </div>
-                  <div className="col-span-2">
-                    <div className="h-4 w-20 bg-gray-200 rounded mx-auto" />
-                        </div>
-                      </div>
-                    ))}
+        {/* Date controls */}
+        <div className="mb-6 inline-flex items-center gap-1 rounded-xl border border-gray-200 bg-white p-1.5">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                className={cn(
+                  'h-10 gap-2 rounded-lg px-4 text-sm font-medium',
+                  selectedDate
+                    ? 'bg-[#1e40af] text-white hover:bg-[#1e3a8a] hover:text-white'
+                    : 'text-gray-500 hover:text-[#1e40af]'
+                )}
+              >
+                <CalendarIcon className="h-4 w-4" />
+                {selectedDate ? format(selectedDate, 'MMM d, yyyy') : 'Pick date'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar mode="single" selected={selectedDate} onSelect={handleDateSelect} initialFocus />
+            </PopoverContent>
+          </Popover>
+
+          <Button
+            variant="ghost"
+            onClick={handleLatestClick}
+            className={cn(
+              'h-10 rounded-lg px-5 text-sm font-semibold',
+              selectedDate
+                ? 'text-gray-500 hover:text-[#1e40af]'
+                : 'bg-[#1e40af] text-white hover:bg-[#1e3a8a] hover:text-white'
+            )}
+          >
+            Latest
+          </Button>
+
+          {selectedDate && (
+            <Button
+              variant="ghost"
+              onClick={handleClearDate}
+              className="h-10 rounded-lg px-4 text-sm font-medium text-gray-500 hover:text-[#1e40af]"
+            >
+              Clear
+            </Button>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="grid gap-5 md:grid-cols-2">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="overflow-hidden rounded-2xl border border-gray-200 animate-pulse">
+                <div className="h-1.5 bg-gray-200" />
+                <div className="flex items-center gap-3 p-4">
+                  <div className="h-11 w-11 rounded-full bg-gray-200" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-2/5 rounded bg-gray-200" />
+                    <div className="h-3 w-3/5 rounded bg-gray-100" />
                   </div>
                 </div>
+                {[1, 2].map((j) => (
+                  <div key={j} className="space-y-2 border-t border-gray-100 p-4">
+                    <div className="h-3 w-1/2 rounded bg-gray-100" />
+                    <div className="h-4 w-3/5 rounded bg-gray-200" />
+                    <div className="h-4 w-2/5 rounded bg-gray-200" />
+                    <div className="h-9 rounded-lg bg-gray-100" />
+                  </div>
+                ))}
+              </div>
             ))}
           </div>
-          </>
         ) : planNames.length === 0 ? (
           <Card className="border-2 border-gray-200">
             <CardContent className="py-12 text-center">
-              <p className="text-muted-foreground">No winnings records available.</p>
+              <p className="text-muted-foreground">
+                {selectedDate
+                  ? 'No winnings recorded for this date.'
+                  : 'No winnings records available.'}
+              </p>
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-8">
-            {planNames.map((planName) => {
-              const allPlanWinnings = groupedWinnings[planName]
-              const isExpanded = expandedPlans.has(planName)
-              const hasMore = allPlanWinnings.length > initialLimitPerPlan
-              const planWinnings = isExpanded 
-                ? allPlanWinnings 
-                : allPlanWinnings.slice(0, initialLimitPerPlan)
-              
-              return (
-                <div key={planName} className="space-y-4">
-                  {/* Plan Header */}
-                  <div className="flex items-center justify-between border-b-2 border-[#1e40af] pb-2">
-                    <div>
-                      <h3 className="text-xl sm:text-2xl font-bold text-[#1e40af]">{planName}</h3>
-                    </div>
-                    {hasMore && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => togglePlanExpansion(planName)}
-                        className="text-[#1e40af] border-[#1e40af] hover:bg-[#1e40af] hover:text-white"
-                      >
-                        {isExpanded ? 'Show Less' : 'See All'}
-                      </Button>
-                    )}
-                  </div>
+          <>
+            <div className="grid gap-5 md:grid-cols-2">
+              {planNames.map((planName) => {
+                const allPlanWinnings = groupedWinnings[planName]
+                const isExpanded = expandedPlans.has(planName)
+                const hasMore = allPlanWinnings.length > initialLimitPerPlan
+                const planWinnings = isExpanded
+                  ? allPlanWinnings
+                  : allPlanWinnings.slice(0, initialLimitPerPlan)
 
-            {/* Mobile View */}
-            <div className="lg:hidden space-y-3">
-                    {planWinnings.map((winning) => (
-                <div
-                  key={winning.id}
-                  className="rounded-xl border-2 border-gray-200 bg-white overflow-hidden shadow-sm"
-                >
-                  {/* Ticket header: competition and date */}
-                  <div className="flex items-center justify-between gap-2 bg-[#1e40af] px-3 py-2 text-white">
-                    <span className="text-xs font-semibold truncate">{getLeagueName(winning)}</span>
-                    <span className="text-[10px] font-medium text-blue-100 flex-shrink-0">
-                      {formatDateShort(winning.date)}
-                    </span>
-                  </div>
+                const { Icon, accent } = getPlanStyle(planName)
 
-                  {/* Teams and the final score */}
-                  <div className="px-3 py-3 space-y-2">
-                    {([
-                      { team: winning.home_team, score: (winning as any).home_score },
-                      { team: winning.away_team, score: (winning as any).away_score },
-                    ] as const).map(({ team, score }, sideIndex) => (
-                      <div key={sideIndex} className="flex items-center gap-2">
-                        {getTeamLogo(team) ? (
-                          <Image
-                            src={getTeamLogo(team)!}
-                            alt=""
-                            width={24}
-                            height={24}
-                            className="w-6 h-6 object-contain rounded-full flex-shrink-0"
-                            unoptimized
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none'
-                            }}
-                          />
-                        ) : (
-                          <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold flex-shrink-0">
-                            {team.charAt(0)}
-                          </div>
-                        )}
-                        <span className="text-sm font-semibold text-gray-900 truncate flex-1 min-w-0">
-                          {team}
-                        </span>
-                        <span className="text-lg font-bold text-gray-900 tabular-nums flex-shrink-0">
-                          {score ?? '-'}
-                        </span>
+                // The card subtitle should describe what is actually on it -
+                // these rows can include a loss, and calling that a winning
+                // prediction would be untrue.
+                const allWins = planWinnings.every((w) => w.result === 'win')
+                const subtitle = `Last ${planWinnings.length} ${
+                  allWins ? 'winning prediction' : 'result'
+                }${planWinnings.length === 1 ? '' : 's'}`
+
+                return (
+                  <article
+                    key={planName}
+                    className="flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md"
+                  >
+                    <div className={cn('h-1.5', accent)} />
+
+                    <header className="flex items-center gap-3 p-4">
+                      <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-blue-50 text-[#1e40af]">
+                        <Icon className="h-5 w-5" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate text-sm font-bold uppercase tracking-wide text-[#0f172a]">
+                          {planName}
+                        </h3>
+                        <p className="truncate text-xs text-gray-500">{subtitle}</p>
                       </div>
-                    ))}
-                  </div>
+                      {hasMore && (
+                        <button
+                          type="button"
+                          onClick={() => togglePlanExpansion(planName)}
+                          className="inline-flex flex-shrink-0 items-center gap-1 text-sm font-semibold text-[#1e40af] hover:text-[#1e3a8a] transition-colors"
+                        >
+                          {isExpanded ? 'Show Less' : 'See All'}
+                          {!isExpanded && <ArrowRight className="h-4 w-4" />}
+                        </button>
+                      )}
+                    </header>
 
-                  {/* The bet itself */}
-                  <div className="border-t border-dashed border-gray-300 px-3 py-2.5 bg-gray-50 space-y-1.5">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="text-[11px] uppercase tracking-wide text-gray-500">Prediction</span>
-                      <span className="text-sm font-semibold text-[#1e40af] truncate">
-                        {winning.prediction_type || '-'}
-                      </span>
+                    <div className="flex-1">
+                      {planWinnings.map((winning) => {
+                        const odds = getOdds(winning)
+                        const won = winning.result === 'win'
+
+                        return (
+                          <div key={winning.id} className="border-t border-gray-100 p-4">
+                            {/* Date and competition */}
+                            <p className="mb-2.5 truncate text-xs text-gray-500">
+                              {formatDateShort(winning.date)}
+                              <span className="mx-1.5 text-gray-300">•</span>
+                              {getLeagueName(winning)}
+                            </p>
+
+                            {/* Teams and the final score */}
+                            <div className="space-y-1.5">
+                              {(
+                                [
+                                  { team: winning.home_team, score: (winning as any).home_score },
+                                  { team: winning.away_team, score: (winning as any).away_score },
+                                ] as const
+                              ).map(({ team, score }, side) => (
+                                <div key={side} className="flex items-center gap-2.5">
+                                  {getTeamLogo(team) ? (
+                                    <Image
+                                      src={getTeamLogo(team)!}
+                                      alt=""
+                                      width={20}
+                                      height={20}
+                                      className="h-5 w-5 flex-shrink-0 rounded-full object-contain"
+                                      unoptimized
+                                      onError={(e) => {
+                                        e.currentTarget.style.visibility = 'hidden'
+                                      }}
+                                    />
+                                  ) : (
+                                    <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-gray-100 text-[10px] font-bold text-gray-500">
+                                      {team.charAt(0)}
+                                    </span>
+                                  )}
+                                  <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-[#0f172a]">
+                                    {team}
+                                  </span>
+                                  <span className="flex-shrink-0 text-lg font-bold tabular-nums text-[#0f172a]">
+                                    {score ?? '–'}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* The bet: tip, price taken, outcome */}
+                            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg bg-gray-50 px-3 py-2.5">
+                              <span className="text-xs text-gray-500">
+                                Prediction:{' '}
+                                <span className="font-semibold text-[#0f172a]">
+                                  {winning.prediction_type || '–'}
+                                </span>
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                Odds:{' '}
+                                <span className="font-bold tabular-nums text-[#0f172a]">
+                                  {odds ?? '–'}
+                                </span>
+                              </span>
+                              <Badge
+                                className={cn(
+                                  'ml-auto rounded-full px-3 py-0.5 text-xs font-bold',
+                                  won ? 'bg-[#22c55e] text-white' : 'bg-red-500 text-white'
+                                )}
+                              >
+                                {won ? 'WON' : 'LOST'}
+                              </Badge>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="text-[11px] uppercase tracking-wide text-gray-500">Odds</span>
-                      <span className="text-sm font-bold text-gray-900 tabular-nums">
-                        {getOdds(winning) ?? '-'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 pt-1">
-                      <span className="text-[11px] uppercase tracking-wide text-gray-500">Result</span>
-                      <Badge
-                        className={cn(
-                          'text-xs font-bold px-2.5 py-0.5',
-                          winning.result === 'win'
-                            ? 'bg-[#22c55e] text-white'
-                            : 'bg-red-500 text-white'
-                        )}
-                      >
-                        {winning.result === 'win' ? 'WON' : 'LOST'}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  </article>
+                )
+              })}
             </div>
 
-            {/* Desktop View */}
-            <div className="hidden lg:block space-y-0 border-2 border-gray-200 rounded-xl overflow-hidden bg-white shadow-lg">
-              {/* Header */}
-              <div className="bg-gradient-to-r from-[#1e40af] to-[#1e3a8a] text-white px-6 py-4 grid grid-cols-12 gap-3 items-center font-bold text-sm shadow-md">
-                <div className="col-span-2">Date</div>
-                <div className="col-span-4">Match</div>
-                <div className="col-span-1 text-center">Score</div>
-                <div className="col-span-2 text-center">Prediction</div>
-                <div className="col-span-1 text-center">Odds</div>
-                <div className="col-span-2 text-center">Result</div>
-              </div>
-
-              {/* Winnings */}
-                    {planWinnings.map((winning, index) => (
-                <div
-                  key={winning.id}
-                  className={cn(
-                    'px-6 py-5 grid grid-cols-12 gap-3 items-center border-b border-gray-100 bg-white hover:bg-gradient-to-r hover:from-blue-50 hover:to-green-50 hover:shadow-md transition-all duration-300',
-                    index === planWinnings.length - 1 && 'border-b-0',
-                    index % 2 === 0 && 'bg-gray-50/50'
-                  )}
+            {showSeeMoreLink && (
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-blue-50/70 p-5">
+                <div className="flex items-center gap-4">
+                  <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-white text-[#1e40af]">
+                    <Trophy className="h-6 w-6" />
+                  </span>
+                  <div>
+                    <p className="text-lg font-bold text-[#0f172a]">More Winning History</p>
+                    <p className="text-sm text-gray-500">
+                      View all past VIP predictions and results
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  asChild
+                  className="h-11 rounded-lg bg-[#1e40af] px-6 font-semibold text-white hover:bg-[#1e3a8a]"
                 >
-                  {/* Date */}
-                  <div className="col-span-2">
-                    <div className="text-sm font-medium text-gray-900">
-                      {formatDate(winning.date)}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1 truncate">{getLeagueName(winning)}</div>
-                  </div>
-
-                  {/* Teams */}
-                  <div className="col-span-4">
-                    <div className="flex items-center gap-3">
-                      {getTeamLogo(winning.home_team) ? (
-                        <div className="relative w-8 h-8 flex-shrink-0">
-                          <Image
-                            src={getTeamLogo(winning.home_team)!}
-                            alt={winning.home_team}
-                            width={32}
-                            height={32}
-                            className="object-contain"
-                            unoptimized
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none'
-                              const parent = e.currentTarget.parentElement
-                              if (parent) {
-                                parent.innerHTML = `<div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">${winning.home_team.charAt(0)}</div>`
-                              }
-                            }}
-                          />
-                        </div>
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                          {winning.home_team.charAt(0)}
-                        </div>
-                      )}
-                      <span className="text-sm font-semibold text-gray-900 truncate min-w-0">
-                        {winning.home_team}
-                      </span>
-                      <span className="text-xs text-gray-500 flex-shrink-0">vs</span>
-                      {getTeamLogo(winning.away_team) ? (
-                        <div className="relative w-8 h-8 flex-shrink-0">
-                          <Image
-                            src={getTeamLogo(winning.away_team)!}
-                            alt={winning.away_team}
-                            width={32}
-                            height={32}
-                            className="object-contain"
-                            unoptimized
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none'
-                              const parent = e.currentTarget.parentElement
-                              if (parent) {
-                                parent.innerHTML = `<div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">${winning.away_team.charAt(0)}</div>`
-                              }
-                            }}
-                          />
-                        </div>
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                          {winning.away_team.charAt(0)}
-                        </div>
-                      )}
-                      <span className="text-sm font-semibold text-gray-900 truncate min-w-0">
-                        {winning.away_team}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Final score */}
-                  <div className="col-span-1 text-center">
-                    <span className="text-base font-bold text-gray-900 tabular-nums whitespace-nowrap">
-                      {getFinalScore(winning) ?? '-'}
-                    </span>
-                  </div>
-
-                  {/* Prediction */}
-                  <div className="col-span-2 text-center">
-                    <span className="text-sm font-semibold text-[#1e40af]">
-                      {winning.prediction_type || '-'}
-                    </span>
-                  </div>
-
-                  {/* Odds */}
-                  <div className="col-span-1 text-center">
-                    <span className="text-sm font-bold text-gray-900 tabular-nums">
-                      {getOdds(winning) ?? '-'}
-                    </span>
-                  </div>
-
-                  {/* Result */}
-                  <div className="col-span-2 flex justify-center">
-                    <Badge
-                      className={cn(
-                        'text-xs font-bold px-3 py-1',
-                        winning.result === 'win' ? 'bg-[#22c55e] text-white' : 'bg-red-500 text-white'
-                      )}
-                    >
-                      {winning.result === 'win' ? 'WON' : 'LOST'}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-                </div>
-              )
-            })}
-          </div>
+                  <Link href="/previous-wins">
+                    View All Results
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </section>
