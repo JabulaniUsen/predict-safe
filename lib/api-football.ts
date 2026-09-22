@@ -391,6 +391,40 @@ const PROVIDER_CACHE_MAX_ENTRIES = 1000
 const providerCache = new Map<string, { data: any; expires: number }>()
 const inFlightRequests = new Map<string, Promise<any>>()
 
+/**
+ * Rejects a provider payload that cannot be used.
+ *
+ * API-Sports answers with HTTP 200 even when it is refusing the request, so
+ * the body is the only reliable signal. `errors` is `[]` on success and an
+ * object describing the problem otherwise (`requests` for the daily quota,
+ * `rateLimit` for the per-minute one, `token` for a bad key).
+ *
+ * Throwing here is deliberate: the caller decides how to handle a provider
+ * outage, and an outage must be distinguishable from a genuinely empty day.
+ */
+function assertUsableProviderPayload(path: string, data: unknown): void {
+  if (!data || typeof data !== 'object') {
+    throw new Error(`API Error (${path}): provider returned a non-object body`)
+  }
+
+  const payload = data as { response?: unknown; errors?: unknown }
+  const { errors } = payload
+
+  const errorCount = Array.isArray(errors)
+    ? errors.length
+    : errors && typeof errors === 'object'
+      ? Object.keys(errors).length
+      : 0
+
+  if (errorCount > 0) {
+    throw new Error(`API Error (${path}): ${JSON.stringify(errors)}`)
+  }
+
+  if (!Array.isArray(payload.response)) {
+    throw new Error(`API Error (${path}): payload has no response array`)
+  }
+}
+
 // Server-side request to API-Sports
 async function callProvider(path: string, params: Record<string, string> = {}) {
   if (!API_KEY) {
@@ -418,20 +452,35 @@ async function callProvider(path: string, params: Record<string, string> = {}) {
       })
 
       if (!response.ok) {
-        throw new Error(`API Error: ${response.statusText}`)
+        throw new Error(`API Error: ${response.status} ${response.statusText}`)
       }
 
       const data = await response.json()
+
+      // A 200 does not mean the call worked. API-Sports reports quota
+      // exhaustion, per-minute throttling and bad tokens in the body, with an
+      // HTTP 200 and no `response` array.
+      //
+      // This used to fall straight through to `data.response || []`, so a
+      // throttled call looked exactly like "there are no fixtures today" - and
+      // then that empty answer was cached for two minutes and served to
+      // everyone who landed on the same isolate. Different visitors hit
+      // different isolates, so the same date showed a full card to one person,
+      // one game to another and nothing to a third, and "clearing your cache"
+      // appeared to fix it because a retry landed somewhere else.
+      assertUsableProviderPayload(path, data)
 
       if (providerCache.size >= PROVIDER_CACHE_MAX_ENTRIES) {
         const oldestKey = providerCache.keys().next().value
         if (oldestKey !== undefined) providerCache.delete(oldestKey)
       }
+      // Only well-formed payloads are cached. A failure must never become a
+      // sticky empty result.
       providerCache.set(url, { data, expires: Date.now() + PROVIDER_CACHE_TTL_MS })
 
       return data
     } catch (error) {
-      console.error('API Football Error:', error)
+      console.error(`API Football Error (${path}):`, error)
       throw error
     } finally {
       inFlightRequests.delete(url)

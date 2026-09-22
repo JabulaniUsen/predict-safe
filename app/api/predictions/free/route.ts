@@ -6,6 +6,7 @@ import {
   generateFreePicks,
   findFreePickFilter,
   applyLiveFixtureState,
+  FreePicksUnavailableError,
 } from '@/lib/predictions/free-picks'
 import type { GeneratedPrediction } from '@/lib/predictions/generate'
 
@@ -119,6 +120,17 @@ export async function GET(request: NextRequest) {
     )
   } catch (error: unknown) {
     console.error('[free-picks] request failed:', error)
+
+    // "We could not reach the provider" and "this date has no games" are
+    // different answers and the page renders them differently. A 503 gets the
+    // "couldn't load, try again" state rather than "no predictions available".
+    if (error instanceof FreePicksUnavailableError) {
+      return NextResponse.json(
+        { error: 'Predictions are temporarily unavailable. Please try again shortly.' },
+        { status: 503, headers: { 'Cache-Control': 'no-store' } }
+      )
+    }
+
     const message = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json({ error: message }, { status: 500 })
   }
