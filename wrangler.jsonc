@@ -16,5 +16,73 @@
   ],
   "observability": {
     "enabled": true
+  },
+
+  /*
+   * Runtime environment variables.
+   *
+   * `wrangler deploy` treats this file as the source of truth for `vars`:
+   * anything configured in the Cloudflare dashboard but *not* listed here is
+   * removed from the Worker on the next CLI deploy. That is not a hypothetical
+   * - it is what took the site's football data offline on 19 Sep 2026. A
+   * deploy ran from a checkout whose config declared no `vars` at all, which
+   * cleared API_FOOTBALL_KEY in production, and every fixtures, odds, live
+   * score and free-pick request started failing with "Missing required
+   * environment variable".
+   *
+   * So: anything production needs at runtime belongs either here or in the
+   * Worker's secrets. Nowhere else.
+   *
+   * Only values that are safe to commit live in this file. Every NEXT_PUBLIC_*
+   * value is compiled into the browser bundle and served to every visitor, so
+   * there is nothing to protect by hiding it here. They are still listed
+   * because server-side code (lib/supabase/server.ts, proxy.ts) reads them
+   * from process.env at request time, not just at build time.
+   */
+  "vars": {
+    "NEXT_PUBLIC_SITE_URL": "https://www.predictsafe.com",
+    "NEXT_PUBLIC_SUPABASE_URL": "https://wxomppvvpwjvjxvttsog.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind4b21wcHZ2cHdqdmp4dnR0c29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2NjQ1NjMsImV4cCI6MjA3OTI0MDU2M30.dZlVtcI1-qlFTgQNTWg5h4HIEpHqRQJyW6pTXwPo4Vw",
+    "NEXT_PUBLIC_GA_ID": "G-7KDF121W18",
+    "SMTP_USER": "predictsafe@gmail.com"
   }
+
+  /*
+   * SECRETS ARE DELIBERATELY NOT IN THIS FILE.
+   *
+   * This repository is PUBLIC. This file is tracked in it. Anything added to
+   * the `vars` block above is readable by anyone on the internet, immediately
+   * and permanently - rotating the credential is the only way back, because
+   * every clone and fork keeps a copy of the history.
+   *
+   * That is not theoretical here: a live API-Sports key reached the public
+   * repo through .claude/settings.json, where permission entries had recorded
+   * curl commands with the key inline in a header. It had to be rotated.
+   *
+   * SUPABASE_SERVICE_ROLE_KEY in particular must never be committed. It
+   * bypasses row-level security entirely, so it is not "the database key" so
+   * much as unrestricted read, write and delete over every user, subscription
+   * and transaction in the project.
+   *
+   * Cloudflare stores secrets separately from `vars`, encrypted, and a deploy
+   * does NOT clear them - which is also why a secret is the *correct* fix for
+   * values that keep disappearing on deploy, not merely the safer one. Putting
+   * them in `vars` is what made them fragile in the first place.
+   *
+   * Production needs these set as secrets:
+   *
+   *   npx wrangler secret put API_FOOTBALL_KEY   # API-Sports v3 key
+   *   npx wrangler secret put SMTP_PASSWORD      # Gmail app password
+   *   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+   *
+   * SUPABASE_SERVICE_ROLE_KEY is what lets generated free picks be written to
+   * the generated_free_picks table. Without it the picks still work and are
+   * still deterministic, but they are rebuilt per request instead of stored,
+   * so the guarantee that every visitor sees an identical set is weaker.
+   *
+   * List what is currently set with:  npx wrangler secret list
+   *
+   * API_FOOTBALL_BASE_URL is not configured anywhere; lib/api-football.ts
+   * defaults to https://v3.football.api-sports.io, which is correct.
+   */
 }
