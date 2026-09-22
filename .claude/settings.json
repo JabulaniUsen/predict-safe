@@ -2,14 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(mkdir -p \"/Users/mac/Desktop/Client projects/predict-safe/components/tips\" \"/Users/mac/Desktop/Client projects/predict-safe/app/tips/[slug]\" \"/Users/mac/Desktop/Client projects/predict-safe/app/admin/pages\")",
-      "Bash(curl -s -X GET \"https://v3.football.api-sports.io/status\" -H \"x-apisports-key: e710b5ae21c00787ae7d37db87d64d29\")",
-      "Bash(curl -s 'https://v3.football.api-sports.io/fixtures?date=2026-06-14&league=39&season=2025' -H 'x-apisports-key: e710b5ae21c00787ae7d37db87d64d29')",
-      "Bash(curl -s 'https://v3.football.api-sports.io/fixtures?date=2026-05-24&league=39&season=2025' -H 'x-apisports-key: e710b5ae21c00787ae7d37db87d64d29')",
       "Bash(python3 -m json.tool)",
-      "Bash(curl -s https://v3.football.api-sports.io/odds?fixture=1379342 -H 'x-apisports-key: e710b5ae21c00787ae7d37db87d64d29')",
-      "Bash(curl -s https://v3.football.api-sports.io/fixtures?date=2026-06-15 -H 'x-apisports-key: e710b5ae21c00787ae7d37db87d64d29')",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d['results']\\); [print\\(f['fixture']['id'], f['league']['name'], f['teams']['home']['name'],'vs',f['teams']['away']['name'], f['fixture']['status']['short']\\) for f in d['response'][:10]]\")",
-      "Bash(curl -s https://v3.football.api-sports.io/odds?fixture=1539002 -H 'x-apisports-key: e710b5ae21c00787ae7d37db87d64d29')",
       "Read(//private/tmp/**)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000)",
       "Bash(curl -s \"http://localhost:3001/api/football/fixtures?from=2026-05-24&to=2026-05-24\")",
