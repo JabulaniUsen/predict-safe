@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { PredictionSchema } from '@/components/seo/prediction-schema'
+import { MelBetHomepageBanner } from '@/components/ads/melbet-homepage-banner'
 import { createClient } from '@/lib/supabase/server'
 import { DeferUntilVisible } from '@/components/ui/defer-until-visible'
 
@@ -96,6 +97,14 @@ export default async function HomePage() {
         <Suspense fallback={<div className="py-8"><div className="container mx-auto px-4">Loading predictions...</div></div>}>
           <FreePredictionsSection />
         </Suspense>
+        {/*
+          MelBet affiliate — standard homepage banner.
+          Deliberately placed here (below free picks, above VIP history):
+          NOT in the hero and NOT in any premium inventory slot
+          (hero / header / leaderboard / sticky footer / exclusive sponsor).
+          Swap in official creative via imageSrc when supplied.
+        */}
+        <MelBetHomepageBanner />
         {/*
           These sections fetch their own data on mount, so none of their
           content is in the server HTML anyway. Holding them back until the

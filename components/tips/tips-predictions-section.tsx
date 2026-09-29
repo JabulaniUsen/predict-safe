@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Fragment, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -14,6 +14,14 @@ import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { CalendarIcon, Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
+import { MelBetBetNow } from '@/components/ads/melbet-betnow'
+
+/**
+ * Position of the single MelBet in-feed ad: after this many predictions.
+ * One static instance per list — never inside a prediction card, no popups,
+ * no repeat-on-refresh. If the list is shorter, the ad renders once at the end.
+ */
+const MELBET_IN_FEED_POSITION = 3
 
 const FILTERS = [
   { id: 'free', label: 'Safe free picks', slug: 'safe-free-picks' },
@@ -340,15 +348,15 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
           <>
             {/* Mobile View */}
             <div className="lg:hidden space-y-3">
-              {predictions.map((prediction) => (
-                <div
-                  key={prediction.id}
-                  onClick={() => {
-                    const matchId = `${prediction.match_id}-${prediction.prediction_type}`
-                    window.location.href = `/match/${encodeURIComponent(matchId)}`
-                  }}
-                  className="bg-gray-100 rounded-lg p-3 space-y-2 cursor-pointer hover:bg-gray-200 transition-colors"
-                >
+              {predictions.map((prediction, index) => (
+                <Fragment key={prediction.id}>
+                  <div
+                    onClick={() => {
+                      const matchId = `${prediction.match_id}-${prediction.prediction_type}`
+                      window.location.href = `/match/${encodeURIComponent(matchId)}`
+                    }}
+                    className="bg-gray-100 rounded-lg p-3 space-y-2 cursor-pointer hover:bg-gray-200 transition-colors"
+                  >
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-700">{formatTime(prediction.kickoff_time)}</span>
                     <div className="flex items-center gap-2">
@@ -402,7 +410,14 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
                       <CircularProgress value={prediction.confidence} size={40} strokeWidth={3} />
                     </div>
                   </div>
-                </div>
+                  </div>
+                  {/* MelBet in-feed: between groups, never inside a card. Single instance. */}
+                  {(index === MELBET_IN_FEED_POSITION - 1 ||
+                    (predictions.length < MELBET_IN_FEED_POSITION &&
+                      index === predictions.length - 1)) && (
+                    <MelBetBetNow />
+                  )}
+                </Fragment>
               ))}
             </div>
 
@@ -418,18 +433,18 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
                 <div className="col-span-2 text-center">Confidence</div>
               </div>
               {predictions.map((prediction, index) => (
-                <div
-                  key={prediction.id}
-                  onClick={() => {
-                    const matchId = `${prediction.match_id}-${prediction.prediction_type}`
-                    window.location.href = `/match/${encodeURIComponent(matchId)}`
-                  }}
-                  className={cn(
-                    'px-6 py-5 grid grid-cols-12 gap-4 items-center border-b border-gray-100 bg-white hover:bg-gradient-to-r hover:from-blue-50 hover:to-green-50 hover:shadow-md transition-all duration-300 cursor-pointer transform hover:scale-[1.01] hover:border-l-4 hover:border-l-[#22c55e]',
-                    index === predictions.length - 1 && 'border-b-0',
-                    index % 2 === 0 && 'bg-gray-50/50'
-                  )}
-                >
+                <Fragment key={prediction.id}>
+                  <div
+                    onClick={() => {
+                      const matchId = `${prediction.match_id}-${prediction.prediction_type}`
+                      window.location.href = `/match/${encodeURIComponent(matchId)}`
+                    }}
+                    className={cn(
+                      'px-6 py-5 grid grid-cols-12 gap-4 items-center border-b border-gray-100 bg-white hover:bg-gradient-to-r hover:from-blue-50 hover:to-green-50 hover:shadow-md transition-all duration-300 cursor-pointer transform hover:scale-[1.01] hover:border-l-4 hover:border-l-[#22c55e]',
+                      index === predictions.length - 1 && 'border-b-0',
+                      index % 2 === 0 && 'bg-gray-50/50'
+                    )}
+                  >
                   <div className="col-span-2">
                     <div className="text-sm font-medium text-gray-900">{formatTime(prediction.kickoff_time)}</div>
                     <div className="text-xs text-gray-500 mt-1 truncate">{prediction.league}</div>
@@ -479,7 +494,16 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
                   <div className="col-span-2 flex justify-center">
                     <CircularProgress value={prediction.confidence} size={50} strokeWidth={5} />
                   </div>
-                </div>
+                  </div>
+                  {/* MelBet in-feed: between groups, never inside a card. Single instance. */}
+                  {(index === MELBET_IN_FEED_POSITION - 1 ||
+                    (predictions.length < MELBET_IN_FEED_POSITION &&
+                      index === predictions.length - 1)) && (
+                    <div className="border-b border-gray-100 bg-gray-50/50 px-6 py-4">
+                      <MelBetBetNow />
+                    </div>
+                  )}
+                </Fragment>
               ))}
             </div>
           </>
