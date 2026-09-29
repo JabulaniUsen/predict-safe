@@ -4,7 +4,7 @@ import { DashboardLayout } from '@/components/dashboard/dashboard-layout'
 import { DashboardContent } from '@/components/dashboard/dashboard-content'
 import { Database } from '@/types/database'
 import { UserSubscriptionWithPlan } from '@/types'
-import { notifySubscriptionEvent } from '@/lib/notifications'
+import { deactivateExpiredSubscriptions } from '@/lib/subscriptions/deactivate-expired'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -50,35 +50,21 @@ export default async function DashboardPage() {
     .eq('user_id', user.id)
   const subscriptions = subscriptionsRaw as UserSubscriptionWithPlan[] | null
 
-  // Check for expired subscriptions, update DB and notify in parallel (non-blocking)
+  // Deactivate past-due plans on visit so expiry takes effect even if the
+  // scheduled check hasn't run yet. Awaited: fire-and-forget updates from a
+  // Server Component may be killed before they hit the database.
   if (subscriptions) {
-    const now = new Date()
-    const expiredSubs = subscriptions.filter(
-      (sub) => sub.plan_status === 'active' && sub.expiry_date && new Date(sub.expiry_date) < now
-    )
-
-    if (expiredSubs.length > 0) {
-      // Run all DB updates in parallel, don't await — page render must not be blocked
-      Promise.all(
-        expiredSubs.map((sub) =>
-          (supabase.from('user_subscriptions') as any)
-            .update({ plan_status: 'expired' })
-            .eq('id', sub.id)
-            .then(() => {
-              const plan = sub.plan as any
-              return notifySubscriptionEvent(
-                user.id,
-                plan?.name || 'Unknown Plan',
-                'expired',
-                userProfile?.email,
-                userProfile?.full_name || undefined
-              )
-            })
-        )
-      ).catch((err) => console.error('Error processing expired subscriptions:', err))
-
-      // Reflect the status change in memory so the page renders correctly immediately
-      expiredSubs.forEach((sub) => { sub.plan_status = 'expired' })
+    try {
+      const { ids } = await deactivateExpiredSubscriptions(supabase as any)
+      if (ids.length > 0) {
+        // Reflect the deactivation in memory so the page renders correctly
+        const deactivatedIds = new Set(ids)
+        subscriptions.forEach((sub) => {
+          if (deactivatedIds.has(sub.id)) sub.plan_status = 'inactive'
+        })
+      }
+    } catch (err) {
+      console.error('Error deactivating expired subscriptions:', err)
     }
   }
 

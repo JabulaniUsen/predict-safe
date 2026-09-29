@@ -16,6 +16,7 @@ import { toast } from 'sonner'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import { cn } from '@/lib/utils'
 import { ActivationFeeModal } from './activation-fee-modal'
+import { isSubscriptionPastDue } from '@/lib/subscriptions/status'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { format } from 'date-fns'
@@ -92,6 +93,13 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
     // Must be active status
     if (subscription.plan_status !== 'active') {
       console.log('🔒 Plan not unlocked: Subscription status is', subscription.plan_status, 'for plan', planId)
+      return false
+    }
+
+    // Treat past-due rows as inactive even if the status column hasn't been
+    // rewritten yet (no cron job — expiry is enforced at access time).
+    if (isSubscriptionPastDue(subscription)) {
+      console.log('🔒 Plan not unlocked: Subscription past expiry date for plan', planId)
       return false
     }
     

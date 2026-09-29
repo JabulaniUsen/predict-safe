@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { deactivateExpiredSubscriptions } from '@/lib/subscriptions/deactivate-expired'
 import { DashboardLayout } from '@/components/dashboard/dashboard-layout'
 import { VIPWinningsSection } from '@/components/home/vip-winnings-section'
 
@@ -20,6 +21,14 @@ export default async function WinningsPage() {
     .select('*, countries(*)')
     .eq('id', user.id)
     .single()
+
+  // Deactivate past-due plans on visit (awaited) so the 'active' filter
+  // below never includes expired plans — no cron job required.
+  try {
+    await deactivateExpiredSubscriptions(supabase as any)
+  } catch (err) {
+    console.error('Error deactivating expired subscriptions:', err)
+  }
 
   // Get user's active subscriptions to filter VIP wins by their plans
   const { data: subscriptions } = await supabase

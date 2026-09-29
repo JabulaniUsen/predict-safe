@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
+import { deactivateExpiredSubscriptions } from '@/lib/subscriptions/deactivate-expired'
 import { DashboardLayout } from '@/components/dashboard/dashboard-layout'
 import { PredictionsList } from '@/components/dashboard/predictions-list'
 
@@ -21,6 +22,14 @@ export default async function PredictionsPage() {
     .select('*')
     .eq('id', user.id)
     .single()
+
+  // Deactivate past-due plans on visit (awaited) so expiry takes effect
+  // without any cron job or background worker.
+  try {
+    await deactivateExpiredSubscriptions(supabase as any)
+  } catch (err) {
+    console.error('Error deactivating expired subscriptions:', err)
+  }
 
   // Get all active plans
   const { data: allPlans } = await supabase

@@ -240,7 +240,13 @@ export function DashboardContent({
                     const isActive = subscription.plan_status === 'active'
                     const isPending = subscription.plan_status === 'pending'
                     const isPendingActivation = subscription.plan_status === 'pending_activation'
-                    const isExpired = subscription.plan_status === 'expired'
+                    // Expired plans are deactivated to 'inactive' — still show
+                    // them as expired (rather than merely unsubscribed) when
+                    // they carry a past expiry date.
+                    const isExpired = subscription.plan_status === 'expired' ||
+                      (subscription.plan_status === 'inactive' &&
+                        subscription.expiry_date &&
+                        new Date(subscription.expiry_date) < new Date())
                     
                     return (
                       <div

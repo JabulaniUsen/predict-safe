@@ -1,86 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { notifySubscriptionEvent } from '@/lib/notifications'
+import { createServiceClient } from '@/lib/supabase/service'
+import { deactivateExpiredSubscriptions } from '@/lib/subscriptions/deactivate-expired'
 
-export async function POST(request: NextRequest) {
+export const dynamic = 'force-dynamic'
+
+function isAuthorized(request: NextRequest, cronToken: string | undefined, userIsAdmin: boolean) {
+  if (userIsAdmin) return true
+  if (!cronToken) return false
+  const authHeader = request.headers.get('authorization')
+  return authHeader === `Bearer ${cronToken}`
+}
+
+async function handleCheckExpired(request: NextRequest) {
   try {
     const supabase = await createClient()
-    
-    // Check if user is admin (for manual trigger) or allow system calls
-    const { data: { user } } = await supabase.auth.getUser()
-    const authHeader = request.headers.get('authorization')
-    const systemToken = process.env.SYSTEM_API_TOKEN
 
-    // Allow if admin or system token matches
+    // Check if caller is an admin (for manual trigger)
+    let userIsAdmin = false
+    const { data: { user } } = await supabase.auth.getUser()
     if (user) {
       const userProfileResult: any = await supabase
         .from('users')
         .select('is_admin')
         .eq('id', user.id)
         .single()
-      const userProfile = userProfileResult.data as { is_admin: boolean } | null
+      userIsAdmin = userProfileResult.data?.is_admin === true
+    }
 
-      if (!userProfile?.is_admin && (!systemToken || authHeader !== `Bearer ${systemToken}`)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-    } else if (!systemToken || authHeader !== `Bearer ${systemToken}`) {
+    const cronToken = process.env.SYSTEM_API_TOKEN || process.env.CRON_SECRET
+
+    if (!isAuthorized(request, cronToken, userIsAdmin)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const now = new Date().toISOString()
-
-    // Find expired subscriptions
-    const { data: expiredSubscriptions } = await supabase
-      .from('user_subscriptions')
-      .select(`
-        id,
-        user_id,
-        plan_id,
-        expiry_date,
-        plan_status,
-        plans!inner(name),
-        users!inner(email, full_name)
-      `)
-      .eq('plan_status', 'active')
-      .lt('expiry_date', now)
-
-    if (!expiredSubscriptions || expiredSubscriptions.length === 0) {
-      return NextResponse.json({ 
-        message: 'No expired subscriptions found',
-        checked: 0,
-        expired: 0
-      })
-    }
-
-    let expired = 0
-    for (const sub of expiredSubscriptions) {
-      const subData = sub as any
-      const plan = subData.plans
-      const user = subData.users
-
-      // Update subscription status to expired
-      await supabase
-        .from('user_subscriptions')
-        // @ts-expect-error - Supabase type inference issue
-        .update({ plan_status: 'expired' })
-        .eq('id', subData.id)
-
-      // Notify user
-      await notifySubscriptionEvent(
-        subData.user_id,
-        plan.name,
-        'expired',
-        user?.email,
-        user?.full_name || undefined
+    // Cron/system calls have no user session, so the anon client is blocked by
+    // RLS — use the service client (bypasses RLS) when available.
+    const serviceClient = createServiceClient()
+    const db = serviceClient ?? supabase
+    if (!serviceClient && !user) {
+      return NextResponse.json(
+        { error: 'Server misconfigured: SUPABASE_SERVICE_ROLE_KEY is not set' },
+        { status: 500 }
       )
-
-      expired++
     }
 
-    return NextResponse.json({ 
-      message: 'Expired subscriptions checked',
-      checked: expiredSubscriptions.length,
-      expired
+    const { checked, deactivated, ids } = await deactivateExpiredSubscriptions(db)
+
+    return NextResponse.json({
+      message: deactivated === 0 ? 'No expired subscriptions found' : 'Expired plans deactivated',
+      checked,
+      expired: deactivated,
+      deactivated,
+      ids,
     })
   } catch (error: any) {
     console.error('Error checking expired subscriptions:', error)
@@ -88,3 +60,11 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function POST(request: NextRequest) {
+  return handleCheckExpired(request)
+}
+
+// GET support for cron providers that can only issue GET requests.
+export async function GET(request: NextRequest) {
+  return handleCheckExpired(request)
+}

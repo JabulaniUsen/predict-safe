@@ -25,6 +25,9 @@ interface CreateNotificationParams {
   /** Subscriber email used in admin-facing templates as context info. */
   userEmail?: string
   userName?: string
+  /** Optional pre-built Supabase client (e.g. service client for cron jobs).
+   *  Defaults to the request-scoped server client. */
+  db?: any
 }
 
 export async function createNotification({
@@ -37,8 +40,9 @@ export async function createNotification({
   recipientEmail,
   userEmail,
   userName,
+  db,
 }: CreateNotificationParams) {
-  const supabase = await createClient()
+  const supabase = db ?? (await createClient())
 
   // Create notification in database
   const { data: notification, error } = await supabase
@@ -155,7 +159,8 @@ export async function notifySubscriptionEvent(
   planName: string,
   event: 'confirmed' | 'expired' | 'removed',
   userEmail?: string,
-  userName?: string
+  userName?: string,
+  db?: any
 ) {
   const typeMap = {
     confirmed: 'subscription_confirmed' as NotificationType,
@@ -183,6 +188,7 @@ export async function notifySubscriptionEvent(
     planName,
     userEmail,
     userName,
+    db,
   })
 }
 
