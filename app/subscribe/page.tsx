@@ -225,7 +225,15 @@ function SubscribeContent() {
     if (step === 'activation' && plan.requires_activation) {
       router.push(`/payment?plan=${plan.id}&price=${selectedPrice.id}&type=activation`)
     } else {
-      router.push(`/payment?plan=${plan.id}&price=${selectedPrice.id}&duration=${selectedDuration}`)
+      // Subscriptions go through /checkout, which renders the admin-managed
+      // payment methods (account details + instructions). /payment is a
+      // hardcoded demo page that shows none of that.
+      const params = new URLSearchParams({
+        plan: plan.slug,
+        duration: String(selectedDuration),
+      })
+      if (selectedCountry) params.set('country', selectedCountry)
+      router.push(`/checkout?${params.toString()}`)
     }
   }
 

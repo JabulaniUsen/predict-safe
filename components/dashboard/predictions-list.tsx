@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
-import { predictionsForDate } from '@/lib/queries/predictions'
+import { predictionsForPublishedDate } from '@/lib/queries/predictions'
+import { UnpublishedNotice } from '@/components/predictions/unpublished-notice'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -39,6 +40,7 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
   const [predictions, setPredictions] = useState<Prediction[]>([])
   const [correctScorePredictions, setCorrectScorePredictions] = useState<CorrectScorePrediction[]>([])
   const [loading, setLoading] = useState(false)
+  const [unpublished, setUnpublished] = useState(false)
   const [teamLogos, setTeamLogos] = useState<TeamLogoCache>({})
   const [subscriptions, setSubscriptions] = useState<UserSubscriptionWithPlan[]>(initialSubscriptions)
 
@@ -250,11 +252,14 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
       // Fetch correct score predictions from predictions table where plan_type = 'correct_score'
       // A locked plan shows fewer rows, but they are the first rows of the same
       // set - never a different selection.
-      const { data, error } = await predictionsForDate(supabase, {
+      // Gated: unpublished dates return no rows for anyone until the admin
+      // publishes the day.
+      const { data, error, unpublished: isUnpublished } = await predictionsForPublishedDate(supabase, {
         date: from,
         planType: 'correct_score',
         limit: isUnlockedForFetch ? undefined : 3,
       })
+      setUnpublished(isUnpublished)
 
       if (error) {
         console.error('Error fetching correct score predictions:', error)
@@ -295,11 +300,12 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
         ? selectedPlan.max_predictions_per_day ?? undefined
         : 3
 
-      const { data, error } = await predictionsForDate(supabase, {
+      const { data, error, unpublished: isUnpublished } = await predictionsForPublishedDate(supabase, {
         date: from,
         planType,
         limit,
       })
+      setUnpublished(isUnpublished)
 
       if (error) {
         console.error('Error fetching predictions:', error)
@@ -490,6 +496,8 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
             </Card>
           ))}
         </div>
+      ) : unpublished ? (
+        <UnpublishedNotice />
       ) : !isUnlocked ? (
         // Check if needs activation fee payment
         needsActivationFee ? (

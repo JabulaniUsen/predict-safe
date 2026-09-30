@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { predictionsForDate } from '@/lib/queries/predictions'
+import { predictionsForPublishedDate } from '@/lib/queries/predictions'
+import { UnpublishedNotice } from '@/components/predictions/unpublished-notice'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -16,6 +17,7 @@ export function ProfitMultiplierSection() {
   const [predictions, setPredictions] = useState<Prediction[]>([])
   const [dateType, setDateType] = useState<'previous' | 'today' | 'tomorrow'>('today')
   const [loading, setLoading] = useState(true)
+  const [unpublished, setUnpublished] = useState(false)
   const [user, setUser] = useState<any>(null)
 
   useEffect(() => {
@@ -32,11 +34,14 @@ export function ProfitMultiplierSection() {
       // homepage preview and the admin dashboard disagreed about what was
       // provided on a given day. It's now the first few of the same set.
       const { from } = getDateRange(dateType)
-      const { data, error } = await predictionsForDate(supabase, {
+      // Gated: an unpublished date returns no rows, so nothing about the new
+      // day leaks to timezones ahead of the admin before review.
+      const { data, error, unpublished: isUnpublished } = await predictionsForPublishedDate<Prediction>(supabase, {
         date: from,
         planType: 'profit_multiplier',
         limit: 3,
       })
+      setUnpublished(isUnpublished)
 
       if (error) {
         console.error('Error fetching predictions:', error)
@@ -113,6 +118,8 @@ export function ProfitMultiplierSection() {
               </Card>
             ))}
           </div>
+        ) : unpublished ? (
+          <UnpublishedNotice />
         ) : predictions.length === 0 ? (
           <Card className="relative border-2 border-gray-200">
             <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-10 rounded-lg">

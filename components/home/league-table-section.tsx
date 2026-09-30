@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -9,48 +9,91 @@ import { getStandings, TOP_LEAGUES, getLeagueName, Standing } from '@/lib/api-fo
 export function LeagueTableSection() {
   const [standings, setStandings] = useState<Record<string, Standing[]>>({})
   const [loading, setLoading] = useState(true)
+  const [loadingLeague, setLoadingLeague] = useState<string | null>(null)
+  const [rateLimited, setRateLimited] = useState(false)
+  const [retryToken, setRetryToken] = useState(0)
   const [activeLeague, setActiveLeague] = useState(TOP_LEAGUES.PREMIER_LEAGUE)
+  // Leagues already requested (success or fail) — each tab fetches at most
+  // once per mount, and a failed tab can be retried via the retry button.
+  const requestedRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
-    const fetchStandings = async () => {
-      setLoading(true)
-      const leagues = Object.values(TOP_LEAGUES)
-      const standingsData: Record<string, Standing[]> = {}
+    let cancelled = false
+
+    // Already have this league (or already asked) — nothing to do.
+    if (standings[activeLeague] || requestedRef.current.has(activeLeague)) {
+      setLoading(false)
+      setLoadingLeague(null)
+      return
+    }
+    requestedRef.current.add(activeLeague)
+
+    const initial = Object.keys(standings).length === 0
+
+    const fetchLeague = async () => {
+      if (initial) {
+        setLoading(true)
+      } else {
+        setLoadingLeague(activeLeague)
+      }
+      setRateLimited(false)
 
       try {
-        await Promise.all(
-          leagues.map(async (leagueId) => {
-            try {
-              const data = await getStandings(leagueId)
-              // Ensure data is an array
-              if (Array.isArray(data)) {
-                standingsData[leagueId] = data
-              } else if (data && typeof data === 'object') {
-                // Try to extract array from response object
-                const arrayData = Object.values(data).find((val: any) => Array.isArray(val))
-                standingsData[leagueId] = Array.isArray(arrayData) ? arrayData : []
-              } else {
-                standingsData[leagueId] = []
-              }
-            } catch (error) {
-              console.error(`Error fetching standings for ${leagueId}:`, error)
-              standingsData[leagueId] = []
-            }
-          })
-        )
-
-        setStandings(standingsData)
+        const data = await getStandings(activeLeague)
+        if (cancelled) return
+        // Ensure data is an array
+        let rows: Standing[] = []
+        if (Array.isArray(data)) {
+          rows = data
+        } else if (data && typeof data === 'object') {
+          // Try to extract array from response object
+          const arrayData = Object.values(data).find((val: unknown) => Array.isArray(val))
+          rows = Array.isArray(arrayData) ? (arrayData as Standing[]) : []
+        }
+        setStandings((prev) => ({ ...prev, [activeLeague]: rows }))
       } catch (error) {
-        console.error('Error fetching standings:', error)
+        if (cancelled) return
+        console.error(`Error fetching standings for ${activeLeague}:`, error)
+        // A 429 carries a "try again shortly" message from our API route —
+        // tell the user to retry rather than showing a bare empty table.
+        if (error instanceof Error && error.message.includes('updating')) {
+          setRateLimited(true)
+        }
+        setStandings((prev) => (prev[activeLeague] ? prev : { ...prev, [activeLeague]: [] }))
       } finally {
-        setLoading(false)
+        if (!cancelled) {
+          if (initial) {
+            setLoading(false)
+          } else {
+            setLoadingLeague(null)
+          }
+        }
       }
     }
 
-    fetchStandings()
-  }, [])
+    // Lazy per-tab fetching: only the visible league is requested. Fetching
+    // all 7 leagues up front in parallel is what blew through the provider's
+    // per-minute request limit (one burst per visitor, every visit).
+    fetchLeague()
+
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLeague, retryToken])
+
+  const handleRetry = () => {
+    requestedRef.current.delete(activeLeague)
+    setStandings((prev) => {
+      const next = { ...prev }
+      delete next[activeLeague]
+      return next
+    })
+    setRetryToken((n) => n + 1)
+  }
 
   const currentStandings = standings[activeLeague] || []
+  const switching = loadingLeague === activeLeague
 
   return (
     <section className="py-8 lg:py-16 bg-gray-50">
@@ -76,8 +119,20 @@ export function LeagueTableSection() {
               </div>
               {Object.values(TOP_LEAGUES).map((leagueId) => (
                 <TabsContent key={leagueId} value={leagueId} className="m-0">
-                  {loading ? (
+                  {loading || switching ? (
                     <div className="py-12 text-center">Loading standings...</div>
+                  ) : rateLimited && currentStandings.length === 0 ? (
+                    <div className="py-12 text-center space-y-3">
+                      <p className="text-muted-foreground">
+                        Standings are updating. Please try again shortly.
+                      </p>
+                      <button
+                        onClick={handleRetry}
+                        className="px-4 py-2 rounded-md bg-[#1e40af] text-white text-sm font-medium hover:bg-[#1e3a8a]"
+                      >
+                        Try again
+                      </button>
+                    </div>
                   ) : currentStandings.length === 0 ? (
                     <div className="py-12 text-center text-muted-foreground">
                       No standings available

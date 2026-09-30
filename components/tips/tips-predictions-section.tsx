@@ -15,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { CalendarIcon, Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { MelBetBetNow } from '@/components/ads/melbet-betnow'
+import { UnpublishedNotice } from '@/components/predictions/unpublished-notice'
 
 /**
  * Position of the single MelBet in-feed ad: after this many predictions.
@@ -65,6 +66,7 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
   const [daysBack, setDaysBack] = useState<number>(1)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
+  const [unpublished, setUnpublished] = useState(false)
   const [retryToken, setRetryToken] = useState(0)
 
   const handleFilterChange = (filterId: string) => {
@@ -97,6 +99,7 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
         const data = await response.json()
         if (cancelled) return
 
+        setUnpublished(data.unpublished === true)
         setPredictions(Array.isArray(data.picks) ? data.picks : [])
       } catch (error) {
         console.error('Error fetching tips:', error)
@@ -338,6 +341,8 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
               </Button>
             </CardContent>
           </Card>
+        ) : unpublished ? (
+          <UnpublishedNotice />
         ) : predictions.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">

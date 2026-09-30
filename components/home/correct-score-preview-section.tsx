@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { predictionsForDate } from '@/lib/queries/predictions'
+import { predictionsForPublishedDate } from '@/lib/queries/predictions'
+import { UnpublishedNotice } from '@/components/predictions/unpublished-notice'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -16,6 +17,7 @@ export function CorrectScorePreviewSection() {
   const [predictions, setPredictions] = useState<CorrectScorePrediction[]>([])
   const [dateType, setDateType] = useState<'previous' | 'today' | 'tomorrow'>('today')
   const [loading, setLoading] = useState(true)
+  const [unpublished, setUnpublished] = useState(false)
   const [user, setUser] = useState<any>(null)
 
   useEffect(() => {
@@ -31,11 +33,14 @@ export function CorrectScorePreviewSection() {
       // the first few of exactly the same set the admin dashboard and a
       // subscribed user see - only the count differs.
       const { from } = getDateRange(dateType)
-      const { data, error } = await predictionsForDate(supabase, {
+      // Gated: an unpublished date returns no rows, so scores/statuses can't
+      // leak through the lock overlay to timezones ahead of the admin.
+      const { data, error, unpublished: isUnpublished } = await predictionsForPublishedDate(supabase, {
         date: from,
         planType: 'correct_score',
         limit: 3,
       })
+      setUnpublished(isUnpublished)
 
       if (error) {
         console.error('Error fetching predictions:', error)
@@ -126,6 +131,8 @@ export function CorrectScorePreviewSection() {
               </Card>
             ))}
           </div>
+        ) : unpublished ? (
+          <UnpublishedNotice />
         ) : predictions.length === 0 ? (
           <Card className="relative border-2 border-gray-200">
             <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-10 rounded-lg">

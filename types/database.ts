@@ -596,6 +596,29 @@ export interface Database {
           updated_at?: string
         }
       }
+      daily_publications: {
+        Row: {
+          prediction_date: string
+          is_published: boolean
+          published_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          prediction_date: string
+          is_published?: boolean
+          published_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          prediction_date?: string
+          is_published?: boolean
+          published_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
       link_partnerships: {
         Row: {
           id: string

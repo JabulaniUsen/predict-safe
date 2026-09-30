@@ -101,7 +101,7 @@ export function Navbar() {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="lg:h-20 lg:w-40 h-20 w-24">
+          <Link href="/" className="lg:h-20 lg:w-40 h-12 w-16">
             <Image
               src="/logo.png"
               alt={`${siteHeader} Logo`}

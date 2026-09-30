@@ -392,6 +392,43 @@ const providerCache = new Map<string, { data: any; expires: number }>()
 const inFlightRequests = new Map<string, Promise<any>>()
 
 /**
+ * Per-endpoint cache lifetimes. Standings only move when full-time results
+ * are processed (a few times a day at most), so a short TTL just burns quota
+ * and invites per-minute throttling for data that hasn't changed. Fixtures
+ * and odds stay short-lived because scores move.
+ */
+const PROVIDER_TTL_BY_PATH: Record<string, number> = {
+  standings: 6 * 60 * 60 * 1000, // 6 hours
+  teams: 24 * 60 * 60 * 1000, // 24 hours
+  leagues: 24 * 60 * 60 * 1000, // 24 hours
+}
+
+function ttlForPath(path: string): number {
+  const base = path.split('/')[0]
+  return PROVIDER_TTL_BY_PATH[base] ?? PROVIDER_CACHE_TTL_MS
+}
+
+/** Thrown when API-Sports refuses a call with a per-minute `rateLimit` error. */
+export class RateLimitError extends Error {
+  constructor(path: string, detail: string) {
+    super(`API rate limited (${path}): ${detail}`)
+    this.name = 'RateLimitError'
+  }
+}
+
+export function isRateLimitError(error: unknown): boolean {
+  return error instanceof RateLimitError
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** Backoff between rate-limit retries. Keeps total added latency ~11s worst case. */
+const RATE_LIMIT_RETRY_DELAYS_MS = [3000, 8000]
+const RATE_LIMIT_MAX_RETRIES = RATE_LIMIT_RETRY_DELAYS_MS.length
+
+/**
  * Rejects a provider payload that cannot be used.
  *
  * API-Sports answers with HTTP 200 even when it is refusing the request, so
@@ -417,7 +454,13 @@ function assertUsableProviderPayload(path: string, data: unknown): void {
       : 0
 
   if (errorCount > 0) {
-    throw new Error(`API Error (${path}): ${JSON.stringify(errors)}`)
+    const detail = JSON.stringify(errors)
+    // Per-minute throttling is transient and retryable; every other provider
+    // refusal (daily quota, bad token) is not.
+    if (errors && typeof errors === 'object' && 'rateLimit' in (errors as Record<string, unknown>)) {
+      throw new RateLimitError(path, detail)
+    }
+    throw new Error(`API Error (${path}): ${detail}`)
   }
 
   if (!Array.isArray(payload.response)) {
@@ -447,36 +490,53 @@ async function callProvider(path: string, params: Record<string, string> = {}) {
 
   const requestPromise = (async () => {
     try {
-      const response = await fetch(url, {
-        headers: { 'x-apisports-key': API_KEY },
-      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let data: any
+      let attempts = 0
+      for (;;) {
+        const response = await fetch(url, {
+          headers: { 'x-apisports-key': API_KEY },
+        })
 
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`)
+        if (response.status === 429) {
+          // HTTP-level throttling (proxies / edge). Same treatment as the
+          // in-body rateLimit refusal below.
+          if (attempts >= RATE_LIMIT_MAX_RETRIES) {
+            throw new RateLimitError(path, `HTTP 429 after ${attempts + 1} attempts`)
+          }
+          await sleep(RATE_LIMIT_RETRY_DELAYS_MS[attempts])
+          attempts += 1
+          continue
+        }
+
+        if (!response.ok) {
+          throw new Error(`API Error: ${response.status} ${response.statusText}`)
+        }
+
+        data = await response.json()
+
+        try {
+          assertUsableProviderPayload(path, data)
+          break
+        } catch (error) {
+          if (!isRateLimitError(error) || attempts >= RATE_LIMIT_MAX_RETRIES) {
+            throw error
+          }
+          await sleep(RATE_LIMIT_RETRY_DELAYS_MS[attempts])
+          attempts += 1
+        }
       }
 
-      const data = await response.json()
-
-      // A 200 does not mean the call worked. API-Sports reports quota
-      // exhaustion, per-minute throttling and bad tokens in the body, with an
-      // HTTP 200 and no `response` array.
-      //
-      // This used to fall straight through to `data.response || []`, so a
-      // throttled call looked exactly like "there are no fixtures today" - and
-      // then that empty answer was cached for two minutes and served to
-      // everyone who landed on the same isolate. Different visitors hit
-      // different isolates, so the same date showed a full card to one person,
-      // one game to another and nothing to a third, and "clearing your cache"
-      // appeared to fix it because a retry landed somewhere else.
-      assertUsableProviderPayload(path, data)
-
+      // `data` passed `assertUsableProviderPayload` inside the retry loop, so
+      // it is a genuinely usable payload. Failures never reach the cache and
+      // can never become a sticky empty result.
       if (providerCache.size >= PROVIDER_CACHE_MAX_ENTRIES) {
         const oldestKey = providerCache.keys().next().value
         if (oldestKey !== undefined) providerCache.delete(oldestKey)
       }
       // Only well-formed payloads are cached. A failure must never become a
       // sticky empty result.
-      providerCache.set(url, { data, expires: Date.now() + PROVIDER_CACHE_TTL_MS })
+      providerCache.set(url, { data, expires: Date.now() + ttlForPath(path) })
 
       return data
     } catch (error) {
