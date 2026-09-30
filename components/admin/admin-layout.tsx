@@ -91,6 +91,11 @@ const navItems: NavItem[] = [
     icon: <LinkIcon className="h-5 w-5 lg:h-6 lg:w-6" />
   },
   {
+    href: '/admin/seo/link-partnerships',
+    label: 'SEO Links',
+    icon: <Globe className="h-5 w-5 lg:h-6 lg:w-6" />
+  },
+  {
     href: '/admin/pages',
     label: 'Pages',
     icon: <Globe className="h-5 w-5 lg:h-6 lg:w-6" />

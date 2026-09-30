@@ -229,6 +229,11 @@ export function Footer() {
                   <span>Download App</span>
                 </Link>
               </li>
+              <li>
+                <Link href="/partners" className="text-gray-300 hover:text-white transition-colors flex items-center gap-2">
+                  <span>Our Partners</span>
+                </Link>
+              </li>
               {footerPages
                 .filter(p => p.footer_section === 'quick_links')
                 .map(p => (

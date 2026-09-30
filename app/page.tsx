@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { PredictionSchema } from '@/components/seo/prediction-schema'
+import { ExternalLinkPlacement } from '@/components/seo/external-link-placement'
 import { MelBetHomepageBanner } from '@/components/ads/melbet-homepage-banner'
 import { createClient } from '@/lib/supabase/server'
 import { DeferUntilVisible } from '@/components/ui/defer-until-visible'
@@ -151,6 +152,24 @@ export default async function HomePage() {
           <LeagueTableSection />
         </DeferUntilVisible>
         <AboutSection />
+        {/*
+          Link-partnership placement (SSR): active "recommended_platforms"
+          records render here as real crawlable <a href> anchors so partner
+          SEO tools can discover PredictSafe as a referring domain.
+          Renders nothing until a partnership is set Active in
+          Admin → SEO → Link Partnerships.
+        */}
+        <section className="py-8 bg-gray-50">
+          <div className="container mx-auto px-4">
+            <ExternalLinkPlacement
+              placement="recommended_platforms"
+              title="Recommended Platforms"
+              className="[&_h4]:text-gray-900 [&_h4]:text-xl"
+              listClassName="flex flex-wrap gap-x-6 gap-y-2 text-sm"
+              linkClassName="text-blue-600 hover:underline"
+            />
+          </div>
+        </section>
       </main>
       <Footer />
     </div>

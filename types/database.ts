@@ -596,6 +596,68 @@ export interface Database {
           updated_at?: string
         }
       }
+      link_partnerships: {
+        Row: {
+          id: string
+          partner_name: string
+          partner_domain: string
+          partner_website: string
+          target_url: string
+          anchor_text: string
+          placement: string
+          link_attribute: 'standard' | 'nofollow' | 'sponsored' | 'ugc'
+          status: 'pending' | 'active' | 'inactive'
+          display_order: number
+          their_backlink_url: string | null
+          our_target_url: string | null
+          their_anchor_text: string | null
+          their_link_status: 'expected' | 'confirmed' | 'removed'
+          notes: string | null
+          verified_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          partner_name: string
+          partner_domain: string
+          partner_website: string
+          target_url: string
+          anchor_text: string
+          placement?: string
+          link_attribute?: 'standard' | 'nofollow' | 'sponsored' | 'ugc'
+          status?: 'pending' | 'active' | 'inactive'
+          display_order?: number
+          their_backlink_url?: string | null
+          our_target_url?: string | null
+          their_anchor_text?: string | null
+          their_link_status?: 'expected' | 'confirmed' | 'removed'
+          notes?: string | null
+          verified_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          partner_name?: string
+          partner_domain?: string
+          partner_website?: string
+          target_url?: string
+          anchor_text?: string
+          placement?: string
+          link_attribute?: 'standard' | 'nofollow' | 'sponsored' | 'ugc'
+          status?: 'pending' | 'active' | 'inactive'
+          display_order?: number
+          their_backlink_url?: string | null
+          our_target_url?: string | null
+          their_anchor_text?: string | null
+          their_link_status?: 'expected' | 'confirmed' | 'removed'
+          notes?: string | null
+          verified_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
