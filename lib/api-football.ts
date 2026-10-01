@@ -1,4 +1,4 @@
-const API_KEY = process.env.API_FOOTBALL_KEY || 'e710b5ae21c00787ae7d37db87d64d29'
+const API_KEY = process.env.API_FOOTBALL_KEY || ''
 const BASE_URL = process.env.API_FOOTBALL_BASE_URL || 'https://v3.football.api-sports.io'
 
 export interface Fixture {
