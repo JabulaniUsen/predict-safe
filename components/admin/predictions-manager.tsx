@@ -10,8 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Prediction, Plan } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { Edit, Trash2, MoreVertical, Trophy, CalendarIcon, Globe, EyeOff } from 'lucide-react'
-import { setDatePublished } from '@/lib/daily-publications'
+import { Edit, Trash2, MoreVertical, Trophy, CalendarIcon } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -279,11 +278,6 @@ export function PredictionsManager({ plans, predictions: initialPredictions }: P
 
   const [activeTab, setActiveTab] = useState<string>(defaultTab)
 
-  // Whole-day publish gate: the active tab's date is hidden from every public
-  // surface (free, correct-score, VIP, dashboard) until published here.
-  const [publishedByDate, setPublishedByDate] = useState<Record<string, boolean>>({})
-  const [publishing, setPublishing] = useState(false)
-
   /**
    * Loads every prediction provided on `date`, regardless of how long ago it
    * was created, and caches it under that date.
@@ -338,55 +332,7 @@ export function PredictionsManager({ plans, predictions: initialPredictions }: P
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDate, activeTab])
 
-  // Track the publish state of the visible date (missing row = unpublished).
-  useEffect(() => {
-    if (!activeDate || publishedByDate[activeDate] !== undefined) return
-    let cancelled = false
-    const load = async () => {
-      try {
-        const supabase = createClient()
-        const { data } = await supabase
-          .from('daily_publications')
-          .select('is_published')
-          .eq('prediction_date', activeDate)
-          .maybeSingle()
-        if (!cancelled) {
-          setPublishedByDate((prev) => ({
-            ...prev,
-            [activeDate]: (data as { is_published: boolean } | null)?.is_published === true,
-          }))
-        }
-      } catch (error) {
-        console.error(`Error loading publish state for ${activeDate}:`, error)
-      }
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDate])
 
-  const handleTogglePublish = async () => {
-    if (!activeDate || publishing) return
-    const currentlyPublished = publishedByDate[activeDate] === true
-    setPublishing(true)
-    try {
-      const supabase = createClient()
-      await setDatePublished(supabase, activeDate, !currentlyPublished)
-      setPublishedByDate((prev) => ({ ...prev, [activeDate]: !currentlyPublished }))
-      toast.success(
-        !currentlyPublished
-          ? `Published ${activeDate} — predictions for this date are now visible site-wide.`
-          : `Unpublished ${activeDate} — predictions for this date are now hidden site-wide.`
-      )
-    } catch (error) {
-      console.error('Error toggling publish state:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to update publish state')
-    } finally {
-      setPublishing(false)
-    }
-  }
 
   // Fetch badges for whatever the current tab ended up showing.
   useEffect(() => {
@@ -569,40 +515,7 @@ export function PredictionsManager({ plans, predictions: initialPredictions }: P
     }
   }
 
-  const activePublished = publishedByDate[activeDate] === true
-
   return (
-    <>
-    {/* Publish gate for the visible date. Until published, free picks, locked
-        previews, VIP sections and the subscriber dashboard all show a "not
-        published yet" state instead of this date's content. */}
-    <Card className={activePublished ? 'border-green-200 bg-green-50' : 'border-yellow-200 bg-yellow-50'}>
-      <CardContent className="py-3 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm">
-          {activePublished ? (
-            <Globe className="h-4 w-4 text-green-700" />
-          ) : (
-            <EyeOff className="h-4 w-4 text-yellow-700" />
-          )}
-          <span>
-            <strong>{activeDate || '—'}</strong>
-            {' '}is {activePublished ? (
-              <Badge className="bg-green-600 ml-1">Published</Badge>
-            ) : (
-              <Badge variant="outline" className="ml-1 border-yellow-600 text-yellow-800">Unpublished — hidden site-wide</Badge>
-            )}
-          </span>
-        </div>
-        <Button
-          size="sm"
-          variant={activePublished ? 'outline' : 'default'}
-          onClick={handleTogglePublish}
-          disabled={publishing || !activeDate}
-        >
-          {publishing ? 'Saving…' : activePublished ? 'Unpublish this date' : 'Publish this date'}
-        </Button>
-      </CardContent>
-    </Card>
     <Tabs defaultValue={defaultTab} className="space-y-4" onValueChange={setActiveTab}>
       <div className="overflow-x-auto">
         <TabsList className="min-w-full">
@@ -1682,7 +1595,6 @@ export function PredictionsManager({ plans, predictions: initialPredictions }: P
         </DialogContent>
       </Dialog>
     </Tabs>
-    </>
   )
 }
 

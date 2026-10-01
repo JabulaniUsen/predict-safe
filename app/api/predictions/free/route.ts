@@ -45,23 +45,6 @@ export async function GET(request: NextRequest) {
     const filter = findFreePickFilter(filterId)
     const readClient = await createClient()
 
-    // Whole-day publish gate: never generate or serve picks for a date the
-    // admin hasn't published. Without this, the first visitor past local
-    // midnight (any timezone ahead of the admin) would auto-generate and see
-    // the new day before the admin has reviewed it.
-    const { data: publication } = await readClient
-      .from('daily_publications')
-      .select('is_published')
-      .eq('prediction_date', date)
-      .maybeSingle()
-
-    if (!(publication as { is_published: boolean } | null)?.is_published) {
-      return NextResponse.json(
-        { date, filter: filter.id, picks: [], source: 'unpublished', unpublished: true },
-        { headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' } }
-      )
-    }
-
     const { data: existing } = await readClient
       .from('generated_free_picks')
       .select('*')

@@ -15,7 +15,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { CalendarIcon, Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { MelBetBetNow } from '@/components/ads/melbet-betnow'
-import { UnpublishedNotice } from '@/components/predictions/unpublished-notice'
 
 /**
  * Position of the single MelBet in-feed ad: after this many predictions.
@@ -66,7 +65,6 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
   const [daysBack, setDaysBack] = useState<number>(1)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
-  const [unpublished, setUnpublished] = useState(false)
   const [retryToken, setRetryToken] = useState(0)
 
   const handleFilterChange = (filterId: string) => {
@@ -99,7 +97,6 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
         const data = await response.json()
         if (cancelled) return
 
-        setUnpublished(data.unpublished === true)
         setPredictions(Array.isArray(data.picks) ? data.picks : [])
       } catch (error) {
         console.error('Error fetching tips:', error)
@@ -148,7 +145,7 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
                 <button
                   key={filter.id}
                   onClick={() => handleFilterChange(filter.id)}
-                  className={`relative inline-flex min-h-[44px] items-center justify-center rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${colSpan} ${
+                  className={`relative inline-flex min-h-[44px] items-center justify-center rounded-lg border px-2 pb-2 pt-5 text-xs font-semibold transition-colors ${colSpan} ${
                     isActive
                       ? 'border-[#1e40af] bg-[#1e40af] text-white'
                       : 'border-[#1e40af] bg-white text-[#1e40af] hover:bg-[#1e40af] hover:text-white'
@@ -215,7 +212,7 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
                 <button
                   key={filter.id}
                   onClick={() => handleFilterChange(filter.id)}
-                  className={`relative inline-flex min-h-12 items-center justify-center rounded-lg border px-2 lg:px-3 py-2.5 text-xs sm:text-sm font-semibold transition-colors ${
+                  className={`relative inline-flex min-h-12 items-center justify-center rounded-lg border px-2 lg:px-3 pb-2.5 pt-6 text-xs sm:text-sm font-semibold transition-colors ${
                     isActive
                       ? 'border-[#1e40af] bg-[#1e40af] text-white'
                       : 'border-[#1e40af] bg-white text-[#1e40af] hover:bg-[#1e40af] hover:text-white'
@@ -341,8 +338,6 @@ export function TipsPredictionsSection({ initialFilter }: TipsPredictionsSection
               </Button>
             </CardContent>
           </Card>
-        ) : unpublished ? (
-          <UnpublishedNotice />
         ) : predictions.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">

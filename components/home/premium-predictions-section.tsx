@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
-import { predictionsForPublishedDate, predictionDateOf } from '@/lib/queries/predictions'
-import { UnpublishedNotice } from '@/components/predictions/unpublished-notice'
+import { predictionsForDate, predictionDateOf } from '@/lib/queries/predictions'
 import { findFixtureForPrediction } from '@/lib/utils/fixture-match'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -74,8 +73,6 @@ export function PremiumPredictionsSection() {
   const [profitMultiplierPredictions, setProfitMultiplierPredictions] = useState<PremiumPrediction[]>([])
   const [correctScorePredictions, setCorrectScorePredictions] = useState<PremiumPrediction[]>([])
   const [loading, setLoading] = useState(true)
-  const [pmUnpublished, setPmUnpublished] = useState(false)
-  const [csUnpublished, setCsUnpublished] = useState(false)
 
   // Separate date navigation for Daily 50 Odds Combo
   const [profitMultiplierDateType, setProfitMultiplierDateType] = useState<'previous' | 'today' | 'tomorrow' | 'custom'>('today')
@@ -104,23 +101,19 @@ export function PremiumPredictionsSection() {
       const profitMultiplierDateRange = getDateRange(profitMultiplierDateType, profitMultiplierCustomDate || undefined, profitMultiplierDaysBack)
       const correctScoreDateRange = getDateRange(correctScoreDateType, correctScoreCustomDate || undefined, correctScoreDaysBack)
 
-      // Gated: unpublished dates resolve to no rows, so a new day can't leak
-      // to timezones ahead of the admin before review.
       const [profitMultiplierResult, correctScoreResult] = await Promise.all([
-        predictionsForPublishedDate(supabase, {
+        predictionsForDate(supabase, {
           date: profitMultiplierDateRange.from,
           planType: 'profit_multiplier',
           limit: 5,
         }),
         // Correct score predictions live in the main predictions table with plan_type = 'correct_score'
-        predictionsForPublishedDate(supabase, {
+        predictionsForDate(supabase, {
           date: correctScoreDateRange.from,
           planType: 'correct_score',
           limit: 5,
         }),
       ])
-      setPmUnpublished(profitMultiplierResult.unpublished)
-      setCsUnpublished(correctScoreResult.unpublished)
 
       if (profitMultiplierResult.error) {
         console.error('❌ Daily 50 Odds Combo Query Error:', profitMultiplierResult.error)
@@ -648,9 +641,7 @@ export function PremiumPredictionsSection() {
                 </div>
               </div>
 
-              {pmUnpublished ? (
-                <UnpublishedNotice />
-              ) : profitMultiplierPredictions.length > 0 ? (
+              {profitMultiplierPredictions.length > 0 ? (
                 <>
                   {/* Mobile View */}
                   <div className="lg:hidden space-y-3 mb-6">
@@ -1023,9 +1014,7 @@ export function PremiumPredictionsSection() {
                 </div>
               </div>
 
-              {csUnpublished ? (
-                <UnpublishedNotice />
-              ) : correctScorePredictions.length > 0 ? (
+              {correctScorePredictions.length > 0 ? (
                 <>
                   {/* Mobile View */}
                   <div className="lg:hidden space-y-3 mb-6">

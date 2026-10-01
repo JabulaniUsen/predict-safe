@@ -1,7 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { DateKey } from '@/lib/utils/date'
 import { toUtcDateKey } from '@/lib/utils/date'
-import { isDatePublished } from '@/lib/daily-publications'
 
 /**
  * The one place predictions are looked up by date.
@@ -65,37 +64,6 @@ export function predictionsForDate(
   }
 
   return query
-}
-
-export interface PublishedDateResult<T> {
-  data: T[] | null
-  error: unknown
-  /** True when the date hasn't been published — nothing was fetched. */
-  unpublished: boolean
-}
-
-/**
- * Gated version of `predictionsForDate` for every PUBLIC surface.
- *
- * Returns `{ unpublished: true }` without touching the predictions table when
- * the admin hasn't published the date yet, so a new day's rows can never leak
- * to visitors in timezones ahead of the admin before review.
- *
- * Admin tooling and server jobs must keep using `predictionsForDate`
- * directly — they need to see unpublished rows.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function predictionsForPublishedDate<T = any>(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: SupabaseClient<any, any, any>,
-  { date, planType, limit }: PredictionsQueryOptions
-): Promise<PublishedDateResult<T>> {
-  const published = await isDatePublished(supabase, date)
-  if (!published) {
-    return { data: [], error: null, unpublished: true }
-  }
-  const { data, error } = await predictionsForDate(supabase, { date, planType, limit })
-  return { data: (data ?? []) as T[], error, unpublished: false }
 }
 
 /**

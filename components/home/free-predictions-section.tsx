@@ -7,7 +7,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatDate, formatTime, getDateRange, parseDateKey, toDateKey } from '@/lib/utils/date'
 import { CircularProgress } from '@/components/ui/circular-progress'
-import { UnpublishedNotice } from '@/components/predictions/unpublished-notice'
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
 import { Calendar } from '@/components/ui/calendar'
@@ -55,7 +54,6 @@ export function FreePredictionsSection() {
   const [daysBack, setDaysBack] = useState<number>(1) // 1 = yesterday when dateType is 'previous'
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
-  const [unpublished, setUnpublished] = useState(false)
   const [retryToken, setRetryToken] = useState(0)
 
   useEffect(() => {
@@ -80,8 +78,6 @@ export function FreePredictionsSection() {
         const data = await response.json()
         if (cancelled) return
 
-        // The API withholds picks for dates the admin hasn't published yet.
-        setUnpublished(data.unpublished === true)
         setPredictions(Array.isArray(data.picks) ? data.picks : [])
       } catch (error) {
         console.error('Error fetching free predictions:', error)
@@ -408,8 +404,6 @@ export function FreePredictionsSection() {
               </Button>
             </CardContent>
           </Card>
-        ) : unpublished ? (
-          <UnpublishedNotice />
         ) : predictions.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
