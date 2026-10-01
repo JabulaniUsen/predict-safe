@@ -355,9 +355,9 @@ export function Navbar() {
                 <Image
                   src="/logo.png"
                   alt={`${siteHeader} Logo`}
-                  width={50}
-                  height={50}
-                  className="w-auto object-contain"
+                  width={160}
+                  height={56}
+                  className="h-14 w-auto object-contain"
                   priority
                 />
               </Link>
