@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Headset, MessageCircle, X } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { getSiteConfig } from '@/lib/site-config'
 
 interface SupportChannel {
   key: string
@@ -36,15 +36,10 @@ export function SupportWidget() {
 
   useEffect(() => {
     const fetchConfig = async () => {
-      const supabase = createClient()
-      const { data } = await supabase
-        .from('site_config')
-        .select('key, value')
-        .in('key', ['whatsapp_number', 'whatsapp_numbers', 'telegram_link', 'chat_support_url']) as {
-          data: Array<{ key: string; value: unknown }> | null
-        }
+      // Batched + edge-cached: shared with navbar/footer.
+      const values = await getSiteConfig(['whatsapp_number', 'whatsapp_numbers', 'telegram_link', 'chat_support_url'])
 
-      const configMap = new Map((data || []).map((item) => [item.key, item.value]))
+      const configMap = new Map(Object.entries(values))
       const next: SupportChannel[] = []
 
       let whatsappNumber = configMap.get('whatsapp_number')

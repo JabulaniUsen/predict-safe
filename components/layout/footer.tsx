@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
+import { getSiteConfig } from '@/lib/site-config'
 import { Facebook, Twitter, Instagram, Youtube, Linkedin, Send, Mail, Phone } from 'lucide-react'
 import { Database } from '@/types/database'
 
@@ -39,11 +40,10 @@ export function Footer() {
     const fetchConfig = async () => {
       const supabase = createClient()
 
-      const [{ data }, { data: pagesData }] = await Promise.all([
-        supabase
-          .from('site_config')
-          .select('key, value')
-          .in('key', ['site_header', 'site_subheader', 'telegram_link', 'contact_email', 'whatsapp_number', 'whatsapp_numbers', 'social_links']),
+      // Config comes batched + edge-cached (shared with navbar/support
+      // widget); only the footer-specific pages list still hits Supabase.
+      const [values, { data: pagesData }] = await Promise.all([
+        getSiteConfig(['site_header', 'site_subheader', 'telegram_link', 'contact_email', 'whatsapp_number', 'whatsapp_numbers', 'social_links']),
         // custom_pages not yet in generated types — cast through any
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase as any)
@@ -56,9 +56,9 @@ export function Footer() {
 
       if (pagesData) setFooterPages(pagesData as FooterPage[])
 
-      if (data) {
+      {
         const configData: SiteConfig = {}
-        const configItems = data as ConfigItem[]
+        const configItems = Object.entries(values).map(([key, value]) => ({ key, value })) as ConfigItem[]
         configItems.forEach((item) => {
           if (!item.value) return
           

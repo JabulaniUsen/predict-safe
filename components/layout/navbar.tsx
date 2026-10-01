@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { getSiteConfig } from '@/lib/site-config'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -57,18 +58,11 @@ export function Navbar() {
 
   useEffect(() => {
     const fetchConfig = async () => {
-      const supabase = createClient()
-      const { data: config } = await supabase
-        .from('site_config')
-        .select('key, value')
-        .in('key', ['site_header', 'site_subheader'])
-
-      if (config && Array.isArray(config)) {
-        config.forEach((item: { key: string; value: any }) => {
-          if (item.key === 'site_header' && item.value) setSiteHeader(item.value)
-          if (item.key === 'site_subheader' && item.value) setSiteSubheader(item.value)
-        })
-      }
+      // Batched + edge-cached: shares one response with the footer and
+      // support widget instead of opening its own Supabase round-trip.
+      const values = await getSiteConfig(['site_header', 'site_subheader'])
+      if (values.site_header) setSiteHeader(values.site_header as string)
+      if (values.site_subheader) setSiteSubheader(values.site_subheader as string)
     }
     fetchConfig()
   }, [])
