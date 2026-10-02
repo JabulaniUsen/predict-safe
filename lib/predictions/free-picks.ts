@@ -43,7 +43,7 @@ export const FREE_PICK_FILTERS: FreePickFilter[] = [
     markets: ['home_win', 'away_win', 'over_1_5', 'double_chance_1x'],
     minOdds: 1.2,
     maxOdds: 1.7,
-    limit: 5,
+    limit: 10,
   },
   {
     id: 'all',
@@ -72,6 +72,9 @@ export const FREE_PICK_FILTERS: FreePickFilter[] = [
     label: 'Double Chance',
     slug: 'double-chance',
     markets: ['double_chance_1x', 'double_chance_x2', 'double_chance_12'],
+    // Double-chance prices routinely sit at 1.10-1.25 - the 1.20 generator
+    // default was discarding most of them.
+    minOdds: 1.05,
     limit: 20,
     orderBy: 'kickoff',
   },
@@ -80,6 +83,9 @@ export const FREE_PICK_FILTERS: FreePickFilter[] = [
     label: 'Home Win',
     slug: 'home-win',
     markets: ['home_win'],
+    // Heavy home favourites are priced 1.10-1.20 - keep them.
+    minOdds: 1.05,
+    minConfidence: 30,
     limit: 20,
     orderBy: 'kickoff',
   },
@@ -88,6 +94,10 @@ export const FREE_PICK_FILTERS: FreePickFilter[] = [
     label: 'Away Win',
     slug: 'away-win',
     markets: ['away_win'],
+    minOdds: 1.05,
+    // Away sides are underdogs more often than not - a 40% floor emptied the
+    // sheet. 30% still excludes lottery tickets.
+    minConfidence: 30,
     limit: 20,
     orderBy: 'kickoff',
   },
@@ -96,6 +106,9 @@ export const FREE_PICK_FILTERS: FreePickFilter[] = [
     label: '1.5 Goals',
     slug: '1-5-goals',
     markets: ['over_1_5'],
+    // Over 1.5 is normally priced 1.10-1.25 - the 1.20 default cut the bulk
+    // of the sheet.
+    minOdds: 1.05,
     limit: 20,
     orderBy: 'kickoff',
   },
@@ -104,6 +117,7 @@ export const FREE_PICK_FILTERS: FreePickFilter[] = [
     label: '2.5 Goals',
     slug: '2-5-goals',
     markets: ['over_2_5'],
+    minOdds: 1.05,
     limit: 20,
     orderBy: 'kickoff',
   },
@@ -112,6 +126,7 @@ export const FREE_PICK_FILTERS: FreePickFilter[] = [
     label: 'BTTS/GG',
     slug: 'btts-gg',
     markets: ['btts'],
+    minOdds: 1.05,
     limit: 20,
     orderBy: 'kickoff',
   },

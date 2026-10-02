@@ -28,6 +28,13 @@ export const dynamic = 'force-dynamic'
 /** Rebuild a partial set no more often than this while the day is still live. */
 const PARTIAL_RETRY_MS = 10 * 60 * 1000
 
+/**
+ * Stored sets built before this instant used stricter per-filter thresholds
+ * (1.20 minimum odds / 40% confidence on the single-market sheets), so they
+ * are rebuilt once under the relaxed thresholds instead of being served as-is.
+ */
+const THRESHOLDS_UPDATED_AT = Date.parse('2026-10-02T00:00:00Z')
+
 function isComplete(row: { leagues_total: number; leagues_succeeded: number }): boolean {
   return row.leagues_total > 0 && row.leagues_succeeded >= row.leagues_total
 }
@@ -62,7 +69,13 @@ export async function GET(request: NextRequest) {
     let picks: GeneratedPrediction[] | null = null
     let source: 'stored' | 'generated' = 'stored'
 
-    if (stored) {
+    // Rows built before the threshold relaxation are treated as absent so
+    // they rebuild once. If the rebuild itself fails (provider down), the
+    // old stored set is still served below rather than a 503.
+    const storedIsCurrent =
+      !!stored && Date.parse(stored.generated_at) >= THRESHOLDS_UPDATED_AT
+
+    if (stored && storedIsCurrent) {
       const staleEnoughToRetry =
         !isComplete(stored) &&
         Date.now() - new Date(stored.generated_at).getTime() > PARTIAL_RETRY_MS
@@ -73,22 +86,36 @@ export async function GET(request: NextRequest) {
     }
 
     if (picks === null) {
-      // Either nothing stored yet, or what is stored was built while leagues
-      // were failing and is old enough to be worth another attempt.
-      const result = await generateFreePicks(date, filter.id)
-      source = 'generated'
-      picks = result.picks
+      // Either nothing stored yet, what is stored predates the relaxed
+      // thresholds, or what is stored was built while leagues were failing
+      // and is old enough to be worth another attempt.
+      try {
+        const result = await generateFreePicks(date, filter.id)
+        source = 'generated'
+        picks = result.picks
 
-      // Don't overwrite a good stored set with a worse one - a rebuild that
-      // reached fewer leagues than the stored attempt is a step backwards.
-      const worseThanStored =
-        stored && result.leaguesSucceeded < stored.leagues_succeeded
+        // Don't overwrite a good stored set with a worse one - a rebuild that
+        // reached fewer leagues than the stored attempt is a step backwards.
+        const worseThanStored =
+          stored && result.leaguesSucceeded < stored.leagues_succeeded
 
-      if (worseThanStored) {
-        picks = Array.isArray(stored!.picks) ? stored!.picks : []
-        source = 'stored'
-      } else if (result.picks.length > 0) {
-        await persist(date, filter.id, result)
+        if (worseThanStored) {
+          picks = Array.isArray(stored!.picks) ? stored!.picks : []
+          source = 'stored'
+        } else if (result.picks.length > 0) {
+          await persist(date, filter.id, result)
+        }
+      } catch (error) {
+        if (stored && Array.isArray(stored.picks)) {
+          console.error(
+            `[free-picks] rebuild failed for ${date}/${filter.id} - serving previous stored set:`,
+            error
+          )
+          picks = stored.picks
+          source = 'stored'
+        } else {
+          throw error
+        }
       }
     }
 
