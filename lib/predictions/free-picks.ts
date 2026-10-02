@@ -181,57 +181,76 @@ export async function generateFreePicks(
 ): Promise<FreePicksResult> {
   const filter = findFreePickFilter(filterId)
 
-  let leaguesSucceeded = 0
-  const leagueFixtures = await mapWithConcurrency(FREE_PLAN_LEAGUES, 6, async (leagueId) => {
-    try {
-      const fixtures = await getFixtures(date, leagueId, date)
-      leaguesSucceeded++
-      return Array.isArray(fixtures) ? fixtures : []
-    } catch (error) {
-      console.error(`[free-picks] league ${leagueId} fixtures failed for ${date}:`, error)
-      return [] as Fixture[]
-    }
-  })
-
-  let fixtures: Fixture[] = leagueFixtures.flat()
   const leaguesTotal = FREE_PLAN_LEAGUES.length
+  let leaguesSucceeded = 0
+  let fixtures: Fixture[] = []
 
-  // Every curated league failed, so we have no idea what is on today. That is
-  // a provider outage, not an empty fixture list, and the two must not look
-  // the same to the reader.
-  if (leaguesSucceeded === 0) {
-    throw new FreePicksUnavailableError(
-      `No league responded for ${date} - the odds provider is unreachable or throttling.`
-    )
+  // Cheap path first (the sureodds setup): a single bulk fixtures call for the
+  // whole day, filtered to the curated leagues in-memory. One provider request
+  // instead of ~21, so a build no longer lives or dies on two dozen
+  // round-trips - which is what made the pages flip-flop.
+  let bulkOk = false
+  try {
+    const dayFixtures = await getFixtures(date, undefined, date)
+    const curated = dayFixtures.filter((f) => FREE_PLAN_LEAGUES.includes(f.league_id))
+    // If the curated slate alone cannot carry the page but there is football
+    // elsewhere in the world, use the whole day. The bulk response already
+    // contains it, so no second request is needed.
+    fixtures = curated.length >= MIN_CURATED_FIXTURES || dayFixtures.length === 0 ? curated : dayFixtures
+    leaguesSucceeded = leaguesTotal
+    bulkOk = true
+  } catch (error) {
+    console.error(`[free-picks] bulk fixtures failed for ${date}, falling back to per-league:`, error)
   }
 
-  // Widen beyond the curated list when it cannot carry the page on its own.
-  //
-  // This used to trigger only on exactly zero fixtures, which is too strict: a
-  // midweek date with a single fixture in one league produced a tips page with
-  // one row on it. The "nothing left to play" case also matters - once the
-  // day's curated slate has finished there is still a day's football elsewhere
-  // in the world, and the old client-side version checked for that before this
-  // logic moved to the server.
-  const hasUpcoming = fixtures.some((f) => f.match_status !== 'Finished')
-  const dayIsStillLive = date >= toUtcDateKey(new Date())
-  const tooFewToFillAPage = fixtures.length < MIN_CURATED_FIXTURES
-
-  if (tooFewToFillAPage || (!hasUpcoming && dayIsStillLive)) {
-    try {
-      const allFixtures = await getFixtures(date, undefined, date)
-      if (Array.isArray(allFixtures) && allFixtures.length > 0) {
-        // Merge rather than replace, so the curated leagues stay in the pool
-        // instead of being dropped in favour of whatever else is on.
-        const byId = new Map<string, Fixture>()
-        for (const fixture of [...fixtures, ...allFixtures]) {
-          if (fixture.match_id) byId.set(fixture.match_id, fixture)
-        }
-        fixtures = Array.from(byId.values())
-        leaguesSucceeded = leaguesTotal
+  if (!bulkOk) {
+    const leagueFixtures = await mapWithConcurrency(FREE_PLAN_LEAGUES, 6, async (leagueId) => {
+      try {
+        const leagueFixtures = await getFixtures(date, leagueId, date)
+        leaguesSucceeded++
+        return Array.isArray(leagueFixtures) ? leagueFixtures : []
+      } catch (error) {
+        console.error(`[free-picks] league ${leagueId} fixtures failed for ${date}:`, error)
+        return [] as Fixture[]
       }
-    } catch (error) {
-      console.error(`[free-picks] all-league fixture fallback failed for ${date}:`, error)
+    })
+
+    fixtures = leagueFixtures.flat()
+
+    // Every curated league failed, so we have no idea what is on today. That is
+    // a provider outage, not an empty fixture list, and the two must not look
+    // the same to the reader.
+    if (leaguesSucceeded === 0) {
+      throw new FreePicksUnavailableError(
+        `No league responded for ${date} - the odds provider is unreachable or throttling.`
+      )
+    }
+
+    // Widen beyond the curated list when it cannot carry the page on its own.
+    // A midweek date with a single fixture in one league produced a tips page
+    // with one row on it. The "nothing left to play" case also matters - once
+    // the day's curated slate has finished there is still a day's football
+    // elsewhere in the world.
+    const hasUpcoming = fixtures.some((f) => f.match_status !== 'Finished')
+    const dayIsStillLive = date >= toUtcDateKey(new Date())
+    const tooFewToFillAPage = fixtures.length < MIN_CURATED_FIXTURES
+
+    if (tooFewToFillAPage || (!hasUpcoming && dayIsStillLive)) {
+      try {
+        const allFixtures = await getFixtures(date, undefined, date)
+        if (Array.isArray(allFixtures) && allFixtures.length > 0) {
+          // Merge rather than replace, so the curated leagues stay in the pool
+          // instead of being dropped in favour of whatever else is on.
+          const byId = new Map<string, Fixture>()
+          for (const fixture of [...fixtures, ...allFixtures]) {
+            if (fixture.match_id) byId.set(fixture.match_id, fixture)
+          }
+          fixtures = Array.from(byId.values())
+          leaguesSucceeded = leaguesTotal
+        }
+      } catch (error) {
+        console.error(`[free-picks] all-league fixture fallback failed for ${date}:`, error)
+      }
     }
   }
 
