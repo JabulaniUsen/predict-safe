@@ -17,6 +17,7 @@ import { Plan, PlanPrice, PaymentMethod } from '@/types'
 import { Database } from '@/types/database'
 import { toast } from 'sonner'
 import { getCurrencySymbol as getCurrencySymbolUtil, getCurrencyFromCountry } from '@/lib/utils/currency'
+import { isMethodAvailableForCountry } from '@/lib/payment-methods'
 
 type CountryOption = 'Nigeria' | 'Ghana' | 'Kenya' | 'Other'
 type UserProfile = Pick<Database['public']['Tables']['users']['Row'], 'country'>
@@ -262,27 +263,12 @@ function CheckoutContent() {
         .eq('is_active', true)
         .order('display_order')
 
-      // Filter in memory based on countries array
-      // Crypto and Skrill are available for all countries
-      const filteredMethods = methodsData?.filter((method: any) => {
-        const methodData = method as any
-        const methodCountries = methodData.countries 
-          ? (Array.isArray(methodData.countries) ? methodData.countries : [])
-          : (methodData.country ? [methodData.country] : [])
-        
-        // Crypto and Skrill are always available
-        if (method.type === 'crypto' || method.type === 'skrill') {
-          return true
-        }
-        
-        // If no countries specified, available for all
-        if (methodCountries.length === 0) {
-          return true
-        }
-        
-        // Check if selected country is in the list
-        return methodCountries.includes(selectedCountry)
-      })
+      // Filter in memory based on countries array.
+      // (Shared helper: missing/NULL/empty countries = all countries;
+      // crypto and Skrill are always available.)
+      const filteredMethods = methodsData?.filter((method: any) =>
+        isMethodAvailableForCountry(method, selectedCountry)
+      )
 
       if (filteredMethods) {
         setPaymentMethods(filteredMethods as PaymentMethod[])

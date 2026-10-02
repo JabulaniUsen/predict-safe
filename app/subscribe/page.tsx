@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Plan, PlanPrice, Country, PaymentMethod } from '@/types'
+import { isMethodAvailableForCountry } from '@/lib/payment-methods'
 import { Database } from '@/types/database'
 import Image from 'next/image'
 
@@ -156,25 +157,11 @@ function SubscribeContent() {
         .order('display_order')
 
       // Filter payment methods based on selected country
-      const filteredMethods = methodsData?.filter((method: any) => {
-        const methodData = method as any
-        const methodCountries = methodData.countries 
-          ? (Array.isArray(methodData.countries) ? methodData.countries : [])
-          : (methodData.country ? [methodData.country] : [])
-        
-        // Crypto and Skrill are always available
-        if (method.type === 'crypto' || method.type === 'skrill') {
-          return true
-        }
-        
-        // If no countries specified, available for all
-        if (methodCountries.length === 0) {
-          return true
-        }
-        
-        // Check if selected country is in the list
-        return methodCountries.includes(selectedCountry)
-      })
+      // (Shared helper: missing/NULL/empty countries = all countries;
+      // crypto and Skrill are always available.)
+      const filteredMethods = methodsData?.filter((method: any) =>
+        isMethodAvailableForCountry(method, selectedCountry)
+      )
 
       if (filteredMethods) {
         setPaymentMethods(filteredMethods)

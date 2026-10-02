@@ -720,24 +720,14 @@ DROP POLICY IF EXISTS "Admins can update all messages" ON messages;
 CREATE POLICY "Admins can update all messages" ON messages
   FOR UPDATE USING (EXISTS (SELECT 1 FROM users WHERE users.id = auth.uid() AND users.is_admin = true));
 
--- Payment methods (public read of active + admin full access)
+-- Payment methods (public read of active + admin full access).
+-- NOTE (031): country filtering is done in the app (see lib/payment-methods.ts),
+-- NOT in RLS. Filtering here by joining public.users made newly added methods
+-- invisible to logged-out users, users with NULL country, and other cases
+-- where the join misfires.
 DROP POLICY IF EXISTS "Active payment methods are viewable by everyone" ON payment_methods;
 CREATE POLICY "Active payment methods are viewable by everyone" ON payment_methods
-  FOR SELECT USING (
-    is_active = true AND (
-      countries = '[]'::jsonb OR
-      countries = 'null'::jsonb OR
-      countries IS NULL OR
-      EXISTS (
-        SELECT 1 FROM users
-        WHERE users.id = auth.uid()
-        AND (
-          users.country = ANY(SELECT jsonb_array_elements_text(payment_methods.countries))
-          OR users.country IS NULL
-        )
-      )
-    )
-  );
+  FOR SELECT USING (is_active = true);
 DROP POLICY IF EXISTS "Admins can view all payment methods" ON payment_methods;
 CREATE POLICY "Admins can view all payment methods" ON payment_methods
   FOR SELECT USING (EXISTS (SELECT 1 FROM users WHERE users.id = auth.uid() AND users.is_admin = true));

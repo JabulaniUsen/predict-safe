@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { PaymentMethod } from '@/types'
+import { getMethodCountries } from '@/lib/payment-methods'
 import { Database } from '@/types/database'
 import { Plus, Edit, Trash2, Copy, X, Upload, Image as ImageIcon } from 'lucide-react'
 import Image from 'next/image'
@@ -172,15 +173,14 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
 
   const handleEdit = (method: PaymentMethod) => {
     setEditingMethod(method)
-    const methodData = method as any
-    
-    // Get countries from countries array or fallback to old country field
-    const methodCountries = methodData.countries 
-      ? (Array.isArray(methodData.countries) ? methodData.countries : JSON.parse(JSON.stringify(methodData.countries)))
-      : (methodData.country ? [methodData.country] : [])
-    
+
+    // Get countries from countries array or fallback to old country field.
+    // An empty/missing list means available for all countries.
+    const methodCountries = getMethodCountries(method)
+    const hasLegacyCountry = Boolean((method as any).country)
+
     // Check if available for all countries (empty array or null means all countries)
-    const isAllCountries = methodCountries.length === 0 && !methodData.country
+    const isAllCountries = methodCountries.length === 0 && !hasLegacyCountry
     
     setSelectedCountries(methodCountries)
     setAvailableForAllCountries(isAllCountries)
@@ -284,59 +284,33 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
         return null
       }
 
-      // Generate unique filename
+      // Generate unique filename. upsert:true so re-saving the same method
+      // with a new logo of the same extension overwrites instead of
+      // failing with a "duplicate" error.
       const uniqueId = editingMethod?.id || `temp-${Date.now()}-${Math.random().toString(36).substring(7)}`
       const fileName = `payment-methods/${uniqueId}.${fileExt}`
-      
-      // Delete old logo if exists (only if editing)
-      if (editingMethod?.logo_url) {
-        try {
-          const oldPath = editingMethod.logo_url.split('/').slice(-2).join('/') // Get last 2 parts (payment-methods/filename)
-          if (oldPath && oldPath.startsWith('payment-methods/')) {
-            await supabase.storage.from('payment-logos').remove([oldPath])
-          }
-        } catch (deleteError) {
-          // Ignore delete errors - file might not exist
-          console.warn('Could not delete old logo:', deleteError)
-        }
-      }
 
-      // Upload the file
-      const { data, error } = await supabase.storage
+      // Upload the file (upsert so re-uploads overwrite)
+      const { error } = await supabase.storage
         .from('payment-logos')
         .upload(fileName, logoFile, {
           cacheControl: '3600',
-          upsert: false // Don't use upsert for new uploads
+          upsert: true,
         })
 
       if (error) {
         console.error('Storage upload error:', error)
-        // Provide more specific error messages
         if (error.message?.includes('row-level security') || error.message?.includes('RLS') || error.message?.includes('violates row-level security')) {
-          toast.error('Storage policy missing! Go to Supabase Dashboard → Storage → payment-logos → Policies → Create INSERT policy with: bucket_id = \'payment-logos\'', {
-            duration: 10000
-          })
-          throw error
-        } else if (error.message?.includes('duplicate')) {
-          // If file exists, try with a new name
-          const retryFileName = `payment-methods/${uniqueId}-${Date.now()}.${fileExt}`
-          const { data: retryData, error: retryError } = await supabase.storage
-            .from('payment-logos')
-            .upload(retryFileName, logoFile, {
-              cacheControl: '3600',
-              upsert: false
-            })
-          
-          if (retryError) throw retryError
-          
-          const { data: { publicUrl } } = supabase.storage
-            .from('payment-logos')
-            .getPublicUrl(retryFileName)
-          
-          return publicUrl
-        } else {
-          throw error
+          throw new Error(
+            "Logo storage policy missing! Go to Supabase Dashboard → Storage → payment-logos → Policies → add an INSERT policy with: bucket_id = 'payment-logos'"
+          )
         }
+        if (error.message?.toLowerCase().includes('bucket')) {
+          throw new Error(
+            "Storage bucket 'payment-logos' not found! Create it in Supabase Dashboard → Storage (public bucket named 'payment-logos')"
+          )
+        }
+        throw error
       }
 
       // Get public URL (even if data is null, we can still construct the URL)
@@ -351,12 +325,11 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
       return publicUrl
     } catch (error: any) {
       console.error('Error uploading logo:', error)
-      const errorMessage = error.message || 'Failed to upload logo'
-      toast.error(errorMessage.includes('row-level security') || errorMessage.includes('RLS')
-        ? 'Storage policy error: Please set up INSERT policy in Supabase Dashboard (Storage > payment-logos > Policies)'
-        : `Failed to upload logo: ${errorMessage}`
-      )
-      return null
+      // Throw so the caller can decide: a failed logo upload must not
+      // silently pass, but it also must not block saving the method.
+      // (Previously this toasted an error here AND the save continued,
+      // so admins saw an "error" even when the method saved fine.)
+      throw error
     } finally {
       setUploadingLogo(false)
     }
@@ -400,12 +373,24 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
     try {
       const supabase = createClient()
 
-      // Upload logo if new file selected
+      // Upload logo if new file selected. A failed upload warns but does not
+      // block the save - the method is stored without a logo instead.
       let logoUrl = methodForm.logo_url
       if (logoFile) {
-        const uploadedUrl = await uploadLogo()
-        if (uploadedUrl) {
-          logoUrl = uploadedUrl
+        try {
+          const uploadedUrl = await uploadLogo()
+          // uploadLogo returns null only for invalid files (already toasted);
+          // keep the existing logo in that case.
+          if (uploadedUrl) {
+            logoUrl = uploadedUrl
+          }
+        } catch (uploadError: any) {
+          const uploadMsg = uploadError?.message || 'Failed to upload logo'
+          console.error('Logo upload failed, saving method without logo:', uploadMsg)
+          toast.warning(`Payment method will be saved without logo: ${uploadMsg}`, {
+            duration: 8000,
+          })
+          logoUrl = methodForm.logo_url
         }
       }
 
@@ -451,53 +436,80 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
         }
       }
 
-      // Determine countries array - empty means all countries
+      // Determine countries array - empty array means all countries.
+      // Always store [] (never NULL) so the DB default, the RLS policy
+      // (countries = '[]'), and the user-side filters all agree.
       const countriesArray = (methodForm.type === 'crypto' || methodForm.type === 'skrill' || availableForAllCountries)
-        ? [] 
+        ? []
         : selectedCountries
 
+      // Crypto currency is required - fall back to the wallet network label
+      // rather than saving an empty string users can't see/filter on.
+      const currency =
+        methodForm.type === 'crypto'
+          ? (methodForm.currency?.trim() || cryptoDetails.network?.trim() || null)
+          : null
+
       const methodData: any = {
-        name: methodForm.name,
+        name: methodForm.name.trim(),
         type: methodForm.type,
-        currency: methodForm.type === 'crypto' ? methodForm.currency : null,
+        currency,
         details: details as any,
         is_active: methodForm.is_active,
         display_order: methodForm.display_order,
-        countries: countriesArray.length > 0 ? countriesArray : null,
+        countries: countriesArray,
         logo_url: logoUrl,
         payment_link: methodForm.payment_link.trim() || null,
       }
 
-      if (editingMethod) {
-        // Update existing
-        const updateData: any = {
-          ...methodData,
-          updated_at: new Date().toISOString(),
+      // Insert/update helper that tolerates databases where later columns
+      // (payment_link, logo_url, countries) haven't been migrated yet or the
+      // PostgREST schema cache is stale: retry without the missing column
+      // instead of failing the whole save.
+      const saveRow = async (payload: any, id: string | null) => {
+        let attempt = { ...payload }
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const query = id
+            ? supabase
+                .from('payment_methods')
+                // @ts-expect-error - Supabase type inference issue
+                .update({ ...attempt, updated_at: new Date().toISOString() })
+                .eq('id', id)
+            : supabase.from('payment_methods').insert(attempt)
+          const { error } = (await query) as { error: any }
+          if (!error) return
+          const msg = String(error.message || '')
+          const missing = msg.match(/Could not find the '(\w+)' column/)
+          if (missing && missing[1] in attempt) {
+            console.warn(`payment_methods.${missing[1]} missing in DB, retrying without it`)
+            delete attempt[missing[1]]
+            continue
+          }
+          throw error
         }
-        const result: any = await supabase
-          .from('payment_methods')
-          // @ts-expect-error - Supabase type inference issue
-          .update(updateData)
-          .eq('id', editingMethod.id)
-        const { error } = result
+      }
 
-        if (error) throw error
+      if (editingMethod) {
+        await saveRow(methodData, editingMethod.id)
         toast.success('Payment method updated successfully!')
       } else {
-        // Create new
-        const result: any = await supabase
-          .from('payment_methods')
-          .insert(methodData)
-        const { error } = result
-
-        if (error) throw error
+        await saveRow(methodData, null)
         toast.success('Payment method created successfully!')
       }
 
       setShowDialog(false)
       window.location.reload()
     } catch (error: any) {
-      toast.error(error.message || 'Failed to save payment method')
+      console.error('Error saving payment method:', error)
+      const msg = error?.message || 'Failed to save payment method'
+      toast.error(
+        msg.includes('row-level security') || msg.includes('RLS')
+          ? 'Permission denied: your account is not marked as admin (users.is_admin).'
+          : msg.includes('duplicate key') || msg.includes('already exists')
+            ? 'A payment method with this name already exists. Use a different name.'
+            : msg
+      )
     } finally {
       setLoading(false)
     }
@@ -575,10 +587,7 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {paymentMethods.map((method) => {
-                const methodData = method as any
-                const methodCountries = methodData.countries 
-                  ? (Array.isArray(methodData.countries) ? methodData.countries : [])
-                  : (methodData.country ? [methodData.country] : [])
+                const methodCountries = getMethodCountries(method)
                 
                 return (
                   <Card key={method.id} className="relative overflow-hidden hover:shadow-lg transition-shadow">
