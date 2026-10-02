@@ -19,6 +19,7 @@ import {
 import { formatDate } from '@/lib/utils/date'
 import { Badge } from '@/components/ui/badge'
 import { ActivationFeeModal } from '@/components/dashboard/activation-fee-modal'
+import { isSubscriptionActive, isSubscriptionPastDue } from '@/lib/subscriptions/status'
 
 // Countdown component for subscription expiry
 function SubscriptionCountdown({ expiryDate }: { expiryDate: string }) {
@@ -237,16 +238,18 @@ export function DashboardContent({
                 <div className="space-y-4">
                   {subscriptions.map((subscription) => {
                     const plan = subscription.plan
-                    const isActive = subscription.plan_status === 'active'
+                    // Access-level truth: past-due rows are NOT active even if
+                    // the status column still says 'active' — this is what
+                    // re-locks predictions the moment a subscription ends.
+                    const isActive = isSubscriptionActive(subscription)
                     const isPending = subscription.plan_status === 'pending'
                     const isPendingActivation = subscription.plan_status === 'pending_activation'
                     // Expired plans are deactivated to 'inactive' — still show
                     // them as expired (rather than merely unsubscribed) when
-                    // they carry a past expiry date.
+                    // they carry a past expiry date. An 'active' row past its
+                    // expiry date is also expired (deactivation missed).
                     const isExpired = subscription.plan_status === 'expired' ||
-                      (subscription.plan_status === 'inactive' &&
-                        subscription.expiry_date &&
-                        new Date(subscription.expiry_date) < new Date())
+                      isSubscriptionPastDue(subscription)
                     
                     return (
                       <div

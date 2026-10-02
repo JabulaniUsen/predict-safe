@@ -59,6 +59,10 @@ function WriteBlogContent() {
   })
   const [tagInput, setTagInput] = useState('')
   const [competitions, setCompetitions] = useState<{ id: string; name: string }[]>([])
+  // The row's current published_at (edit mode). Publishing a draft must set a
+  // fresh published_at — otherwise the post stays invisible on /blog, which
+  // requires published=true AND a non-null past published_at.
+  const [existingPublishedAt, setExistingPublishedAt] = useState<string | null>(null)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -160,6 +164,7 @@ function WriteBlogContent() {
 
         // In edit mode, slug is already set, so mark it as manually edited to preserve it
         setSlugManuallyEdited(true)
+        setExistingPublishedAt((post as any).published_at || null)
         setLoadingPost(false)
       } catch (error: any) {
         toast.error(error.message || 'Failed to load blog post')
@@ -286,11 +291,13 @@ function WriteBlogContent() {
       competition_id: formData.competition_id || null,
     }
 
-    // Handle scheduling
+    // Handle scheduling / publishing. The public blog list requires
+    // published=true AND a non-null past published_at, so every path that
+    // publishes must guarantee a published_at, including editing a draft.
     if (formData.scheduled_at) {
       const scheduledDate = new Date(formData.scheduled_at)
       const now = new Date()
-      
+
       if (scheduledDate > now) {
         // Scheduled for future - don't publish yet
         submitData.scheduled_at = scheduledDate.toISOString()
@@ -300,15 +307,19 @@ function WriteBlogContent() {
         // Scheduled time has passed - publish immediately
         submitData.scheduled_at = null
         submitData.published = true
-        if (!isEditMode) {
-          submitData.published_at = new Date().toISOString()
-        }
+        submitData.published_at = existingPublishedAt || new Date().toISOString()
       }
-    } else {
+    } else if (formData.published) {
+      // Publish immediately (new post or draft -> published)
       submitData.scheduled_at = null
-    if (formData.published && !isEditMode) {
-      submitData.published_at = new Date().toISOString()
-      }
+      submitData.published = true
+      submitData.published_at = existingPublishedAt || new Date().toISOString()
+    } else {
+      // Saved as draft — clear scheduling/publish stamps so a later publish
+      // gets a fresh published_at and a stale future schedule can't linger.
+      submitData.scheduled_at = null
+      submitData.published = false
+      submitData.published_at = null
     }
 
     try {

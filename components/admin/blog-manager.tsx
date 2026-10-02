@@ -67,9 +67,17 @@ export function BlogManager({ initialPosts }: BlogManagerProps) {
     const supabase = createClient()
     const newPublished = !post.published
     const updateData: any = { published: newPublished }
-    
-    if (newPublished && !post.published_at) {
-      updateData.published_at = new Date().toISOString()
+
+    if (newPublished) {
+      // Publishing (including re-publishing a draft) always leaves the row
+      // publicly visible: clear any stale future schedule and guarantee a
+      // published_at. Unpublishing clears the stamps so no stale schedule or
+      // date lingers.
+      updateData.scheduled_at = null
+      updateData.published_at = post.published_at || new Date().toISOString()
+    } else {
+      updateData.scheduled_at = null
+      updateData.published_at = null
     }
 
     try {
@@ -81,9 +89,9 @@ export function BlogManager({ initialPosts }: BlogManagerProps) {
 
       if (error) throw error
 
-      setPosts(posts.map(p => 
-        p.id === post.id 
-          ? { ...p, published: newPublished, published_at: updateData.published_at || p.published_at }
+      setPosts(posts.map(p =>
+        p.id === post.id
+          ? { ...p, published: newPublished, published_at: updateData.published_at, scheduled_at: updateData.scheduled_at } as BlogPost
           : p
       ))
       toast.success(newPublished ? 'Blog post published' : 'Blog post unpublished')

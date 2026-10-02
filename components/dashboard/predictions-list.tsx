@@ -224,12 +224,15 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
     return teamLogos[teamName] || null
   }
 
-  // Fetch predictions when plan or date changes
+  // Fetch predictions when plan, date or subscriptions change — so an admin
+  // approval unlocks (and an expiry re-locks) automatically without the user
+  // having to switch plan/date manually.
   useEffect(() => {
     if (selectedPlanSlug) {
       fetchPredictions()
     }
-  }, [selectedPlanSlug, dateType, customDate])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPlanSlug, dateType, customDate, subscriptions])
 
   const fetchPredictions = async () => {
     setLoading(true)

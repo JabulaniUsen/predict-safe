@@ -5,6 +5,7 @@ import { DashboardContent } from '@/components/dashboard/dashboard-content'
 import { Database } from '@/types/database'
 import { UserSubscriptionWithPlan } from '@/types'
 import { deactivateExpiredSubscriptions } from '@/lib/subscriptions/deactivate-expired'
+import { isSubscriptionActive } from '@/lib/subscriptions/status'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -68,9 +69,10 @@ export default async function DashboardPage() {
     }
   }
 
-  // Count active subscriptions
+  // Count active subscriptions — a row past its expiry date counts as
+  // inactive even if the status column hasn't been rewritten yet.
   const activeSubscriptions = subscriptions?.filter(
-    (sub) => sub.plan_status === 'active'
+    (sub) => isSubscriptionActive(sub)
   ).length || 0
 
   // Get all subscriptions for display

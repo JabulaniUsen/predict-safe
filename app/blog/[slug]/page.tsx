@@ -30,7 +30,24 @@ export async function generateMetadata({
     }
   }
 
-  const blogPost = post as BlogPost
+  // Never leak drafts/scheduled posts to crawlers or link previews — the
+  // page body 404s for these, so metadata must not expose them either.
+  const previewPost = post as BlogPost
+  const previewVisible =
+    previewPost.published === true &&
+    previewPost.published_at !== null &&
+    new Date(previewPost.published_at) <= new Date()
+  if (!previewVisible) {
+    return {
+      title: 'Post Not Found',
+      robots: {
+        index: false,
+        follow: false,
+      },
+    }
+  }
+
+  const blogPost = previewPost
   const description = blogPost.excerpt 
     ? stripHtmlTags(blogPost.excerpt) 
     : stripHtmlTags(blogPost.content).substring(0, 160)

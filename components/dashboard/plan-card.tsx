@@ -8,6 +8,7 @@ import { UserSubscriptionWithPlan, Plan } from '@/types'
 import { format } from 'date-fns'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { isSubscriptionActive, isSubscriptionPastDue } from '@/lib/subscriptions/status'
 
 interface PlanCardProps {
   plan: Plan
@@ -18,8 +19,11 @@ interface PlanCardProps {
 export function PlanCard({ plan, subscription, currency }: PlanCardProps) {
   const [timeRemaining, setTimeRemaining] = useState<string>('')
 
+  const activeNow = subscription ? isSubscriptionActive(subscription) : false
+  const pastDue = subscription ? isSubscriptionPastDue(subscription) : false
+
   useEffect(() => {
-    if (subscription?.plan_status === 'active' && subscription.expiry_date) {
+    if (activeNow && subscription?.expiry_date) {
       const updateTimer = () => {
         const now = new Date()
         const expiry = new Date(subscription.expiry_date!)
@@ -42,7 +46,7 @@ export function PlanCard({ plan, subscription, currency }: PlanCardProps) {
 
       return () => clearInterval(interval)
     }
-  }, [subscription])
+  }, [subscription, activeNow])
 
   const getStatusBadge = () => {
     if (!subscription || subscription.plan_status === 'inactive') {
@@ -63,7 +67,7 @@ export function PlanCard({ plan, subscription, currency }: PlanCardProps) {
       )
     }
 
-    if (subscription.plan_status === 'active') {
+    if (subscription.plan_status === 'active' && !pastDue) {
       return (
         <Badge variant="default" className="gap-1 bg-green-50 text-green-700 border-green-200">
           <CheckCircle2 className="h-3 w-3" />
@@ -98,7 +102,7 @@ export function PlanCard({ plan, subscription, currency }: PlanCardProps) {
       )
     }
 
-    if (subscription.plan_status === 'active') {
+    if (subscription.plan_status === 'active' && !pastDue) {
       return (
         <Button asChild className="w-full" variant="default">
           <Link href={`/dashboard/predictions?plan=${plan.slug}`}>View Predictions</Link>
@@ -131,7 +135,7 @@ export function PlanCard({ plan, subscription, currency }: PlanCardProps) {
           </div>
         )}
 
-        {subscription?.plan_status === 'active' && subscription.expiry_date && (
+        {activeNow && subscription?.expiry_date && (
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Expires:</span>
@@ -148,7 +152,7 @@ export function PlanCard({ plan, subscription, currency }: PlanCardProps) {
           </div>
         )}
 
-        {subscription?.plan_status === 'expired' && (
+        {(subscription?.plan_status === 'expired' || pastDue) && (
           <div className="rounded-lg bg-red-50 p-3 text-sm text-red-800">
             Your subscription has expired.
           </div>

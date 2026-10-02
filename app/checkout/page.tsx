@@ -952,7 +952,18 @@ function CheckoutContent() {
                         Pay with ATM Card, USSD and Bank. Your account will be automatically activated after a successful transaction.
                       </p>
                     )}
-                    
+
+                    {/* Admin-written instructions — shown for every method
+                      type (including Paystack) whenever they exist. */}
+                    {(method.details as any)?.instructions && (
+                      <div className={isPaystack ? 'rounded-md bg-white/10 border border-white/20 p-3' : 'border-t border-gray-300 pt-3 mt-3'}>
+                        <p className={`text-sm font-semibold mb-1 ${isPaystack ? 'text-white' : ''}`}>Payment instructions</p>
+                        <p className="text-sm whitespace-pre-line">
+                          {(method.details as any).instructions}
+                        </p>
+                      </div>
+                    )}
+
                     {!isPaystack && (
                       <>
                         <p className="font-semibold mb-3">Payment should be made to</p>
@@ -1120,22 +1131,6 @@ function CheckoutContent() {
                         )}
                       </>
                     )}
-
-                        {/*
-                          The instructions the admin writes against each payment
-                          method. These were being saved but never shown, which
-                          left international users staring at a mobile-money
-                          number from another country with no explanation of
-                          which network to use or what reference to include.
-                        */}
-                        {(method.details as any)?.instructions && (
-                          <div className="border-t border-gray-300 pt-3 mt-3">
-                            <p className="text-sm font-semibold mb-1">Payment instructions</p>
-                            <p className="text-sm whitespace-pre-line">
-                              {(method.details as any).instructions}
-                            </p>
-                          </div>
-                        )}
 
                         {(method as any).country && (method as any).country !== selectedCountry && (
                           <div className="border-t border-gray-300 pt-3 mt-3">

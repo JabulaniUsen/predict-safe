@@ -9,7 +9,8 @@ import { findFixtureForPrediction } from '@/lib/utils/fixture-match'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Lock, CalendarIcon, Loader2 } from 'lucide-react'
-import { formatTime, getDateRange } from '@/lib/utils/date'
+import { formatTime, getDateRange, parseDateKey } from '@/lib/utils/date'
+import { isSubscriptionActive } from '@/lib/subscriptions/status'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import { cn } from '@/lib/utils'
 import Image from 'next/image'
@@ -77,14 +78,63 @@ export function PremiumPredictionsSection() {
   // Separate date navigation for Daily 50 Odds Combo
   const [profitMultiplierDateType, setProfitMultiplierDateType] = useState<'previous' | 'today' | 'tomorrow' | 'custom'>('today')
   const [profitMultiplierCustomDate, setProfitMultiplierCustomDate] = useState<string>('')
-  const [profitMultiplierDaysBack, setProfitMultiplierDaysBack] = useState<number>(0)
+  const [profitMultiplierDaysBack, setProfitMultiplierDaysBack] = useState<number>(1)
 
   // Separate date navigation for Correct Score
   const [correctScoreDateType, setCorrectScoreDateType] = useState<'previous' | 'today' | 'tomorrow' | 'custom'>('today')
   const [correctScoreCustomDate, setCorrectScoreCustomDate] = useState<string>('')
-  const [correctScoreDaysBack, setCorrectScoreDaysBack] = useState<number>(0)
+  const [correctScoreDaysBack, setCorrectScoreDaysBack] = useState<number>(1)
+
+  // Subscription unlock state — re-checked on mount + every 30s so an admin
+  // approval (or expiry) applies automatically without a page refresh.
+  const [daily50Unlocked, setDaily50Unlocked] = useState(false)
+  const [correctScoreUnlocked, setCorrectScoreUnlocked] = useState(false)
 
   const [teamLogos, setTeamLogos] = useState<Record<string, string | null>>({})
+
+  // Checks the viewer's subscriptions and sets unlock flags. Runs on mount
+  // and on a 30s poll so approval/expiry unlocks or re-locks automatically.
+  useEffect(() => {
+    let cancelled = false
+    const checkSubscriptions = async () => {
+      const supabase = createClient()
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (cancelled) return
+      if (!authUser) {
+        setDaily50Unlocked(false)
+        setCorrectScoreUnlocked(false)
+        return
+      }
+      const { data: subs } = await supabase
+        .from('user_subscriptions')
+        .select('plan_status, expiry_date, activation_fee_paid, plan:plans(slug, requires_activation)')
+        .eq('user_id', authUser.id)
+        .in('plan_status', ['active', 'pending_activation'])
+      if (cancelled || !subs) return
+      interface HomeSub {
+        plan_status: string | null
+        expiry_date: string | null
+        activation_fee_paid: boolean | null
+        plan: { slug: string | null; requires_activation: boolean | null } | null
+      }
+      const hasUnlock = (slugs: string[]) =>
+        (subs as HomeSub[]).some((s) => {
+          const slug = s.plan?.slug
+          if (!slug || !slugs.includes(slug)) return false
+          if (!isSubscriptionActive(s)) return false
+          if (s.plan?.requires_activation && !s.activation_fee_paid) return false
+          return true
+        })
+      setDaily50Unlocked(hasUnlock(['daily-50-odds-combo', 'profit-multiplier']))
+      setCorrectScoreUnlocked(hasUnlock(['correct-score']))
+    }
+    checkSubscriptions()
+    const interval = setInterval(checkSubscriptions, 30000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -315,6 +365,17 @@ export function PremiumPredictionsSection() {
     }
   }
 
+  // When the viewer already holds that plan, tapping a card takes them to
+  // their predictions instead of the subscribe page. Past games are public
+  // so they never navigate.
+  const handlePlanCardClick = (locked: boolean, planSlug: string) => {
+    if (!locked) {
+      router.push(`/dashboard/predictions?plan=${planSlug}`)
+      return
+    }
+    handleSubscribe()
+  }
+
   // Check if a prediction is in the past (kickoff time has passed)
   const isPastGame = (kickoffTime: string): boolean => {
     const kickoff = new Date(kickoffTime)
@@ -326,7 +387,12 @@ export function PremiumPredictionsSection() {
   }
 
   // Check if a prediction is for today or future
-  const shouldShowLocks = (kickoffTime: string): boolean => {
+  // Past games are always public. Future games are locked UNLESS the viewer
+  // holds an active (non-expired, activation-paid) subscription for that plan
+  // — that is what makes the home screen unlock automatically on approval
+  // and re-lock automatically on expiry.
+  const shouldShowLocks = (kickoffTime: string, unlocked = false): boolean => {
+    if (unlocked) return false
     return !isPastGame(kickoffTime)
   }
 
@@ -358,7 +424,7 @@ export function PremiumPredictionsSection() {
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 bg-clip-text text-transparent mb-1 lg:mb-2">
               Premium Predictions
             </h2>
-            <p className="text-sm lg:text-base text-gray-300">Exclusive high-value predictions - Subscribe to unlock</p>
+            <p className="text-sm lg:text-base text-gray-300">{daily50Unlocked && correctScoreUnlocked ? 'Your premium predictions are unlocked' : 'Exclusive high-value predictions - Subscribe to unlock'}</p>
           </div>
         </div>
 
@@ -577,13 +643,13 @@ export function PremiumPredictionsSection() {
                         )}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {profitMultiplierCustomDate ? format(new Date(profitMultiplierCustomDate), 'MMM dd') : 'Select Date'}
+                        {profitMultiplierCustomDate ? format(parseDateKey(profitMultiplierCustomDate), 'MMM dd') : 'Select Date'}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0 bg-gray-800 border-yellow-600/30" align="start">
                       <Calendar
                         mode="single"
-                        selected={profitMultiplierCustomDate ? new Date(profitMultiplierCustomDate) : undefined}
+                        selected={profitMultiplierCustomDate ? parseDateKey(profitMultiplierCustomDate) : undefined}
                         onSelect={(date) => {
                           if (date) {
                             setProfitMultiplierCustomDate(format(date, 'yyyy-MM-dd'))
@@ -648,7 +714,7 @@ export function PremiumPredictionsSection() {
                     {profitMultiplierPredictions.map((prediction) => (
                       <div
                         key={prediction.id}
-                        onClick={handleSubscribe}
+                        onClick={() => handlePlanCardClick(shouldShowLocks(prediction.kickoff_time, daily50Unlocked), 'daily-50-odds-combo')}
                         className="bg-gray-800 border border-yellow-600/30 rounded-lg p-3 space-y-2 cursor-pointer hover:bg-gray-700 hover:border-yellow-500/50 transition-all shadow-lg shadow-black/50"
                       >
                         {/* Top Row: Time and Home Team */}
@@ -718,10 +784,10 @@ export function PremiumPredictionsSection() {
 
                         {/* Prediction Row */}
                         <div
-                          onClick={shouldShowLocks(prediction.kickoff_time) ? handleSubscribe : undefined}
+                          onClick={shouldShowLocks(prediction.kickoff_time, daily50Unlocked) ? () => handlePlanCardClick(true, 'daily-50-odds-combo') : undefined}
                           className={cn(
                             "bg-gray-900 border border-yellow-600/20 px-2 py-2 rounded grid grid-cols-5 gap-1 items-center transition-all",
-                            shouldShowLocks(prediction.kickoff_time) && "cursor-pointer hover:bg-gray-800 hover:border-yellow-500/40"
+                            shouldShowLocks(prediction.kickoff_time, daily50Unlocked) && "cursor-pointer hover:bg-gray-800 hover:border-yellow-500/40"
                           )}
                         >
                           <div className="flex items-center justify-center">
@@ -733,7 +799,7 @@ export function PremiumPredictionsSection() {
                             </Badge>
                           </div>
                           <div className="text-[10px] sm:text-xs font-medium text-gray-400 text-center truncate flex items-center justify-center gap-1">
-                            {shouldShowLocks(prediction.kickoff_time) ? (
+                            {shouldShowLocks(prediction.kickoff_time, daily50Unlocked) ? (
                               <Lock className="h-4 w-4 text-yellow-500" />
                             ) : (
                               <span className="text-yellow-400">{prediction.prediction_type || '-'}</span>
@@ -743,7 +809,7 @@ export function PremiumPredictionsSection() {
                             {formatActualScore(prediction)}
                           </div>
                           <div className="text-[10px] sm:text-xs font-semibold text-gray-400 text-center flex items-center justify-center gap-1">
-                            {shouldShowLocks(prediction.kickoff_time) ? (
+                            {shouldShowLocks(prediction.kickoff_time, daily50Unlocked) ? (
                               <Lock className="h-4 w-4 text-yellow-500" />
                             ) : (
                               <span className="text-yellow-400">{prediction.odds?.toFixed(2) || '-'}</span>
@@ -753,7 +819,7 @@ export function PremiumPredictionsSection() {
                             {prediction.confidence ? (
                               <CircularProgress value={prediction.confidence} size={40} strokeWidth={3} />
                             ) : (
-                              shouldShowLocks(prediction.kickoff_time) ? (
+                              shouldShowLocks(prediction.kickoff_time, daily50Unlocked) ? (
                                 <Lock className="h-4 w-4 text-[#f97316]" />
                               ) : null
                             )}
@@ -778,11 +844,11 @@ export function PremiumPredictionsSection() {
 
                     {/* Predictions */}
                     {profitMultiplierPredictions.map((prediction, index) => {
-                      const showLocks = shouldShowLocks(prediction.kickoff_time)
+                      const showLocks = shouldShowLocks(prediction.kickoff_time, daily50Unlocked)
                       return (
                         <div
                           key={prediction.id}
-                          onClick={showLocks ? handleSubscribe : undefined}
+                          onClick={showLocks ? () => handlePlanCardClick(true, 'daily-50-odds-combo') : () => handlePlanCardClick(false, 'daily-50-odds-combo')}
                           className={cn(
                             'px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 grid grid-cols-12 gap-2 lg:gap-4 items-center border-b border-yellow-600/20 bg-gray-800 transition-all duration-300 transform',
                             index === profitMultiplierPredictions.length - 1 && 'border-b-0',
@@ -950,13 +1016,13 @@ export function PremiumPredictionsSection() {
                         )}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {correctScoreCustomDate ? format(new Date(correctScoreCustomDate), 'MMM dd') : 'Select Date'}
+                        {correctScoreCustomDate ? format(parseDateKey(correctScoreCustomDate), 'MMM dd') : 'Select Date'}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0 bg-gray-800 border-yellow-600/30" align="start">
                       <Calendar
                         mode="single"
-                        selected={correctScoreCustomDate ? new Date(correctScoreCustomDate) : undefined}
+                        selected={correctScoreCustomDate ? parseDateKey(correctScoreCustomDate) : undefined}
                         onSelect={(date) => {
                           if (date) {
                             setCorrectScoreCustomDate(format(date, 'yyyy-MM-dd'))
@@ -1019,11 +1085,11 @@ export function PremiumPredictionsSection() {
                   {/* Mobile View */}
                   <div className="lg:hidden space-y-3 mb-6">
                     {correctScorePredictions.map((prediction) => {
-                      const showLocks = shouldShowLocks(prediction.kickoff_time)
+                      const showLocks = shouldShowLocks(prediction.kickoff_time, correctScoreUnlocked)
                       return (
                         <div
                           key={prediction.id}
-                          onClick={showLocks ? handleSubscribe : undefined}
+                          onClick={showLocks ? () => handlePlanCardClick(true, 'correct-score') : () => handlePlanCardClick(false, 'correct-score')}
                           className={cn(
                             "bg-gray-800 border border-yellow-600/30 rounded-lg p-3 space-y-2 transition-all shadow-lg shadow-black/50",
                             showLocks && "cursor-pointer hover:bg-gray-700 hover:border-yellow-500/50"
@@ -1096,7 +1162,7 @@ export function PremiumPredictionsSection() {
 
                           {/* Prediction Row */}
                           <div
-                            onClick={showLocks ? handleSubscribe : undefined}
+                            onClick={showLocks ? () => handlePlanCardClick(true, 'correct-score') : () => handlePlanCardClick(false, 'correct-score')}
                             className={cn(
                               "bg-gray-900 border border-yellow-600/20 px-2 py-2 rounded grid grid-cols-5 gap-1 items-center transition-all",
                               showLocks && "cursor-pointer hover:bg-gray-800 hover:border-yellow-500/40"
@@ -1155,11 +1221,11 @@ export function PremiumPredictionsSection() {
 
                     {/* Predictions */}
                     {correctScorePredictions.map((prediction, index) => {
-                      const showLocks = shouldShowLocks(prediction.kickoff_time)
+                      const showLocks = shouldShowLocks(prediction.kickoff_time, correctScoreUnlocked)
                       return (
                         <div
                           key={prediction.id}
-                          onClick={showLocks ? handleSubscribe : undefined}
+                          onClick={showLocks ? () => handlePlanCardClick(true, 'correct-score') : () => handlePlanCardClick(false, 'correct-score')}
                           className={cn(
                             'px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 grid grid-cols-12 gap-2 lg:gap-4 items-center border-b border-yellow-600/20 bg-gray-800 transition-all duration-300 transform',
                             index === correctScorePredictions.length - 1 && 'border-b-0',
@@ -1310,14 +1376,23 @@ export function PremiumPredictionsSection() {
               )}
             </div>
 
-            {/* Subscribe CTA */}
+            {/* Subscribe CTA — reflects live unlock state */}
             <div className="mt-6 text-center">
-              <Button
-                onClick={handleSubscribe}
-                className="bg-gradient-to-r from-yellow-500 via-yellow-400 to-yellow-500 hover:from-yellow-400 hover:to-yellow-500 text-black font-bold px-8 py-3 rounded-lg text-lg shadow-lg shadow-yellow-500/50 hover:shadow-xl hover:shadow-yellow-500/70 transition-all duration-300 transform hover:scale-105 border border-yellow-300"
-              >
-                Subscribe to Unlock
-              </Button>
+              {daily50Unlocked && correctScoreUnlocked ? (
+                <Button
+                  onClick={() => router.push('/dashboard/predictions')}
+                  className="bg-gradient-to-r from-yellow-500 via-yellow-400 to-yellow-500 hover:from-yellow-400 hover:to-yellow-500 text-black font-bold px-8 py-3 rounded-lg text-lg shadow-lg shadow-yellow-500/50 hover:shadow-xl hover:shadow-yellow-500/70 transition-all duration-300 transform hover:scale-105 border border-yellow-300"
+                >
+                  View My Predictions
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleSubscribe}
+                  className="bg-gradient-to-r from-yellow-500 via-yellow-400 to-yellow-500 hover:from-yellow-400 hover:to-yellow-500 text-black font-bold px-8 py-3 rounded-lg text-lg shadow-lg shadow-yellow-500/50 hover:shadow-xl hover:shadow-yellow-500/70 transition-all duration-300 transform hover:scale-105 border border-yellow-300"
+                >
+                  Subscribe to Unlock
+                </Button>
+              )}
             </div>
           </>
         )}
