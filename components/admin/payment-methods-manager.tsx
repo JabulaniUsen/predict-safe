@@ -264,14 +264,12 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
 
     setUploadingLogo(true)
     try {
-      const supabase = createClient()
-      
       // Validate file
       if (!logoFile.type.startsWith('image/')) {
         toast.error('Please upload an image file')
         return null
       }
-      
+
       // Check file size (max 5MB)
       if (logoFile.size > 5 * 1024 * 1024) {
         toast.error('File size must be less than 5MB')
@@ -284,40 +282,25 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
         return null
       }
 
-      // Generate unique filename. upsert:true so re-saving the same method
-      // with a new logo of the same extension overwrites instead of
-      // failing with a "duplicate" error.
+      // Upload via the server API route. It runs with the service-role key,
+      // so it works even when the `payment-logos` storage bucket or its RLS
+      // policies haven't been set up yet (the bucket is auto-created).
       const uniqueId = editingMethod?.id || `temp-${Date.now()}-${Math.random().toString(36).substring(7)}`
-      const fileName = `payment-methods/${uniqueId}.${fileExt}`
+      const formData = new FormData()
+      formData.append('file', logoFile)
+      formData.append('methodId', uniqueId)
 
-      // Upload the file (upsert so re-uploads overwrite)
-      const { error } = await supabase.storage
-        .from('payment-logos')
-        .upload(fileName, logoFile, {
-          cacheControl: '3600',
-          upsert: true,
-        })
+      const response = await fetch('/api/payment-methods/upload-logo', {
+        method: 'POST',
+        body: formData,
+      })
+      const result = await response.json().catch(() => ({}))
 
-      if (error) {
-        console.error('Storage upload error:', error)
-        if (error.message?.includes('row-level security') || error.message?.includes('RLS') || error.message?.includes('violates row-level security')) {
-          throw new Error(
-            "Logo storage policy missing! Go to Supabase Dashboard → Storage → payment-logos → Policies → add an INSERT policy with: bucket_id = 'payment-logos'"
-          )
-        }
-        if (error.message?.toLowerCase().includes('bucket')) {
-          throw new Error(
-            "Storage bucket 'payment-logos' not found! Create it in Supabase Dashboard → Storage (public bucket named 'payment-logos')"
-          )
-        }
-        throw error
+      if (!response.ok) {
+        throw new Error(result?.error || 'Failed to upload logo')
       }
 
-      // Get public URL (even if data is null, we can still construct the URL)
-      const { data: { publicUrl } } = supabase.storage
-        .from('payment-logos')
-        .getPublicUrl(fileName)
-
+      const publicUrl = result?.url as string | undefined
       if (!publicUrl) {
         throw new Error('Failed to get public URL for uploaded file')
       }
