@@ -72,9 +72,16 @@ export function BlogManager({ initialPosts }: BlogManagerProps) {
       // Publishing (including re-publishing a draft) always leaves the row
       // publicly visible: clear any stale future schedule and guarantee a
       // published_at. Unpublishing clears the stamps so no stale schedule or
-      // date lingers.
+      // date lingers. Only reuse the existing stamp when it is already in
+      // the past — a future-dated stamp (e.g. from a fast browser clock) is
+      // hidden by RLS/list queries and 404s. Otherwise backdate slightly to
+      // guarantee immediate visibility.
+      const existing = post.published_at ? new Date(post.published_at).getTime() : NaN
       updateData.scheduled_at = null
-      updateData.published_at = post.published_at || new Date().toISOString()
+      updateData.published_at =
+        post.published_at && existing <= Date.now()
+          ? post.published_at
+          : new Date(Date.now() - 60_000).toISOString()
     } else {
       updateData.scheduled_at = null
       updateData.published_at = null

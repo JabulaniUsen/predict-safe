@@ -294,6 +294,15 @@ function WriteBlogContent() {
     // Handle scheduling / publishing. The public blog list requires
     // published=true AND a non-null past published_at, so every path that
     // publishes must guarantee a published_at, including editing a draft.
+    // Timestamps come from the browser clock, which can run fast — a
+    // future-dated published_at is hidden by RLS and the list/detail queries
+    // (`published_at <= NOW()`), producing a 404 on a "published" post. So
+    // only ever reuse an existing stamp when it is already in the past, and
+    // otherwise backdate slightly to guarantee immediate visibility.
+    const pastPublishedAt =
+      existingPublishedAt && new Date(existingPublishedAt).getTime() <= Date.now()
+        ? existingPublishedAt
+        : new Date(Date.now() - 60_000).toISOString()
     if (formData.scheduled_at) {
       const scheduledDate = new Date(formData.scheduled_at)
       const now = new Date()
@@ -307,13 +316,13 @@ function WriteBlogContent() {
         // Scheduled time has passed - publish immediately
         submitData.scheduled_at = null
         submitData.published = true
-        submitData.published_at = existingPublishedAt || new Date().toISOString()
+        submitData.published_at = pastPublishedAt
       }
     } else if (formData.published) {
       // Publish immediately (new post or draft -> published)
       submitData.scheduled_at = null
       submitData.published = true
-      submitData.published_at = existingPublishedAt || new Date().toISOString()
+      submitData.published_at = pastPublishedAt
     } else {
       // Saved as draft — clear scheduling/publish stamps so a later publish
       // gets a fresh published_at and a stale future schedule can't linger.
