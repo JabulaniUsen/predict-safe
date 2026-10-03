@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { AdminLayout } from '@/components/admin/admin-layout'
 import { AdLinksManager } from '@/components/admin/ad-links-manager'
 import { Database } from '@/types/database'
+import type { AffiliateLink } from '@/lib/affiliate-links'
 
 // Force dynamic rendering - this page requires admin authentication
 export const dynamic = 'force-dynamic'
@@ -30,22 +31,17 @@ export default async function AdminAdLinksPage() {
     redirect('/dashboard')
   }
 
-  // Get all ad links
+  // Get all affiliate / partner links
   const { data: adLinks } = await supabase
     .from('ad_links')
     .select('*')
-    .order('display_order', { ascending: true })
+    .order('created_at', { ascending: true })
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Ad Links Management</h1>
-          <p className="text-muted-foreground">Manage advertisement links displayed in the navbar dropdown</p>
-        </div>
-
-        <AdLinksManager adLinks={adLinks || []} />
-      </div>
+      <AdLinksManager
+        adLinks={(adLinks as unknown as AffiliateLink[]) || []}
+      />
     </AdminLayout>
   )
 }

@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Navbar } from '@/components/layout/navbar'
 import { Footer } from '@/components/layout/footer'
 import { ExternalLinkPlacement } from '@/components/seo/external-link-placement'
+import { getActivePartnerLinks } from '@/lib/affiliate-links-server'
 import { LINK_PLACEMENTS } from '@/lib/link-partnerships'
 
 export const metadata: Metadata = {
@@ -15,7 +16,11 @@ export const metadata: Metadata = {
 // Revalidate periodically so newly activated partnerships appear without a redeploy.
 export const revalidate = 3600
 
-export default function PartnersPage() {
+export default async function PartnersPage() {
+  // Affiliate links with Type = Partners (Admin → Affiliate Links).
+  // Server-rendered dofollow backlinks, same SEO rules as the navbar slots.
+  const partnerLinks = await getActivePartnerLinks()
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -25,6 +30,26 @@ export default function PartnersPage() {
           The football prediction sites and platforms we partner with. Each link below is a
           genuine partnership link published on PredictSafe.
         </p>
+
+        {partnerLinks.length > 0 && (
+          <section className="rounded-lg border p-6 mb-10">
+            <h4 className="text-lg font-bold mb-4 text-gray-900">Partners</h4>
+            <ul className="space-y-2">
+              {partnerLinks.map((link) => (
+                <li key={link.id}>
+                  <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener"
+                    className="text-blue-600 hover:underline"
+                  >
+                    {link.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <div className="space-y-10">
           {LINK_PLACEMENTS.map((placement) => (

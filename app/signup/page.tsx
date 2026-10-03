@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Combobox } from '@/components/ui/combobox'
 import { toast } from 'sonner'
 import { Database } from '@/types/database'
-import { Navbar } from '@/components/layout/navbar'
+import { NavbarClient as Navbar } from '@/components/layout/navbar-client'
 import { getRandomAvatar } from '@/lib/utils/avatars'
 
 type UserInsert = Database['public']['Tables']['users']['Insert']

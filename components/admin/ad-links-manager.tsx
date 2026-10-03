@@ -1,62 +1,88 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Switch } from '@/components/ui/switch'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { toast } from 'sonner'
-import { Plus, Edit, Trash2, ExternalLink, ArrowUp, ArrowDown } from 'lucide-react'
+import { Pencil, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { Database } from '@/types/database'
-
-type AdLinkUpdate = Database['public']['Tables']['ad_links']['Update']
-type AdLinkInsert = Database['public']['Tables']['ad_links']['Insert']
-
-interface AdLink {
-  id: string
-  title: string
-  url: string
-  description: string | null
-  display_order: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
+import {
+  AFFILIATE_LINK_TYPES,
+  AFFILIATE_LINK_LOCATIONS,
+  affiliateLocationLabel,
+  type AffiliateLink,
+  type AffiliateLinkType,
+  type AffiliateLinkLocation,
+} from '@/lib/affiliate-links'
 
 interface AdLinksManagerProps {
-  adLinks: AdLink[]
+  adLinks: AffiliateLink[]
+}
+
+type StatusValue = 'published' | 'draft'
+
+const emptyForm = {
+  type: '' as '' | AffiliateLinkType,
+  location: '' as '' | AffiliateLinkLocation,
+  label: '',
+  website: '',
+  status: 'published' as StatusValue,
+}
+
+function typeBadge(type: string) {
+  if (type === 'partners') return <Badge variant="secondary">Partners</Badge>
+  return <Badge variant="outline">Menu Link</Badge>
+}
+
+function statusBadge(isActive: boolean) {
+  if (isActive) return <Badge className="bg-green-600">Published</Badge>
+  return <Badge variant="secondary">Draft</Badge>
 }
 
 export function AdLinksManager({ adLinks: initialAdLinks }: AdLinksManagerProps) {
   const router = useRouter()
-  const [adLinks, setAdLinks] = useState<AdLink[]>(initialAdLinks)
+  const [links, setLinks] = useState<AffiliateLink[]>(initialAdLinks)
   const [loading, setLoading] = useState(false)
-  const [editingLink, setEditingLink] = useState<AdLink | null>(null)
+  const [editingLink, setEditingLink] = useState<AffiliateLink | null>(null)
   const [showDialog, setShowDialog] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [typeFilter, setTypeFilter] = useState('all')
 
-  const [linkForm, setLinkForm] = useState({
-    title: '',
-    url: '',
-    description: '',
-    display_order: 0,
-    is_active: true,
-  })
+  const [form, setForm] = useState(emptyForm)
+
+  const filtered = useMemo(() => {
+    if (typeFilter === 'all') return links
+    return links.filter((l) => l.type === typeFilter)
+  }, [links, typeFilter])
+
+  const refresh = async () => {
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('ad_links')
+      .select('*')
+      .order('created_at', { ascending: true })
+    if (data) setLinks(data as AffiliateLink[])
+    router.refresh()
+  }
 
   const resetForm = () => {
-    setLinkForm({
-      title: '',
-      url: '',
-      description: '',
-      display_order: 0,
-      is_active: true,
-    })
+    setForm(emptyForm)
     setEditingLink(null)
   }
 
@@ -65,372 +91,330 @@ export function AdLinksManager({ adLinks: initialAdLinks }: AdLinksManagerProps)
     setShowDialog(true)
   }
 
-  const openEditDialog = (link: AdLink) => {
-    setLinkForm({
-      title: link.title,
-      url: link.url,
-      description: link.description || '',
-      display_order: link.display_order,
-      is_active: link.is_active,
+  const openEditDialog = (link: AffiliateLink) => {
+    setForm({
+      type: link.type,
+      location: link.location,
+      label: link.title,
+      website: link.url,
+      status: link.is_active ? 'published' : 'draft',
     })
     setEditingLink(link)
     setShowDialog(true)
   }
 
-  const handleSubmit = async () => {
-    if (!linkForm.title.trim() || !linkForm.url.trim()) {
-      toast.error('Title and URL are required')
-      return
+  const validate = () => {
+    if (!form.type) {
+      toast.error('Type is required')
+      return false
     }
-
-    // Validate URL format
+    if (!form.location) {
+      toast.error('Location is required')
+      return false
+    }
+    if (!form.label.trim()) {
+      toast.error('Link label is required')
+      return false
+    }
+    if (!form.website.trim()) {
+      toast.error('Website address is required')
+      return false
+    }
     try {
-      new URL(linkForm.url)
+      new URL(form.website.trim())
     } catch {
-      toast.error('Please enter a valid URL')
-      return
+      toast.error('Website address must be a valid URL (include https://)')
+      return false
     }
+    return true
+  }
+
+  const handleSubmit = async () => {
+    if (!validate()) return
 
     setLoading(true)
     try {
       const supabase = createClient()
+      const payload = {
+        title: form.label.trim(),
+        url: form.website.trim(),
+        type: form.type,
+        location: form.location,
+        is_active: form.status === 'published',
+        updated_at: new Date().toISOString(),
+      }
 
       if (editingLink) {
-        // Update existing link
-        const updateData: AdLinkUpdate = {
-          title: linkForm.title.trim(),
-          url: linkForm.url.trim(),
-          description: linkForm.description.trim() || null,
-          display_order: linkForm.display_order,
-          is_active: linkForm.is_active,
-          updated_at: new Date().toISOString(),
-        }
-        const { error } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await (supabase as any)
           .from('ad_links')
-          // @ts-expect-error - Supabase type inference issue
-          .update(updateData)
+          .update(payload)
           .eq('id', editingLink.id)
-
         if (error) throw error
-
-        toast.success('Ad link updated successfully!')
+        toast.success('Link updated successfully!')
       } else {
-        // Create new link
-        const insertData: AdLinkInsert = {
-          title: linkForm.title.trim(),
-          url: linkForm.url.trim(),
-          description: linkForm.description.trim() || null,
-          display_order: linkForm.display_order,
-          is_active: linkForm.is_active,
-        }
-        const { error } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await (supabase as any)
           .from('ad_links')
-          // @ts-expect-error - Supabase type inference issue
-          .insert(insertData)
-
+          .insert(payload)
         if (error) throw error
-
-        toast.success('Ad link created successfully!')
+        toast.success(
+          form.type === 'menu_link'
+            ? 'Menu link saved. It renders in the navbar Link slot as a follow backlink.'
+            : 'Partner link saved.'
+        )
       }
 
       setShowDialog(false)
       resetForm()
-      router.refresh()
-    } catch (error: any) {
-      console.error('Error saving ad link:', error)
-      toast.error(error.message || 'Failed to save ad link')
+      await refresh()
+    } catch (error) {
+      console.error('Error saving affiliate link:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to save link')
     } finally {
       setLoading(false)
     }
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this ad link?')) {
-      return
-    }
+    if (!confirm('Are you sure you want to delete this link?')) return
 
     setDeletingId(id)
     try {
       const supabase = createClient()
-      const { error } = await supabase
-        .from('ad_links')
-        .delete()
-        .eq('id', id)
-
+      const { error } = await supabase.from('ad_links').delete().eq('id', id)
       if (error) throw error
-
-      toast.success('Ad link deleted successfully!')
-      router.refresh()
-    } catch (error: any) {
-      console.error('Error deleting ad link:', error)
-      toast.error(error.message || 'Failed to delete ad link')
+      toast.success('Link deleted successfully!')
+      await refresh()
+    } catch (error) {
+      console.error('Error deleting affiliate link:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to delete link')
     } finally {
       setDeletingId(null)
     }
   }
 
-  const handleToggleActive = async (link: AdLink) => {
-    try {
-      const supabase = createClient()
-      const updateData: AdLinkUpdate = {
-        is_active: !link.is_active,
-        updated_at: new Date().toISOString(),
-      }
-      const { error } = await supabase
-        .from('ad_links')
-        // @ts-expect-error - Supabase type inference issue
-        .update(updateData)
-        .eq('id', link.id)
-
-      if (error) throw error
-
-      toast.success(`Ad link ${!link.is_active ? 'activated' : 'deactivated'} successfully!`)
-      router.refresh()
-    } catch (error: any) {
-      console.error('Error toggling ad link status:', error)
-      toast.error(error.message || 'Failed to update ad link status')
-    }
-  }
-
-  const handleMoveOrder = async (link: AdLink, direction: 'up' | 'down') => {
-    const currentIndex = adLinks.findIndex(l => l.id === link.id)
-    if (currentIndex === -1) return
-
-    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
-    if (newIndex < 0 || newIndex >= adLinks.length) return
-
-    const targetLink = adLinks[newIndex]
-
-    try {
-      const supabase = createClient()
-
-      // Swap display orders
-      const updateData1: AdLinkUpdate = {
-        display_order: targetLink.display_order,
-        updated_at: new Date().toISOString()
-      }
-      await supabase
-        .from('ad_links')
-        // @ts-expect-error - Supabase type inference issue
-        .update(updateData1)
-        .eq('id', link.id)
-
-      const updateData2: AdLinkUpdate = {
-        display_order: link.display_order,
-        updated_at: new Date().toISOString()
-      }
-      await supabase
-        .from('ad_links')
-        // @ts-expect-error - Supabase type inference issue
-        .update(updateData2)
-        .eq('id', targetLink.id)
-
-      toast.success('Display order updated!')
-      router.refresh()
-    } catch (error: any) {
-      console.error('Error updating display order:', error)
-      toast.error(error.message || 'Failed to update display order')
-    }
-  }
-
-  // Sort links by display_order
-  const sortedLinks = [...adLinks].sort((a, b) => a.display_order - b.display_order)
-
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold">Ad Links</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Manage links displayed in the navbar dropdown. Active links are visible to all users.
-          </p>
-        </div>
-        <Button onClick={openAddDialog} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Add Ad Link
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold tracking-tight">Affiliate/Partners Links</h2>
+        <Button onClick={openAddDialog} className="bg-green-600 hover:bg-green-700">
+          Add New Link
         </Button>
       </div>
 
-      {sortedLinks.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground mb-4">No ad links yet. Create your first one!</p>
-            <Button onClick={openAddDialog} variant="outline">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Ad Link
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4">
-          {sortedLinks.map((link, index) => (
-            <Card key={link.id} className={!link.is_active ? 'opacity-60' : ''}>
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 space-y-2">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-lg font-semibold">{link.title}</h3>
-                      <Badge variant={link.is_active ? 'default' : 'secondary'}>
-                        {link.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
-                      <Badge variant="outline" className="text-xs">
-                        Order: {link.display_order}
-                      </Badge>
-                    </div>
-                    <a
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:underline flex items-center gap-1"
-                    >
-                      {link.url}
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                    {link.description && (
-                      <p className="text-sm text-muted-foreground">{link.description}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex flex-col gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleMoveOrder(link, 'up')}
-                        disabled={index === 0}
-                        title="Move up"
-                      >
-                        <ArrowUp className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleMoveOrder(link, 'down')}
-                        disabled={index === sortedLinks.length - 1}
-                        title="Move down"
-                      >
-                        <ArrowDown className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <Switch
-                      checked={link.is_active}
-                      onCheckedChange={() => handleToggleActive(link)}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => openEditDialog(link)}
-                      className="h-9 w-9"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(link.id)}
-                      disabled={deletingId === link.id}
-                      className="h-9 w-9 text-red-600 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex justify-end mb-4">
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="All Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                {AFFILIATE_LINK_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label === 'Menu Link' ? 'Menu Links' : t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-      {/* Add/Edit Dialog */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-2xl">
+          {filtered.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No links yet. Click &ldquo;Add New Link&rdquo; to create one.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[760px]">
+                <thead>
+                  <tr className="text-left text-muted-foreground border-b">
+                    <th className="pb-2 pr-4 font-medium">ID</th>
+                    <th className="pb-2 pr-4 font-medium">TYPE</th>
+                    <th className="pb-2 pr-4 font-medium">LOCATION</th>
+                    <th className="pb-2 pr-4 font-medium">LABEL</th>
+                    <th className="pb-2 pr-4 font-medium">URL</th>
+                    <th className="pb-2 pr-4 font-medium">STATUS</th>
+                    <th className="pb-2 text-right font-medium">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((link, index) => (
+                    <tr key={link.id} className="border-b last:border-0">
+                      <td className="py-3 pr-4 text-muted-foreground">{index + 1}</td>
+                      <td className="py-3 pr-4">{typeBadge(link.type)}</td>
+                      <td className="py-3 pr-4">
+                        {affiliateLocationLabel(link.location)}
+                      </td>
+                      <td className="py-3 pr-4 font-medium">{link.title}</td>
+                      <td className="py-3 pr-4 max-w-[260px] truncate">
+                        <a
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          {link.url}
+                        </a>
+                      </td>
+                      <td className="py-3 pr-4">{statusBadge(link.is_active)}</td>
+                      <td className="py-3">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEditDialog(link)}
+                            className="h-8 w-8 text-green-600 hover:text-green-700"
+                            title="Edit"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(link.id)}
+                            disabled={deletingId === link.id}
+                            className="h-8 w-8 text-red-500 hover:text-red-600"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <p className="mt-4 text-xs text-muted-foreground">
+            Menu links publish into the navbar slots as follow backlinks
+            (server-rendered{' '}
+            <code>&lt;a href&gt;</code>, no nofollow) for reciprocal-link SEO.
+            Partner links publish on the public partners page.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Add / Edit dialog */}
+      <Dialog
+        open={showDialog}
+        onOpenChange={(open) => {
+          setShowDialog(open)
+          if (!open) resetForm()
+        }}
+      >
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingLink ? 'Edit Ad Link' : 'Add New Ad Link'}</DialogTitle>
-            <DialogDescription>
-              {editingLink
-                ? 'Update the ad link information below.'
-                : 'Fill in the details to create a new ad link that will appear in the navbar dropdown.'}
-            </DialogDescription>
+            <div className="flex items-center justify-between">
+              <DialogTitle>Add/Edit Affiliate Link</DialogTitle>
+            </div>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label htmlFor="title">Title *</Label>
+              <label className="text-sm font-medium">
+                Type <span className="text-red-500">*</span>
+              </label>
+              <Select
+                value={form.type || undefined}
+                onValueChange={(v) =>
+                  setForm({ ...form, type: v as AffiliateLinkType })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Menu Link" />
+                </SelectTrigger>
+                <SelectContent>
+                  {AFFILIATE_LINK_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Location <span className="text-red-500">*</span>
+              </label>
+              <Select
+                value={form.location || undefined}
+                onValueChange={(v) =>
+                  setForm({ ...form, location: v as AffiliateLinkLocation })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="placeholder" disabled>
+                    Select
+                  </SelectItem>
+                  {AFFILIATE_LINK_LOCATIONS.map((l) => (
+                    <SelectItem key={l.value} value={l.value}>
+                      {l.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Label <span className="text-red-500">*</span>
+              </label>
               <Input
-                id="title"
-                value={linkForm.title}
-                onChange={(e) => setLinkForm({ ...linkForm, title: e.target.value })}
-                placeholder="e.g., Betting Site A"
-                required
+                value={form.label}
+                onChange={(e) => setForm({ ...form, label: e.target.value })}
+                placeholder="Link Label"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="url">URL *</Label>
+              <label className="text-sm font-medium">
+                Website Address <span className="text-red-500">*</span>
+              </label>
               <Input
-                id="url"
-                type="url"
-                value={linkForm.url}
-                onChange={(e) => setLinkForm({ ...linkForm, url: e.target.value })}
-                placeholder="https://example.com"
-                required
+                value={form.website}
+                onChange={(e) => setForm({ ...form, website: e.target.value })}
+                placeholder="Link Address"
               />
-              <p className="text-xs text-muted-foreground">
-                Must include http:// or https://
-              </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="description">Description (Optional)</Label>
-              <Textarea
-                id="description"
-                value={linkForm.description}
-                onChange={(e) => setLinkForm({ ...linkForm, description: e.target.value })}
-                placeholder="Brief description of the link"
-                rows={3}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="display_order">Display Order</Label>
-                <Input
-                  id="display_order"
-                  type="number"
-                  min="0"
-                  value={linkForm.display_order}
-                  onChange={(e) => setLinkForm({ ...linkForm, display_order: parseInt(e.target.value) || 0 })}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Lower numbers appear first
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="is_active">Status</Label>
-                <div className="flex items-center gap-3 pt-2">
-                  <Switch
-                    id="is_active"
-                    checked={linkForm.is_active}
-                    onCheckedChange={(checked) => setLinkForm({ ...linkForm, is_active: checked })}
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    {linkForm.is_active ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-              </div>
+              <label className="text-sm font-medium">
+                Status <span className="text-red-500">*</span>
+              </label>
+              <Select
+                value={form.status}
+                onValueChange={(v) =>
+                  setForm({ ...form, status: v as StatusValue })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Publish" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="published">Publish</SelectItem>
+                  <SelectItem value="draft">Draft</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDialog(false)} disabled={loading}>
-              Cancel
+          <div className="flex justify-end pt-2">
+            <Button
+              onClick={handleSubmit}
+              disabled={loading}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {loading ? 'Saving…' : 'Save Link'}
             </Button>
-            <Button onClick={handleSubmit} disabled={loading}>
-              {loading ? 'Saving...' : editingLink ? 'Update' : 'Create'}
-            </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

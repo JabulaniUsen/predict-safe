@@ -570,6 +570,8 @@ export interface Database {
           title: string
           url: string
           description: string | null
+          type: string
+          location: string
           display_order: number
           is_active: boolean
           created_at: string
@@ -580,6 +582,8 @@ export interface Database {
           title: string
           url: string
           description?: string | null
+          type?: string
+          location?: string
           display_order?: number
           is_active?: boolean
           created_at?: string
@@ -590,6 +594,8 @@ export interface Database {
           title?: string
           url?: string
           description?: string | null
+          type?: string
+          location?: string
           display_order?: number
           is_active?: boolean
           created_at?: string

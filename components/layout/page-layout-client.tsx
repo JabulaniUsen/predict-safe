@@ -1,6 +1,8 @@
+'use client'
+
 import type { ReactNode } from 'react'
 import Image from 'next/image'
-import { Navbar } from './navbar'
+import { NavbarClient as Navbar } from './navbar-client'
 import { Footer } from './footer'
 
 interface PageLayoutProps {
@@ -9,11 +11,17 @@ interface PageLayoutProps {
   subtitle?: string
 }
 
+/**
+ * Client-safe page layout for Client Component pages (checkout,
+ * subscriptions, …). Uses `NavbarClient`, which fetches the affiliate menu
+ * backlinks after hydration. Server pages should use `./page-layout`
+ * instead so the backlinks are server-rendered for crawlers.
+ */
 export function PageLayout({ children, title, subtitle }: PageLayoutProps) {
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar />
-      
+
       {/* Hero Section with Background */}
       <section className="relative min-h-[200px] flex items-center overflow-hidden">
         {/* Background Image with Fallback */}
@@ -52,9 +60,8 @@ export function PageLayout({ children, title, subtitle }: PageLayoutProps) {
       <main className="flex-1 bg-gray-50">
         {children}
       </main>
-      
+
       <Footer />
     </div>
   )
 }
-

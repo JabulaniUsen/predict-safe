@@ -87,7 +87,7 @@ const navItems: NavItem[] = [
   },
   {
     href: '/admin/ad-links',
-    label: 'Ad Links',
+    label: 'Affiliate Links',
     icon: <LinkIcon className="h-5 w-5 lg:h-6 lg:w-6" />
   },
   {

@@ -311,17 +311,35 @@ CREATE TABLE IF NOT EXISTS custom_pages (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Ad links (navbar "Links" dropdown)
+-- Affiliate / Partners Links (admin screen; Type = partners/menu_link,
+-- Location = link_1/link_2). Menu-link rows are the navbar Link 1 / Link 2
+-- slots and render as server-side dofollow backlinks for reciprocal-link SEO.
 CREATE TABLE IF NOT EXISTS ad_links (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title VARCHAR(255) NOT NULL,
   url TEXT NOT NULL,
   description TEXT,
+  type TEXT NOT NULL DEFAULT 'menu_link',
+  location TEXT NOT NULL DEFAULT 'link_1',
   display_order INTEGER DEFAULT 0,
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Bring databases created before migration 033 up to the same shape.
+ALTER TABLE ad_links ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'menu_link';
+ALTER TABLE ad_links ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT 'link_1';
+UPDATE ad_links SET type = 'menu_link' WHERE type NOT IN ('partners', 'menu_link');
+UPDATE ad_links SET location = 'link_1' WHERE location NOT IN ('link_1', 'link_2');
+ALTER TABLE ad_links DROP CONSTRAINT IF EXISTS ad_links_type_check;
+ALTER TABLE ad_links ADD CONSTRAINT ad_links_type_check
+  CHECK (type IN ('partners', 'menu_link'));
+ALTER TABLE ad_links DROP CONSTRAINT IF EXISTS ad_links_location_check;
+ALTER TABLE ad_links ADD CONSTRAINT ad_links_location_check
+  CHECK (location IN ('link_1', 'link_2'));
+CREATE INDEX IF NOT EXISTS idx_ad_links_type_location_active
+  ON ad_links(type, location, is_active);
 
 -- Link partnerships (reciprocal-link configuration; a row is NOT a backlink)
 CREATE TABLE IF NOT EXISTS link_partnerships (
