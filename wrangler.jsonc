@@ -40,10 +40,10 @@
    * from process.env at request time, not just at build time.
    */
   "vars": {
-    "NEXT_PUBLIC_SITE_URL": "https://www.predictsafe.com",
-    "NEXT_PUBLIC_SUPABASE_URL": "https://utrddcynyjqudfbejvfx.supabase.co",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV0cmRkY3lueWpxdWRmYmVqdmZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4MDgzMjIsImV4cCI6MjEwNjM4NDMyMn0.bnesF8ExUK3Dm6i2nyh8vTDt1lkn2ZzLWWNRzlzNQK4",
     "NEXT_PUBLIC_GA_ID": "G-7KDF121W18",
+    "NEXT_PUBLIC_SITE_URL": "https://www.predictsafe.com",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV0cmRkY3lueWpxdWRmYmVqdmZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4MDgzMjIsImV4cCI6MjEwNjM4NDMyMn0.bnesF8ExUK3Dm6i2nyh8vTDt1lkn2ZzLWWNRzlzNQK4",
+    "NEXT_PUBLIC_SUPABASE_URL": "https://utrddcynyjqudfbejvfx.supabase.co",
     "SMTP_USER": "predictsafe@gmail.com"
   }
 
