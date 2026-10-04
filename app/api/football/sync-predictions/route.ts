@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
       perFixture = 1,
       limit,
       preview = false,
+      strategy = 'safest',
     } = body
 
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -40,6 +41,8 @@ export async function POST(request: NextRequest) {
     }
 
     const confidenceThreshold = Math.max(0, Math.min(100, parseInt(minConfidence) || 0))
+
+    const pickStrategy = strategy === 'biggest_odds' ? 'biggest_odds' : 'safest'
 
     const minOddsValue = minOdds !== undefined && minOdds !== null ? parseFloat(minOdds) : null
     const maxOddsValue = maxOdds !== undefined && maxOdds !== null ? parseFloat(maxOdds) : null
@@ -113,6 +116,7 @@ export async function POST(request: NextRequest) {
       correctScoreOnly: isCorrectScore,
       perFixture: Math.max(1, Math.min(5, Number(perFixture) || 1)),
       limit: limit !== undefined ? Math.max(1, Number(limit)) : undefined,
+      strategy: pickStrategy,
     })
 
     const predictions = generated.map((pred) => ({

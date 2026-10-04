@@ -198,13 +198,34 @@ export function candidatesForFixture(odds: Odds | undefined | null): PredictionC
 }
 
 /** Ranks candidates most-confident first, breaking ties deterministically. */
-function rankCandidates(candidates: PredictionCandidate[]): PredictionCandidate[] {
+function rankCandidates(
+  candidates: PredictionCandidate[],
+  strategy: PickStrategy = 'safest'
+): PredictionCandidate[] {
   return [...candidates].sort((a, b) => {
+    if (strategy === 'biggest_odds') {
+      if (a.odds !== b.odds) return b.odds - a.odds
+      if (b.confidence !== a.confidence) return b.confidence - a.confidence
+      return a.market.localeCompare(b.market)
+    }
     if (b.confidence !== a.confidence) return b.confidence - a.confidence
     if (a.odds !== b.odds) return a.odds - b.odds
     return a.market.localeCompare(b.market)
   })
 }
+
+/**
+ * How the winning selection is chosen from each fixture's eligible markets.
+ *
+ * `safest` takes the most probable outcome - which is why sheets built this
+ * way cluster around 1.20-1.50 (heavy-favourite 1X2, double chance, Over 1.5).
+ * `biggest_odds` takes the longest-priced selection still above the minimum
+ * confidence, for high-odds sheets like the Daily 50 Odds Combo. Note that a
+ * long price implies a low fair probability, so bigger odds require a lower
+ * minimum-confidence setting - a 3.00 shot is roughly a 33% chance and can
+ * never survive a 55% confidence floor.
+ */
+export type PickStrategy = 'safest' | 'biggest_odds';
 
 export interface GenerateOptions {
   /** Only keep tips at or above this confidence (0-100). */
@@ -215,6 +236,11 @@ export interface GenerateOptions {
   markets?: string[]
   /** Only consider correct-score markets (for the Correct Score plan). */
   correctScoreOnly?: boolean
+  /**
+   * Which eligible selection to take from each fixture. Defaults to the
+   * safest (most probable) pick.
+   */
+  strategy?: PickStrategy
   /** How many tips to take from each fixture. Defaults to 1. */
   perFixture?: number
   /** Cap on the number of predictions returned overall. */
@@ -303,6 +329,7 @@ export function buildPredictions(
     limit,
     orderBy = 'confidence',
     predictionDate,
+    strategy = 'safest',
   } = options
 
   const predictions: GeneratedPrediction[] = []
@@ -327,7 +354,8 @@ export function buildPredictions(
         if (c.odds < minOdds) return false
         if (maxOdds !== undefined && c.odds > maxOdds) return false
         return true
-      })
+      }),
+      strategy
     ).slice(0, Math.max(1, perFixture))
 
     for (const pick of eligible) {

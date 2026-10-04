@@ -98,6 +98,11 @@ function AddPredictionWithAPIContent() {
   const [perFixture, setPerFixture] = useState<string>('1')
   const [minOdds, setMinOdds] = useState<string>('') // Optional minimum odds
   const [maxOdds, setMaxOdds] = useState<string>('') // Optional maximum odds
+  // 'safest' takes each match's most probable selection (clusters ~1.20-1.50).
+  // 'biggest_odds' takes the longest-priced selection still above the minimum
+  // confidence - for high-odds VIP sheets. Long prices imply low probability,
+  // so this needs a lower confidence setting to return anything.
+  const [pickStrategy, setPickStrategy] = useState<'safest' | 'biggest_odds'>('safest')
   const [previewPredictions, setPreviewPredictions] = useState<PreviewPrediction[]>([])
   const [selectedPredictions, setSelectedPredictions] = useState<Set<number>>(new Set())
   const [selectedGameIndex, setSelectedGameIndex] = useState<number | null>(null)
@@ -178,6 +183,7 @@ function AddPredictionWithAPIContent() {
           maxOdds: maxOdds ? parseFloat(maxOdds) : undefined,
           markets: MARKET_GROUPS.find((g) => g.id === marketGroup)?.markets,
           perFixture: parseInt(perFixture, 10),
+          strategy: pickStrategy,
           preview: true, // Enable preview mode
         }),
       })
@@ -452,6 +458,24 @@ function AddPredictionWithAPIContent() {
                       <option value="2">2</option>
                       <option value="3">3</option>
                     </select>
+                  </div>
+
+                  <div className="space-y-2 pt-2">
+                    <Label htmlFor="pickStrategy" className="text-xs">Pick style</Label>
+                    <select
+                      id="pickStrategy"
+                      value={pickStrategy}
+                      onChange={(e) => setPickStrategy(e.target.value as 'safest' | 'biggest_odds')}
+                      className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      <option value="safest">Safest selection (short odds, ~1.20-1.50)</option>
+                      <option value="biggest_odds">Biggest odds (long prices for VIP sheets)</option>
+                    </select>
+                    <p className="text-xs text-muted-foreground">
+                      {pickStrategy === 'biggest_odds'
+                        ? 'Takes the longest-priced selection still above your minimum confidence. Long prices mean low probability, so lower the confidence slider (40-50%) to actually see big odds.'
+                        : 'Takes each match\u2019s most probable selection. These cluster around 1.20-1.50 - switch to Biggest odds for high-odds VIP tips.'}
+                    </p>
                   </div>
                 </div>
 
