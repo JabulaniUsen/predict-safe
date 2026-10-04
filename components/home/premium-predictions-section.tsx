@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
-import { predictionsForDate, predictionDateOf } from '@/lib/queries/predictions'
+import { predictionsForDate, predictionDateOf, isPredictionRevealed } from '@/lib/queries/predictions'
 import { findFixtureForPrediction } from '@/lib/utils/fixture-match'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -29,6 +29,7 @@ interface PremiumPrediction {
   confidence?: number
   kickoff_time: string
   prediction_date: string
+  is_revealed?: boolean | null
   match_id?: string | null
   status: 'not_started' | 'live' | 'finished'
   type: 'profit_multiplier' | 'correct_score'
@@ -51,6 +52,7 @@ interface PredictionRow {
   confidence: number | null
   kickoff_time: string
   prediction_date: string | null
+  is_revealed?: boolean | null
   match_id: string | null
   status: PredictionStatus | null
   home_score: number | string | null
@@ -189,6 +191,7 @@ export function PremiumPredictionsSection() {
             confidence: pred.confidence ?? undefined,
             kickoff_time: pred.kickoff_time,
             prediction_date: predictionDateOf(pred),
+            is_revealed: (pred as { is_revealed?: boolean | null }).is_revealed ?? null,
             match_id: pred.match_id,
             status: pred.status || 'not_started',
             type: 'profit_multiplier',
@@ -216,6 +219,7 @@ export function PremiumPredictionsSection() {
             confidence: pred.confidence ?? undefined,
             kickoff_time: pred.kickoff_time,
             prediction_date: predictionDateOf(pred),
+            is_revealed: (pred as { is_revealed?: boolean | null }).is_revealed ?? null,
             match_id: pred.match_id,
             status: pred.status || 'not_started',
             type: 'correct_score',
@@ -387,14 +391,17 @@ export function PremiumPredictionsSection() {
   }
 
   // Check if a prediction is for today or future
-  // Past games are always public. Future games are locked UNLESS the viewer
-  // holds an active (non-expired, activation-paid) subscription for that plan
-  // — that is what makes the home screen unlock automatically on approval
-  // and re-lock automatically on expiry.
-  const shouldShowLocks = (kickoffTime: string, unlocked = false): boolean => {
+  // Past games are public ONLY when revealed. Anything the admin hasn't
+  // revealed stays locked for everyone - subscribers included - so edits made
+  // after midnight (or in a later timezone) can't leak the earlier tip.
+  const shouldShowLocks = (kickoffTime: string, unlocked = false, revealed = true): boolean => {
+    if (!revealed) return true
     if (unlocked) return false
     return !isPastGame(kickoffTime)
   }
+
+  const isRevealed = (prediction: PremiumPrediction): boolean =>
+    isPredictionRevealed(prediction)
 
   const getTeamLogo = (teamName: string): string | null => {
     return teamLogos[teamName] || null
@@ -714,7 +721,7 @@ export function PremiumPredictionsSection() {
                     {profitMultiplierPredictions.map((prediction) => (
                       <div
                         key={prediction.id}
-                        onClick={() => handlePlanCardClick(shouldShowLocks(prediction.kickoff_time, daily50Unlocked), 'daily-50-odds-combo')}
+                        onClick={() => handlePlanCardClick(shouldShowLocks(prediction.kickoff_time, daily50Unlocked, isRevealed(prediction)), 'daily-50-odds-combo')}
                         className="bg-gray-800 border border-yellow-600/30 rounded-lg p-3 space-y-2 cursor-pointer hover:bg-gray-700 hover:border-yellow-500/50 transition-all shadow-lg shadow-black/50"
                       >
                         {/* Top Row: Time and Home Team */}
@@ -784,10 +791,10 @@ export function PremiumPredictionsSection() {
 
                         {/* Prediction Row */}
                         <div
-                          onClick={shouldShowLocks(prediction.kickoff_time, daily50Unlocked) ? () => handlePlanCardClick(true, 'daily-50-odds-combo') : undefined}
+                          onClick={shouldShowLocks(prediction.kickoff_time, daily50Unlocked, isRevealed(prediction)) ? () => handlePlanCardClick(true, 'daily-50-odds-combo') : undefined}
                           className={cn(
                             "bg-gray-900 border border-yellow-600/20 px-2 py-2 rounded grid grid-cols-5 gap-1 items-center transition-all",
-                            shouldShowLocks(prediction.kickoff_time, daily50Unlocked) && "cursor-pointer hover:bg-gray-800 hover:border-yellow-500/40"
+                            shouldShowLocks(prediction.kickoff_time, daily50Unlocked, isRevealed(prediction)) && "cursor-pointer hover:bg-gray-800 hover:border-yellow-500/40"
                           )}
                         >
                           <div className="flex items-center justify-center">
@@ -799,7 +806,7 @@ export function PremiumPredictionsSection() {
                             </Badge>
                           </div>
                           <div className="text-[10px] sm:text-xs font-medium text-gray-400 text-center truncate flex items-center justify-center gap-1">
-                            {shouldShowLocks(prediction.kickoff_time, daily50Unlocked) ? (
+                            {shouldShowLocks(prediction.kickoff_time, daily50Unlocked, isRevealed(prediction)) ? (
                               <Lock className="h-4 w-4 text-yellow-500" />
                             ) : (
                               <span className="text-yellow-400">{prediction.prediction_type || '-'}</span>
@@ -809,17 +816,19 @@ export function PremiumPredictionsSection() {
                             {formatActualScore(prediction)}
                           </div>
                           <div className="text-[10px] sm:text-xs font-semibold text-gray-400 text-center flex items-center justify-center gap-1">
-                            {shouldShowLocks(prediction.kickoff_time, daily50Unlocked) ? (
+                            {shouldShowLocks(prediction.kickoff_time, daily50Unlocked, isRevealed(prediction)) ? (
                               <Lock className="h-4 w-4 text-yellow-500" />
                             ) : (
                               <span className="text-yellow-400">{prediction.odds?.toFixed(2) || '-'}</span>
                             )}
                           </div>
                           <div className="flex items-center justify-center">
-                            {prediction.confidence ? (
+                            {!isRevealed(prediction) ? (
+                              <Lock className="h-4 w-4 text-[#f97316]" />
+                            ) : prediction.confidence ? (
                               <CircularProgress value={prediction.confidence} size={40} strokeWidth={3} />
                             ) : (
-                              shouldShowLocks(prediction.kickoff_time, daily50Unlocked) ? (
+                              shouldShowLocks(prediction.kickoff_time, daily50Unlocked, isRevealed(prediction)) ? (
                                 <Lock className="h-4 w-4 text-[#f97316]" />
                               ) : null
                             )}
@@ -844,7 +853,7 @@ export function PremiumPredictionsSection() {
 
                     {/* Predictions */}
                     {profitMultiplierPredictions.map((prediction, index) => {
-                      const showLocks = shouldShowLocks(prediction.kickoff_time, daily50Unlocked)
+                      const showLocks = shouldShowLocks(prediction.kickoff_time, daily50Unlocked, isRevealed(prediction))
                       return (
                         <div
                           key={prediction.id}
@@ -953,7 +962,9 @@ export function PremiumPredictionsSection() {
 
                           {/* Confidence */}
                           <div className="col-span-2 flex justify-center hidden lg:flex">
-                            {prediction.confidence ? (
+                            {!isRevealed(prediction) ? (
+                              <Lock className="h-5 w-5 text-[#f97316]" />
+                            ) : prediction.confidence ? (
                               <CircularProgress value={prediction.confidence} size={50} strokeWidth={5} />
                             ) : (
                               showLocks && <Lock className="h-5 w-5 text-[#f97316]" />
@@ -1085,7 +1096,7 @@ export function PremiumPredictionsSection() {
                   {/* Mobile View */}
                   <div className="lg:hidden space-y-3 mb-6">
                     {correctScorePredictions.map((prediction) => {
-                      const showLocks = shouldShowLocks(prediction.kickoff_time, correctScoreUnlocked)
+                      const showLocks = shouldShowLocks(prediction.kickoff_time, correctScoreUnlocked, isRevealed(prediction))
                       return (
                         <div
                           key={prediction.id}
@@ -1194,7 +1205,9 @@ export function PremiumPredictionsSection() {
                               )}
                             </div>
                             <div className="flex items-center justify-center">
-                              {prediction.confidence ? (
+                              {!isRevealed(prediction) ? (
+                                <Lock className="h-4 w-4 text-[#f97316]" />
+                              ) : prediction.confidence ? (
                                 <CircularProgress value={prediction.confidence} size={40} strokeWidth={3} />
                               ) : (
                                 <span className="text-[10px] sm:text-xs text-gray-400">-</span>
@@ -1221,7 +1234,7 @@ export function PremiumPredictionsSection() {
 
                     {/* Predictions */}
                     {correctScorePredictions.map((prediction, index) => {
-                      const showLocks = shouldShowLocks(prediction.kickoff_time, correctScoreUnlocked)
+                      const showLocks = shouldShowLocks(prediction.kickoff_time, correctScoreUnlocked, isRevealed(prediction))
                       return (
                         <div
                           key={prediction.id}
@@ -1328,7 +1341,9 @@ export function PremiumPredictionsSection() {
 
                           {/* Confidence */}
                           <div className="col-span-2 flex justify-center hidden lg:flex">
-                            {prediction.confidence ? (
+                            {!isRevealed(prediction) ? (
+                              <Lock className="h-5 w-5 text-[#f97316]" />
+                            ) : prediction.confidence ? (
                               <CircularProgress value={prediction.confidence} size={50} strokeWidth={5} />
                             ) : (
                               <span className="text-xs text-gray-400">-</span>

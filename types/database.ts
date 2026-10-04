@@ -165,6 +165,12 @@ export interface Database {
           kickoff_time: string
           /** The day the prediction was provided for. Filter on this, never on kickoff_time. */
           prediction_date: string
+          /**
+           * Manual reveal switch. The tip/odds stay hidden from everyone
+           * (including subscribers and past-game history) until the admin
+           * flips this to true after finishing edits.
+           */
+          is_revealed: boolean
           status: 'not_started' | 'live' | 'finished'
           result: 'win' | 'loss' | 'pending' | null
           home_score: number | null
@@ -188,6 +194,7 @@ export interface Database {
           confidence: number
           kickoff_time: string
           prediction_date: string
+          is_revealed?: boolean
           status?: 'not_started' | 'live' | 'finished'
           result?: 'win' | 'loss' | 'pending' | null
           home_score?: number | null
@@ -211,6 +218,7 @@ export interface Database {
           confidence?: number
           kickoff_time?: string
           prediction_date?: string
+          is_revealed?: boolean
           status?: 'not_started' | 'live' | 'finished'
           result?: 'win' | 'loss' | 'pending' | null
           home_score?: number | null

@@ -191,6 +191,15 @@ function AddPredictionContent() {
       away_score: matchStatus === 'finished' ? awayScore : null,
       result: matchStatus === 'finished' ? result : null,
       admin_notes: (formDataObj.get('admin_notes') as string) || null,
+      // New and edited tips start hidden - the admin reveals them from the
+      // predictions list once edits are finished (migration 035). This stops
+      // an early version of the tip leaking before corrections are done.
+      is_revealed: false,
+    }
+
+    const stripReveal = (data: Record<string, unknown>) => {
+      const { is_revealed: _omit, ...rest } = data
+      return rest
     }
 
     try {
@@ -204,16 +213,38 @@ function AddPredictionContent() {
           .update(updateData)
           .eq('id', editId)
 
-        if (error) throw error
-        toast.success('Prediction updated successfully!')
+        if (error) {
+          // Column missing when migration 035 hasn't been applied yet.
+          if (error.message?.includes('is_revealed')) {
+            const retry = await supabase
+              .from('predictions')
+              // @ts-expect-error - Supabase type inference issue
+              .update(stripReveal(baseData as unknown as Record<string, unknown>))
+              .eq('id', editId)
+            if (retry.error) throw retry.error
+          } else {
+            throw error
+          }
+        }
+        toast.success('Prediction updated and hidden - reveal it from the predictions list when ready!')
       } else {
         const insertData: Database['public']['Tables']['predictions']['Insert'] = baseData
         const { error } = await supabase
           .from('predictions')
           // @ts-expect-error - Supabase type inference issue
           .insert(insertData)
-        if (error) throw error
-        toast.success('Prediction added successfully!')
+        if (error) {
+          if (error.message?.includes('is_revealed')) {
+            const retry = await supabase
+              .from('predictions')
+              // @ts-expect-error - Supabase type inference issue
+              .insert(stripReveal(baseData as unknown as Record<string, unknown>))
+            if (retry.error) throw retry.error
+          } else {
+            throw error
+          }
+        }
+        toast.success('Prediction added as hidden - reveal it from the predictions list when ready!')
       }
 
       router.push('/admin/predictions')

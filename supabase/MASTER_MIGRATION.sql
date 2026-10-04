@@ -117,6 +117,7 @@ CREATE TABLE IF NOT EXISTS predictions (
   confidence INTEGER NOT NULL CHECK (confidence >= 0 AND confidence <= 100),
   kickoff_time TIMESTAMP WITH TIME ZONE NOT NULL,
   prediction_date DATE NOT NULL,
+  is_revealed BOOLEAN NOT NULL DEFAULT FALSE,
   match_id VARCHAR(50),
   league_id VARCHAR(50),
   home_team_id VARCHAR(50),

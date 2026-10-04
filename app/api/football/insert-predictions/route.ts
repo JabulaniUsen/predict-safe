@@ -84,6 +84,14 @@ export async function POST(request: NextRequest) {
         cleaned.prediction_date = kickoff.slice(0, 10) || new Date().toISOString().slice(0, 10)
       }
 
+      // Bulk-added tips start hidden so the admin can review/edit before
+      // revealing (migration 035). An explicit caller value is respected.
+      if (cleaned.is_revealed === undefined && pred.is_revealed === undefined) {
+        cleaned.is_revealed = false
+      } else if (pred.is_revealed !== undefined) {
+        cleaned.is_revealed = pred.is_revealed
+      }
+
       return cleaned
     })
 

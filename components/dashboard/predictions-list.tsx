@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
-import { predictionsForDate } from '@/lib/queries/predictions'
+import { predictionsForDate, isPredictionRevealed } from '@/lib/queries/predictions'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -335,6 +335,17 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
     !selectedSubscription.activation_fee_paid &&
     selectedPlan.requires_activation
 
+  // A tip the admin hasn't revealed stays hidden even for subscribers with
+  // an active plan - this is what stops an early version of the tip leaking
+  // before edits are finished. Rows written before migration 035 count as
+  // revealed so history keeps showing.
+  const isRevealed = (pred: { is_revealed?: boolean | null }): boolean =>
+    isPredictionRevealed(pred)
+
+  const hiddenCount = isCorrectScorePlan
+    ? correctScorePredictions.filter((p) => !isRevealed(p as unknown as { is_revealed?: boolean | null })).length
+    : predictions.filter((p) => !isRevealed(p as unknown as { is_revealed?: boolean | null })).length
+
   const [activationModalOpen, setActivationModalOpen] = useState(false)
 
   const handleSubscribe = () => {
@@ -478,6 +489,17 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
       </div>
 
       {/* Predictions Display */}
+      {isUnlocked && hiddenCount > 0 && !loading && (
+        <Card className="border-2 border-amber-200 bg-amber-50">
+          <CardContent className="py-3 px-4 flex items-center gap-2 text-sm text-amber-900">
+            <Lock className="h-4 w-4 flex-shrink-0" />
+            <span>
+              {hiddenCount} tip{hiddenCount === 1 ? '' : 's'} for this date {hiddenCount === 1 ? 'is' : 'are'} still hidden -
+              the admin reveals {hiddenCount === 1 ? 'it' : 'them'} here once edits are finished.
+            </span>
+          </CardContent>
+        </Card>
+      )}
       {loading ? (
         <div className="grid gap-3 lg:gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
@@ -615,11 +637,21 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
 
                   {/* Prediction Row */}
                   <div className="bg-gray-200 px-3 py-2 rounded grid grid-cols-3 gap-2 items-center">
-                    <div className="text-sm font-medium text-gray-900">
-                      {prediction.score_prediction}
+                    <div className="text-sm font-medium text-gray-900 flex items-center gap-1">
+                      {!isRevealed(prediction as unknown as { is_revealed?: boolean | null }) ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-amber-700">
+                          <Lock className="h-3 w-3" /> Hidden
+                        </span>
+                      ) : (
+                        prediction.score_prediction
+                      )}
                     </div>
-                    <div className="text-sm font-semibold text-gray-900 text-center">
-                      {prediction.odds ? prediction.odds.toFixed(2) : 'N/A'}
+                    <div className="text-sm font-semibold text-gray-900 text-center flex items-center justify-center gap-1">
+                      {!isRevealed(prediction as unknown as { is_revealed?: boolean | null }) ? (
+                        <Lock className="h-3 w-3 text-amber-600" />
+                      ) : (
+                        prediction.odds ? prediction.odds.toFixed(2) : 'N/A'
+                      )}
                     </div>
                     <div className="flex items-center justify-center">
                   <Badge
@@ -730,12 +762,22 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
 
                   {/* Score */}
                   <div className="col-span-1 text-center">
-                    <Badge variant="secondary" className="text-xs">{prediction.score_prediction}</Badge>
+                    {!isRevealed(prediction as unknown as { is_revealed?: boolean | null }) ? (
+                      <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-300 gap-1">
+                        <Lock className="h-3 w-3" /> Hidden
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-xs">{prediction.score_prediction}</Badge>
+                    )}
                   </div>
 
                   {/* Odds */}
                   <div className="col-span-1 text-center hidden md:block">
-                    <span className="text-sm font-semibold text-gray-900">{prediction.odds ? prediction.odds.toFixed(2) : 'N/A'}</span>
+                    {!isRevealed(prediction as unknown as { is_revealed?: boolean | null }) ? (
+                      <Lock className="h-4 w-4 text-amber-600 mx-auto" />
+                    ) : (
+                      <span className="text-sm font-semibold text-gray-900">{prediction.odds ? prediction.odds.toFixed(2) : 'N/A'}</span>
+                    )}
                   </div>
 
                   {/* Status */}
@@ -840,19 +882,33 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
 
                   {/* Prediction Row */}
                   <div className="bg-gray-200 px-3 py-2 rounded grid grid-cols-3 gap-2 items-center">
-                    <div className="text-sm font-medium text-gray-900">
-                      {prediction.prediction_type === 'Over 1.5' ? 'Ov 1.5' :
-                       prediction.prediction_type === 'Over 2.5' ? 'Ov 2.5' :
-                       prediction.prediction_type === 'Home Win' ? '1' :
-                       prediction.prediction_type === 'Away Win' ? '2' :
-                       prediction.prediction_type === 'Double Chance' ? '12' :
-                       prediction.prediction_type}
+                    <div className="text-sm font-medium text-gray-900 flex items-center gap-1">
+                      {!isRevealed(prediction as unknown as { is_revealed?: boolean | null }) ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-amber-700">
+                          <Lock className="h-3 w-3" /> Hidden
+                        </span>
+                      ) : (
+                        prediction.prediction_type === 'Over 1.5' ? 'Ov 1.5' :
+                        prediction.prediction_type === 'Over 2.5' ? 'Ov 2.5' :
+                        prediction.prediction_type === 'Home Win' ? '1' :
+                        prediction.prediction_type === 'Away Win' ? '2' :
+                        prediction.prediction_type === 'Double Chance' ? '12' :
+                        prediction.prediction_type
+                      )}
                 </div>
-                    <div className="text-sm font-semibold text-gray-900 text-center">
-                      {prediction.odds.toFixed(2)}
+                    <div className="text-sm font-semibold text-gray-900 text-center flex items-center justify-center gap-1">
+                      {!isRevealed(prediction as unknown as { is_revealed?: boolean | null }) ? (
+                        <Lock className="h-3 w-3 text-amber-600" />
+                      ) : (
+                        prediction.odds.toFixed(2)
+                      )}
                     </div>
                     <div className="flex items-center justify-center">
-                      <CircularProgress value={prediction.confidence} size={32} strokeWidth={4} />
+                      {!isRevealed(prediction as unknown as { is_revealed?: boolean | null }) ? (
+                        <Lock className="h-4 w-4 text-amber-600" />
+                      ) : (
+                        <CircularProgress value={prediction.confidence} size={32} strokeWidth={4} />
+                      )}
                     </div>
                   </div>
                 </div>
@@ -966,21 +1022,35 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
 
                   {/* Tip */}
                   <div className="col-span-1 text-center">
-                    <Badge variant="secondary" className="text-xs">
-                      {prediction.prediction_type === 'Over 1.5' ? 'Ov 1.5' :
-                       prediction.prediction_type === 'Over 2.5' ? 'Ov 2.5' :
-                       prediction.prediction_type}
-                    </Badge>
+                    {!isRevealed(prediction as unknown as { is_revealed?: boolean | null }) ? (
+                      <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-300 gap-1">
+                        <Lock className="h-3 w-3" /> Hidden
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-xs">
+                        {prediction.prediction_type === 'Over 1.5' ? 'Ov 1.5' :
+                         prediction.prediction_type === 'Over 2.5' ? 'Ov 2.5' :
+                         prediction.prediction_type}
+                      </Badge>
+                    )}
                   </div>
 
                   {/* Odd */}
                   <div className="col-span-1 text-center hidden md:block">
-                    <span className="text-sm font-semibold text-gray-900">{prediction.odds.toFixed(2)}</span>
+                    {!isRevealed(prediction as unknown as { is_revealed?: boolean | null }) ? (
+                      <Lock className="h-4 w-4 text-amber-600 mx-auto" />
+                    ) : (
+                      <span className="text-sm font-semibold text-gray-900">{prediction.odds.toFixed(2)}</span>
+                    )}
                   </div>
 
                   {/* Confidence */}
                   <div className="col-span-2 flex justify-center hidden lg:flex">
-                    <CircularProgress value={prediction.confidence} size={50} strokeWidth={5} />
+                    {!isRevealed(prediction as unknown as { is_revealed?: boolean | null }) ? (
+                      <Lock className="h-5 w-5 text-amber-600" />
+                    ) : (
+                      <CircularProgress value={prediction.confidence} size={50} strokeWidth={5} />
+                    )}
                   </div>
                 </div>
             )

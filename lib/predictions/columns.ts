@@ -24,6 +24,7 @@ export const PREDICTION_INSERT_COLUMNS = [
   'kickoff_time',
   'status',
   'result',
+  'is_revealed',
   'admin_notes',
 ] as const
 

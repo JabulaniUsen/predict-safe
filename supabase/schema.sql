@@ -77,6 +77,9 @@ CREATE TABLE IF NOT EXISTS predictions (
   -- never re-derived, so every section of the site agrees on which predictions
   -- belong to a given date regardless of the viewer's timezone.
   prediction_date DATE NOT NULL,
+  -- Manual reveal switch: tips stay hidden from everyone until the admin
+  -- flips this after finishing edits (see migration 035).
+  is_revealed BOOLEAN NOT NULL DEFAULT FALSE,
   match_id VARCHAR(50),
   league_id VARCHAR(50),
   home_team_id VARCHAR(50),

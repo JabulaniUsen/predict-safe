@@ -202,20 +202,54 @@ function AddCorrectScoreContent() {
         ? determineCorrectScoreResult(scorePrediction, homeScore, awayScore)
         : null,
       admin_notes: (formDataObj.get('admin_notes') as string) || null,
+      // Saved hidden - reveal from the predictions list once edits are done
+      // (migration 035), so early versions never leak before corrections.
+      is_revealed: false,
+    }
+
+    const withoutReveal = (data: Record<string, unknown>) => {
+      const { is_revealed: _omit, ...rest } = data
+      return rest
+    }
+
+    const persist = async (mode: 'update' | 'insert') => {
+      const supabase = createClient()
+      const query =
+        mode === 'update'
+          ? supabase
+              .from('predictions')
+              // @ts-expect-error - Supabase type inference issue
+              .update(predictionData)
+              .eq('id', editId)
+          : supabase
+              .from('predictions')
+              // @ts-expect-error - Supabase type inference issue
+              .insert(predictionData)
+      const { error } = await query
+      if (error && error.message?.includes('is_revealed')) {
+        // Migration 035 not applied yet - retry without the new column.
+        const fallback =
+          mode === 'update'
+            ? supabase
+                .from('predictions')
+                // @ts-expect-error - Supabase type inference issue
+                .update(withoutReveal(predictionData))
+                .eq('id', editId)
+            : supabase
+                .from('predictions')
+                // @ts-expect-error - Supabase type inference issue
+                .insert(withoutReveal(predictionData))
+        const { error: retryError } = await fallback
+        if (retryError) throw retryError
+        return
+      }
+      if (error) throw error
     }
 
     try {
-      const supabase = createClient()
-
       if (isEditMode) {
-        const { error } = await supabase
-          .from('predictions')
-          // @ts-expect-error - Supabase type inference issue
-          .update(predictionData)
-          .eq('id', editId)
-
-        if (error) throw error
-        toast.success('Correct score prediction updated successfully!')
+        await persist('update')
+        toast.success('Correct score prediction updated and hidden - reveal it from the predictions list when ready!')
         
         // Notify users subscribed to this plan (non-blocking)
         try {
@@ -231,12 +265,8 @@ function AddCorrectScoreContent() {
           // Don't fail the request if notification fails
         }
       } else {
-        const { error } = await supabase
-          .from('predictions')
-          // @ts-expect-error - Supabase type inference issue
-          .insert(predictionData)
-        if (error) throw error
-        toast.success('Correct score prediction added successfully!')
+        await persist('insert')
+        toast.success('Correct score prediction added as hidden - reveal it from the predictions list when ready!')
         
         // Notify users subscribed to this plan (non-blocking)
         try {

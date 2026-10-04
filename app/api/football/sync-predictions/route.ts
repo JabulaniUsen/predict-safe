@@ -144,6 +144,9 @@ export async function POST(request: NextRequest) {
           cleaned[col] = pred[col]
         }
       })
+      // API-synced tips start hidden so the admin can review/edit before
+      // revealing (migration 035). Dropped when the column doesn't exist yet.
+      if (!('is_revealed' in cleaned)) cleaned.is_revealed = false
       return cleaned
     })
 

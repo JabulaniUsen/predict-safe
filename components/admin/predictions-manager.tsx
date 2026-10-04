@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Prediction, Plan } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { Edit, Trash2, MoreVertical, Trophy, CalendarIcon } from 'lucide-react'
+import { Edit, Trash2, MoreVertical, Trophy, CalendarIcon, Eye, EyeOff } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,7 +21,7 @@ import {
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { getDateRange, parseDateKey } from '@/lib/utils/date'
-import { predictionsForDate, predictionDateOf } from '@/lib/queries/predictions'
+import { predictionsForDate, predictionDateOf, isPredictionRevealed } from '@/lib/queries/predictions'
 import { format } from 'date-fns'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import { formatTime } from '@/lib/utils/date'
@@ -80,6 +80,8 @@ export function PredictionsManager({ plans, predictions: initialPredictions }: P
   const [teamLogos, setTeamLogos] = useState<TeamLogoCache>({})
   const [addingToVIP, setAddingToVIP] = useState<string | null>(null)
   const [updatingScores, setUpdatingScores] = useState<Record<string, boolean>>({})
+  const [togglingReveal, setTogglingReveal] = useState<Record<string, boolean>>({})
+  const [bulkRevealing, setBulkRevealing] = useState<Record<string, boolean>>({})
   
   // Date filter state - separate for each plan tab
   const [dateFilters, setDateFilters] = useState<Record<string, {
@@ -515,8 +517,75 @@ export function PredictionsManager({ plans, predictions: initialPredictions }: P
     }
   }
 
+  const handleToggleReveal = async (prediction: Prediction) => {
+    const revealed = isPredictionRevealed(prediction as unknown as { is_revealed?: boolean | null })
+    setTogglingReveal((prev) => ({ ...prev, [prediction.id]: true }))
+    try {
+      const supabase = createClient()
+      const { error } = await supabase
+        .from('predictions')
+        // @ts-expect-error - is_revealed added in migration 035
+        .update({ is_revealed: !revealed })
+        .eq('id', prediction.id)
+      if (error) throw error
+      const date = predictionDateOf(prediction)
+      setPredictionsByDate((prev) => ({
+        ...prev,
+        [date]: (prev[date] || []).map((p) =>
+          p.id === prediction.id ? ({ ...p, is_revealed: !revealed } as Prediction) : p
+        ),
+      }))
+      toast.success(!revealed ? 'Tip revealed to users' : 'Tip hidden from users')
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update visibility')
+    } finally {
+      setTogglingReveal((prev) => {
+        const next = { ...prev }
+        delete next[prediction.id]
+        return next
+      })
+    }
+  }
+
+  const handleBulkReveal = async (planSlug: string, date: string, reveal: boolean) => {
+    const key = `${planSlug}-${date}`
+    setBulkRevealing((prev) => ({ ...prev, [key]: true }))
+    try {
+      const preds = getPredictionsForPlan(planSlug)
+      const ids = preds
+        .filter((p) => isPredictionRevealed(p as unknown as { is_revealed?: boolean | null }) !== reveal)
+        .map((p) => p.id)
+      if (ids.length === 0) {
+        toast.info(reveal ? 'All tips are already revealed' : 'All tips are already hidden')
+        return
+      }
+      const supabase = createClient()
+      const { error } = await supabase
+        .from('predictions')
+        // @ts-expect-error - is_revealed added in migration 035
+        .update({ is_revealed: reveal })
+        .in('id', ids)
+      if (error) throw error
+      setPredictionsByDate((prev) => ({
+        ...prev,
+        [date]: (prev[date] || []).map((p) =>
+          ids.includes(p.id) ? ({ ...p, is_revealed: reveal } as Prediction) : p
+        ),
+      }))
+      toast.success(reveal ? `Revealed ${ids.length} tip(s) to users` : `Hid ${ids.length} tip(s) from users`)
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update visibility')
+    } finally {
+      setBulkRevealing((prev) => {
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
+    }
+  }
+
   return (
-    <Tabs defaultValue={defaultTab} className="space-y-4" onValueChange={setActiveTab}>
+  <Tabs defaultValue={defaultTab} className="space-y-4" onValueChange={setActiveTab}>
       <div className="overflow-x-auto">
         <TabsList className="min-w-full">
           {regularPlans.map((plan) => (
@@ -568,15 +637,54 @@ export function PredictionsManager({ plans, predictions: initialPredictions }: P
                         </Link>
                       </Button>
                       {planPredictions.length > 0 && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="text-xs lg:text-sm"
-                          onClick={() => handleDeleteAllClick(plan.slug, plan.name)}
-                        >
-                          <Trash2 className="h-3 w-3 mr-1" />
-                          Delete All
-                        </Button>
+                        <>
+                          {(() => {
+                            const hiddenCount = planPredictions.filter(
+                              (p) => !isPredictionRevealed(p as unknown as { is_revealed?: boolean | null })
+                            ).length
+                            const bulkKey = `${plan.slug}-${getSelectedDate(plan.slug)}`
+                            const busy = Boolean(bulkRevealing[bulkKey])
+                            return (
+                              <>
+                                {hiddenCount > 0 && (
+                                  <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-300">
+                                    <EyeOff className="h-3 w-3 mr-1" />
+                                    {hiddenCount} hidden
+                                  </Badge>
+                                )}
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs lg:text-sm"
+                                  disabled={busy}
+                                  onClick={() => handleBulkReveal(plan.slug, getSelectedDate(plan.slug), true)}
+                                >
+                                  <Eye className="h-3 w-3 mr-1" />
+                                  {busy ? 'Revealing...' : 'Reveal all'}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs lg:text-sm"
+                                  disabled={busy}
+                                  onClick={() => handleBulkReveal(plan.slug, getSelectedDate(plan.slug), false)}
+                                >
+                                  <EyeOff className="h-3 w-3 mr-1" />
+                                  Hide all
+                                </Button>
+                              </>
+                            )
+                          })()}
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="text-xs lg:text-sm"
+                            onClick={() => handleDeleteAllClick(plan.slug, plan.name)}
+                          >
+                            <Trash2 className="h-3 w-3 mr-1" />
+                            Delete All
+                          </Button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -791,6 +899,12 @@ export function PredictionsManager({ plans, predictions: initialPredictions }: P
                                pred.prediction_type === 'Over 2.5' ? 'Ov 2.5' :
                                pred.prediction_type}
                             </Badge>
+                            {!isPredictionRevealed(pred as unknown as { is_revealed?: boolean | null }) && (
+                              <Badge variant="outline" className="text-[10px] mt-1 bg-amber-50 text-amber-700 border-amber-300">
+                                <EyeOff className="h-3 w-3 mr-1" />
+                                Hidden
+                              </Badge>
+                            )}
                           </div>
 
                           {/* Odd */}
@@ -852,6 +966,22 @@ export function PredictionsManager({ plans, predictions: initialPredictions }: P
                                     <Edit className="h-4 w-4 mr-2" />
                                     Edit
                               </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleToggleReveal(pred)}
+                                  disabled={Boolean(togglingReveal[pred.id])}
+                                >
+                                  {isPredictionRevealed(pred as unknown as { is_revealed?: boolean | null }) ? (
+                                    <>
+                                      <EyeOff className="h-4 w-4 mr-2" />
+                                      {togglingReveal[pred.id] ? 'Hiding...' : 'Hide tip'}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Eye className="h-4 w-4 mr-2" />
+                                      {togglingReveal[pred.id] ? 'Revealing...' : 'Reveal tip'}
+                                    </>
+                                  )}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => handleAddToVIPWins(pred, plan.name)}
@@ -1062,15 +1192,54 @@ export function PredictionsManager({ plans, predictions: initialPredictions }: P
                         <Link href="/admin/predictions/add-correct-score">Add Manually</Link>
                       </Button>
                       {correctScorePreds.length > 0 && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="text-xs lg:text-sm"
-                          onClick={() => handleDeleteAllClick('correct-score', correctScorePlan.name)}
-                        >
-                          <Trash2 className="h-3 w-3 mr-1" />
-                          Delete All
-                        </Button>
+                        <>
+                          {(() => {
+                            const hiddenCount = correctScorePreds.filter(
+                              (p) => !isPredictionRevealed(p as unknown as { is_revealed?: boolean | null })
+                            ).length
+                            const bulkKey = `correct-score-${getSelectedDate('correct-score')}`
+                            const busy = Boolean(bulkRevealing[bulkKey])
+                            return (
+                              <>
+                                {hiddenCount > 0 && (
+                                  <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-300">
+                                    <EyeOff className="h-3 w-3 mr-1" />
+                                    {hiddenCount} hidden
+                                  </Badge>
+                                )}
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs lg:text-sm"
+                                  disabled={busy}
+                                  onClick={() => handleBulkReveal('correct-score', getSelectedDate('correct-score'), true)}
+                                >
+                                  <Eye className="h-3 w-3 mr-1" />
+                                  {busy ? 'Revealing...' : 'Reveal all'}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs lg:text-sm"
+                                  disabled={busy}
+                                  onClick={() => handleBulkReveal('correct-score', getSelectedDate('correct-score'), false)}
+                                >
+                                  <EyeOff className="h-3 w-3 mr-1" />
+                                  Hide all
+                                </Button>
+                              </>
+                            )
+                          })()}
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="text-xs lg:text-sm"
+                            onClick={() => handleDeleteAllClick('correct-score', correctScorePlan.name)}
+                          >
+                            <Trash2 className="h-3 w-3 mr-1" />
+                            Delete All
+                          </Button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -1285,6 +1454,12 @@ export function PredictionsManager({ plans, predictions: initialPredictions }: P
                         {/* Predicted Score */}
                         <div className="col-span-1 text-center">
                           <Badge variant="secondary" className="text-xs">{score}</Badge>
+                          {!isPredictionRevealed(pred as unknown as { is_revealed?: boolean | null }) && (
+                            <Badge variant="outline" className="text-[10px] mt-1 bg-amber-50 text-amber-700 border-amber-300">
+                              <EyeOff className="h-3 w-3 mr-1" />
+                              Hidden
+                            </Badge>
+                          )}
                         </div>
                         
                         {/* Odds */}
@@ -1350,6 +1525,22 @@ export function PredictionsManager({ plans, predictions: initialPredictions }: P
                                   <Edit className="h-4 w-4 mr-2" />
                                   Edit
                             </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleToggleReveal(pred)}
+                                disabled={Boolean(togglingReveal[pred.id])}
+                              >
+                                {isPredictionRevealed(pred as unknown as { is_revealed?: boolean | null }) ? (
+                                  <>
+                                    <EyeOff className="h-4 w-4 mr-2" />
+                                    {togglingReveal[pred.id] ? 'Hiding...' : 'Hide tip'}
+                                  </>
+                                ) : (
+                                  <>
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    {togglingReveal[pred.id] ? 'Revealing...' : 'Reveal tip'}
+                                  </>
+                                )}
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => handleAddToVIPWins(pred, correctScorePlan.name)}

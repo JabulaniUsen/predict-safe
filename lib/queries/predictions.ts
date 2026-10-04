@@ -67,6 +67,20 @@ export function predictionsForDate(
 }
 
 /**
+ * Manual reveal switch.
+ *
+ * Tips stay hidden from everyone (subscribers included, past games included)
+ * until the admin reveals them after finishing edits. Rows written before
+ * migration 035 have no value - treat those as revealed so history stays
+ * visible.
+ */
+export function isPredictionRevealed(prediction: {
+  is_revealed?: boolean | null
+}): boolean {
+  return (prediction as { is_revealed?: boolean | null }).is_revealed !== false
+}
+
+/**
  * The date a prediction belongs to, tolerating rows written before
  * `prediction_date` existed (migration 028 backfills these, but a row created
  * by an older client mid-deploy could still arrive without one).
