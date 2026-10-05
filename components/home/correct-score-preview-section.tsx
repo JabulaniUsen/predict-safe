@@ -40,7 +40,9 @@ export function CorrectScorePreviewSection() {
       if (error) {
         console.error('Error fetching predictions:', error)
       } else {
-        // Transform predictions table data to match CorrectScorePrediction format
+        // Transform predictions table data to match CorrectScorePrediction format.
+        // Keep is_revealed on the row so any reveal-aware rendering downstream
+        // sees the real flag instead of defaulting to revealed.
         const transformedData = (data || []).map((pred: any) => ({
           id: pred.id,
           home_team: pred.home_team,
@@ -54,6 +56,7 @@ export function CorrectScorePreviewSection() {
           home_score: pred.home_score || null,
           away_score: pred.away_score || null,
           admin_notes: pred.admin_notes || null,
+          is_revealed: pred.is_revealed ?? null,
           created_at: pred.created_at,
           updated_at: pred.updated_at,
         }))

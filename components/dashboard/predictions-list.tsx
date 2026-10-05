@@ -263,7 +263,11 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
         console.error('Error fetching correct score predictions:', error)
         toast.error('Failed to load correct score predictions. Please try again.')
       } else {
-        // Transform predictions table data to match CorrectScorePrediction format
+        // Transform predictions table data to match CorrectScorePrediction format.
+        // is_revealed must travel with the row: without it every tip reads as
+        // revealed (isPredictionRevealed treats missing as revealed), so hidden
+        // tips leaked their score and odds to subscribers and the Hidden badge
+        // / hidden count never appeared.
         const transformedData = (data || []).map((pred: any) => ({
           id: pred.id,
           home_team: pred.home_team,
@@ -277,6 +281,7 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
           home_score: pred.home_score || null,
           away_score: pred.away_score || null,
           admin_notes: pred.admin_notes || null,
+          is_revealed: pred.is_revealed ?? null,
           created_at: pred.created_at,
           updated_at: pred.updated_at,
         }))
