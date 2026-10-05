@@ -296,6 +296,15 @@ const DEFAULT_MIN_ODDS = 1.2
  */
 const DEFAULT_MIN_CONFIDENCE = 40
 
+/**
+ * Correct-score probabilities live on a different scale to every other market.
+ * A favourite scoreline at 7.00 devigs to roughly 8-12% once split across the
+ * 15+ scores the book prices, so the standard 40% floor would reject every
+ * correct-score candidate on every fixture. This floor keeps the junk out
+ * (25.00+ longshots) while letting the most likely 1-2 scorelines through.
+ */
+const DEFAULT_MIN_CONFIDENCE_CORRECT_SCORE = 8
+
 function matchesMarketFilter(candidate: PredictionCandidate, options: GenerateOptions): boolean {
   if (options.correctScoreOnly) return candidate.market.startsWith('correct_score_')
   // Correct-score tips are only ever offered when they're asked for - they're
@@ -321,9 +330,10 @@ export function buildPredictions(
   oddsByMatchId: Map<string, Odds>,
   options: GenerateOptions
 ): GeneratedPrediction[] {
+  const isCorrectScore = options.correctScoreOnly === true
   const {
-    minConfidence = DEFAULT_MIN_CONFIDENCE,
-    minOdds = DEFAULT_MIN_ODDS,
+    minConfidence = isCorrectScore ? DEFAULT_MIN_CONFIDENCE_CORRECT_SCORE : DEFAULT_MIN_CONFIDENCE,
+    minOdds = isCorrectScore ? 1 : DEFAULT_MIN_ODDS,
     maxOdds,
     perFixture = 1,
     limit,

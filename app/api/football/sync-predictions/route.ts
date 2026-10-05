@@ -26,7 +26,11 @@ export async function POST(request: NextRequest) {
     const {
       date,
       planType = 'free',
-      minConfidence = 50,
+      // Correct-score fair probabilities sit around 5-15% (the book splits
+      // ~100% across 15+ scorelines), so the standard 50% default would reject
+      // every correct-score candidate. Default it to 8% when the caller
+      // doesn't send an explicit threshold.
+      minConfidence: rawMinConfidence,
       minOdds,
       maxOdds,
       markets,
@@ -35,6 +39,10 @@ export async function POST(request: NextRequest) {
       preview = false,
       strategy = 'safest',
     } = body
+
+    const isCorrectScorePlan = planType === 'correct_score'
+    const defaultConfidence = isCorrectScorePlan ? 8 : 50
+    const minConfidence = rawMinConfidence ?? defaultConfidence
 
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return NextResponse.json({ error: 'A date (YYYY-MM-DD) is required' }, { status: 400 })

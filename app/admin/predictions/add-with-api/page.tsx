@@ -90,10 +90,16 @@ function AddPredictionWithAPIContent() {
   // The admin's own today, not UTC's - otherwise the form opens on tomorrow
   // for anyone east of UTC late in the day.
   const [date, setDate] = useState(() => todayKey())
+  // Correct-score probabilities live around 5-15% (the book splits ~100%
+  // across 15+ scorelines at 6.00-12.00), so the standard 55% floor and a
+  // 1.00-2.00 odds band can never match anything. This plan needs its own
+  // defaults: a low confidence floor and no odds band.
+  const isCorrectScorePlan = planSlug === 'correct-score' || planSlug === 'correct_score'
   // Confidence is now the vig-adjusted implied probability of the selection,
   // not a random number, so the useful range sits lower than it used to. 55%
-  // is roughly an even-money shot.
-  const [minConfidence, setMinConfidence] = useState([55])
+  // is roughly an even-money shot. Correct scores are long-odds by nature
+  // (~8% for a favourite scoreline), so that plan starts at 8%.
+  const [minConfidence, setMinConfidence] = useState(() => [isCorrectScorePlan ? 8 : 55])
   const [marketGroup, setMarketGroup] = useState<string>('all')
   const [perFixture, setPerFixture] = useState<string>('1')
   const [minOdds, setMinOdds] = useState<string>('') // Optional minimum odds
@@ -119,6 +125,17 @@ function AddPredictionWithAPIContent() {
     standings: [],
     loading: false,
   })
+
+  // When navigating between plans (e.g. ?plan=correct-score), reset the
+  // filters to values that can actually match that plan. A 55% floor with a
+  // 2.00 ceiling is sensible for 1X2 but impossible for correct scores.
+  useEffect(() => {
+    if (isCorrectScorePlan) {
+      setMinConfidence([8])
+      setMinOdds('')
+      setMaxOdds('')
+    }
+  }, [isCorrectScorePlan])
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -203,7 +220,9 @@ function AddPredictionWithAPIContent() {
           toast.info(
             `No selections met your filters. ${data.fixturesPriced} of ${data.fixturesConsidered} matches had odds` +
               (data.leaguesFailed ? ` (${data.leaguesFailed} leagues did not respond)` : '') +
-              '. Try lowering the minimum confidence or widening the odds range.'
+              (isCorrectScorePlan
+                ? '. Correct scores price around 6.00-12.00 at ~5-15% probability, so keep confidence at 5-12% and leave the odds range empty.'
+                : '. Try lowering the minimum confidence or widening the odds range.')
           )
         } else {
           toast.success(
@@ -406,31 +425,52 @@ function AddPredictionWithAPIContent() {
                     <input
                       id="confidence"
                       type="range"
-                      min={40}
-                      max={95}
-                      step={5}
-                      value={minConfidence[0]}
+                      min={isCorrectScorePlan ? 2 : 40}
+                      max={isCorrectScorePlan ? 30 : 95}
+                      step={isCorrectScorePlan ? 1 : 5}
+                      value={Math.min(Math.max(minConfidence[0], isCorrectScorePlan ? 2 : 40), isCorrectScorePlan ? 30 : 95)}
                       onChange={(e) => setMinConfidence([parseInt(e.target.value)])}
                       className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer range-slider"
                       style={{
-                        background: `linear-gradient(to right, #1e40af 0%, #1e40af ${((minConfidence[0] - 40) / 55) * 100}%, #e5e7eb ${((minConfidence[0] - 40) / 55) * 100}%, #e5e7eb 100%)`
+                        background: (() => {
+                          const lo = isCorrectScorePlan ? 2 : 40
+                          const hi = isCorrectScorePlan ? 30 : 95
+                          const pct = ((Math.min(Math.max(minConfidence[0], lo), hi) - lo) / (hi - lo)) * 100
+                          return `linear-gradient(to right, #1e40af 0%, #1e40af ${pct}%, #e5e7eb ${pct}%, #e5e7eb 100%)`
+                        })()
                       }}
                     />
                   </div>
                   <div className="flex justify-between text-xs text-muted-foreground px-1">
-                    <span>40%</span>
-                    <span>67%</span>
-                    <span>95%</span>
+                    <span>{isCorrectScorePlan ? '2%' : '40%'}</span>
+                    <span>{isCorrectScorePlan ? '16%' : '67%'}</span>
+                    <span>{isCorrectScorePlan ? '30%' : '95%'}</span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Only selections the bookmaker prices at <strong>{minConfidence[0]}%</strong> or better will be
-                    included. This is the real implied probability with the bookmaker&apos;s margin removed, so a
-                    higher setting returns fewer but shorter-priced tips.
+                    {isCorrectScorePlan ? (
+                      <>
+                        Correct scores price around <strong>6.00-12.00 at ~5-15%</strong> probability, so keep
+                        this at <strong>{minConfidence[0]}%</strong> (5-12% works). Anything above ~20% will
+                        return nothing.
+                      </>
+                    ) : (
+                      <>
+                        Only selections the bookmaker prices at <strong>{minConfidence[0]}%</strong> or better will be
+                        included. This is the real implied probability with the bookmaker&apos;s margin removed, so a
+                        higher setting returns fewer but shorter-priced tips.
+                      </>
+                    )}
                   </p>
                 </div>
 
                 <div className="space-y-3 border-t pt-4">
                   <Label htmlFor="marketGroup">Prediction Markets</Label>
+                  {isCorrectScorePlan ? (
+                    <p className="text-xs text-muted-foreground rounded-md border bg-muted/50 px-3 py-2">
+                      Correct Score plan always uses the <strong>Exact Score</strong> market - no need to pick one.
+                    </p>
+                  ) : (
+                  <>
                   <select
                     id="marketGroup"
                     value={marketGroup}
@@ -445,6 +485,12 @@ function AddPredictionWithAPIContent() {
                     Leave on <strong>Best available</strong> to let each match contribute whichever market the odds
                     most support, or narrow it to a specific market.
                   </p>
+                  </>
+                  )}
+                  </div>
+
+                  <div className="space-y-3 border-t pt-4">
+                    <Label className="text-xs">Tips per match & pick style</Label>
 
                   <div className="space-y-2 pt-2">
                     <Label htmlFor="perFixture" className="text-xs">Tips per match</Label>
@@ -468,13 +514,21 @@ function AddPredictionWithAPIContent() {
                       onChange={(e) => setPickStrategy(e.target.value as 'safest' | 'biggest_odds')}
                       className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
                     >
-                      <option value="safest">Safest selection (short odds, ~1.20-1.50)</option>
+                      <option value="safest">
+                        {isCorrectScorePlan
+                          ? 'Safest scoreline (favourite score, ~6.00-8.00)'
+                          : 'Safest selection (short odds, ~1.20-1.50)'}
+                      </option>
                       <option value="biggest_odds">Biggest odds (long prices for VIP sheets)</option>
                     </select>
                     <p className="text-xs text-muted-foreground">
-                      {pickStrategy === 'biggest_odds'
+                      {isCorrectScorePlan
+                        ? (pickStrategy === 'biggest_odds'
+                          ? 'Takes the longest-priced scoreline still above your minimum confidence. Keep confidence low (5-8%) or this returns nothing.'
+                          : 'Takes each match\u2019s most likely scoreline (usually 1-0, 1-1 or 2-1 at ~6.00-8.00).')
+                        : (pickStrategy === 'biggest_odds'
                         ? 'Takes the longest-priced selection still above your minimum confidence. Long prices mean low probability, so lower the confidence slider (40-50%) to actually see big odds.'
-                        : 'Takes each match\u2019s most probable selection. These cluster around 1.20-1.50 - switch to Biggest odds for high-odds VIP tips.'}
+                        : 'Takes each match\u2019s most probable selection. These cluster around 1.20-1.50 - switch to Biggest odds for high-odds VIP tips.')}
                     </p>
                   </div>
                 </div>
@@ -489,7 +543,7 @@ function AddPredictionWithAPIContent() {
                         type="number"
                         step="0.01"
                         min="1.0"
-                        placeholder="e.g., 1.50"
+                        placeholder={isCorrectScorePlan ? 'Leave empty' : 'e.g., 1.50'}
                         value={minOdds}
                         onChange={(e) => setMinOdds(e.target.value)}
                       />
@@ -504,7 +558,7 @@ function AddPredictionWithAPIContent() {
                         type="number"
                         step="0.01"
                         min="1.0"
-                        placeholder="e.g., 3.00"
+                        placeholder={isCorrectScorePlan ? 'Leave empty' : 'e.g., 3.00'}
                         value={maxOdds}
                         onChange={(e) => setMaxOdds(e.target.value)}
                       />
@@ -514,7 +568,9 @@ function AddPredictionWithAPIContent() {
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Leave empty to include all odds. Both filters can be used together to set a range.
+                    {isCorrectScorePlan
+                      ? 'Leave both empty for correct scores - they price at 6.00+. Setting a max of 2.00 will always return nothing.'
+                      : 'Leave empty to include all odds. Both filters can be used together to set a range.'}
                   </p>
                 </div>
               </div>
