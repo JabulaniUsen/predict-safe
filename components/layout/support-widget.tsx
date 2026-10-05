@@ -118,7 +118,11 @@ export function SupportWidget() {
   return (
     <div
       ref={containerRef}
-      className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3"
+      // The container itself must never intercept taps: it is a transparent
+      // box that can overlap real content (on /signup it covered the right
+      // third of the Create Account button, swallowing those taps). Only the
+      // toggle button and the open channel links take pointer events.
+      className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3 pointer-events-none"
     >
       <div
         className={`flex flex-col items-end gap-3 transition-all duration-300 ${
@@ -144,7 +148,7 @@ export function SupportWidget() {
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-[#f97316] to-[#ea580c] hover:scale-110 active:scale-95 flex items-center justify-center"
+        className="pointer-events-auto h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-[#f97316] to-[#ea580c] hover:scale-110 active:scale-95 flex items-center justify-center"
         aria-label={isOpen ? 'Close support menu' : 'Contact support'}
         aria-expanded={isOpen}
       >
