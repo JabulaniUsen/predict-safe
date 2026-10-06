@@ -411,36 +411,31 @@ function CheckoutContent() {
     setProofPreview(null)
   }
 
-  const uploadProof = async (): Promise<string | null> => {
+  const uploadProof = async (): Promise<{ url: string; path: string } | null> => {
     if (!paymentProof || !user) return null
 
     setUploading(true)
     try {
-      const supabase = createClient()
-      
-      // Create a unique filename
-      const fileExt = paymentProof.name.split('.').pop()
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`
-      
-      // Upload to Supabase Storage
-      const { data, error } = await supabase.storage
-        .from('payment-proofs')
-        .upload(fileName, paymentProof, {
-          cacheControl: '3600',
-          upsert: false
-        })
+      // Upload via the server route: it uses the service-role client so it
+      // works even when storage RLS policies were never created in the
+      // dashboard (the usual cause of "Unable to upload image"), and it
+      // auto-creates the private payment-proofs bucket.
+      const formData = new FormData()
+      formData.append('file', paymentProof)
 
-      if (error) throw error
+      const response = await fetch('/api/payment-proofs/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result?.error || 'Unable to upload image')
+      }
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('payment-proofs')
-        .getPublicUrl(fileName)
-
-      return publicUrl
+      return { url: result.url, path: result.path }
     } catch (error: any) {
       console.error('Error uploading proof:', error)
-      toast.error('Failed to upload payment proof')
+      toast.error(error.message || 'Failed to upload payment proof')
       return null
     } finally {
       setUploading(false)
@@ -477,8 +472,8 @@ function CheckoutContent() {
       }
 
       // Upload payment proof
-      const proofUrl = await uploadProof()
-      if (!proofUrl) {
+      const proof = await uploadProof()
+      if (!proof) {
         setSubmitting(false)
         return
       }
@@ -493,7 +488,8 @@ function CheckoutContent() {
           payment_type: 'subscription',
           status: 'pending',
           metadata: {
-            payment_proof_url: proofUrl,
+            payment_proof_url: proof.url,
+            payment_proof_path: proof.path,
             duration_days: selectedDuration,
           payment_method_id: selectedPaymentMethod.id,
           payment_method_name: selectedPaymentMethod.name,

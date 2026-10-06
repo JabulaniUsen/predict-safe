@@ -337,32 +337,31 @@ export function ActivationFeeModal({
         return
       }
 
-      // Upload proof of payment
-      const fileExt = paymentProof.name.split('.').pop()
-      const fileName = `${user.id}/${subscriptionId}_${Date.now()}.${fileExt}`
-      
+      // Upload proof of payment via the server route: it uses the
+      // service-role client so it works even when storage RLS policies were
+      // never created in the dashboard (the usual cause of
+      // "Unable to upload image"), and it auto-creates the private
+      // payment-proofs bucket.
       setUploading(true)
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('payment-proofs')
-        .upload(fileName, paymentProof, {
-          cacheControl: '3600',
-          upsert: false
-        })
+      const formData = new FormData()
+      formData.append('file', paymentProof)
+      formData.append('subscriptionId', subscriptionId)
 
-      let proofUrl: string | null = null
-      if (uploadError) {
-        console.error('Storage upload error:', uploadError)
-        toast.error('Failed to upload payment proof. Please try again.')
+      const uploadResponse = await fetch('/api/payment-proofs/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      const uploadResult = await uploadResponse.json()
+      if (!uploadResponse.ok) {
+        console.error('Storage upload error:', uploadResult?.error)
+        toast.error(uploadResult?.error || 'Failed to upload payment proof. Please try again.')
         setUploading(false)
         setSubmitting(false)
         return
-      } else {
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('payment-proofs')
-          .getPublicUrl(fileName)
-        proofUrl = publicUrl
       }
+
+      const proofUrl: string = uploadResult.url
+      const proofPath: string | null = uploadResult.path ?? null
 
       // Create transaction record
       const { data: transaction, error: txError } = await supabase
@@ -379,6 +378,7 @@ export function ActivationFeeModal({
           status: 'pending',
           metadata: {
             payment_proof_url: proofUrl,
+            payment_proof_path: proofPath,
             payment_method_id: selectedPaymentMethod.id,
             payment_method_name: selectedPaymentMethod.name,
             payment_method_type: selectedPaymentMethod.type,

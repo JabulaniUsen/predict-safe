@@ -34,6 +34,33 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
   const [showActivationQuestionDialog, setShowActivationQuestionDialog] = useState(false)
   const [loading, setLoading] = useState(false)
   const [viewingProof, setViewingProof] = useState<string | null>(null)
+  const [loadingProof, setLoadingProof] = useState(false)
+
+  const getPaymentProofPath = (transaction: any) => {
+    const metadata = transaction.metadata as any
+    return metadata?.payment_proof_path || null
+  }
+
+  // Proofs live in the private payment-proofs bucket, so stored URLs can
+  // expire or 403. Mint a fresh signed URL via the server before viewing,
+  // falling back to the stored URL if signing fails.
+  const handleViewProof = async (transaction: any) => {
+    const path = getPaymentProofPath(transaction)
+    const storedUrl = getPaymentProofUrl(transaction)
+    const source = path || storedUrl
+    if (!source) return
+    setLoadingProof(true)
+    try {
+      const response = await fetch(`/api/payment-proofs/signed-url?path=${encodeURIComponent(source)}`)
+      const result = await response.json()
+      setViewingProof(result?.url || storedUrl)
+    } catch (error) {
+      console.error('Error loading payment proof:', error)
+      setViewingProof(storedUrl)
+    } finally {
+      setLoadingProof(false)
+    }
+  }
 
   // Moves a confirmed first-payment subscription into 'pending_activation' instead of
   // straight to 'active', for plans that require a separate activation fee. Used both
@@ -902,7 +929,8 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setViewingProof(proofUrl)}
+                                onClick={() => handleViewProof(tx)}
+                                disabled={loadingProof}
                               >
                                 <Eye className="h-4 w-4 mr-1" />
                                 View Proof
