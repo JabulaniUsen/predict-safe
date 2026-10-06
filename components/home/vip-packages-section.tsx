@@ -86,7 +86,10 @@ export function VIPPackagesSection() {
     if (!user) {
       router.push('/login')
     } else {
-      router.push(`/subscribe?plan=${planSlug}`)
+      // Carry the Weekly/Monthly toggle choice through — /subscribe reads
+      // the duration param instead of silently defaulting.
+      const durationDays = billingPeriod === 'weekly' ? 7 : 30
+      router.push(`/subscribe?plan=${planSlug}&duration=${durationDays}`)
     }
   }
 

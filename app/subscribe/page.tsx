@@ -33,10 +33,16 @@ function SubscribeContent() {
   const searchParams = useSearchParams()
   const planSlug = searchParams.get('plan')
   const step = searchParams.get('step')
+  const durationParam = searchParams.get('duration')
 
   const [plan, setPlan] = useState<Plan | null>(null)
   const [prices, setPrices] = useState<PlanPrice[]>([])
-  const [selectedDuration, setSelectedDuration] = useState<number>(7)
+  // Honor the duration carried in the URL (e.g. the homepage Weekly/Monthly
+  // toggle) instead of silently defaulting — the user can still change it below.
+  const initialDuration = durationParam === '7' || durationParam === '30'
+    ? parseInt(durationParam)
+    : 7
+  const [selectedDuration, setSelectedDuration] = useState<number>(initialDuration)
   const [selectedPrice, setSelectedPrice] = useState<PlanPrice | null>(null)
   const [user, setUser] = useState<any>(null)
   const [userCountry, setUserCountry] = useState<string>('')

@@ -354,7 +354,10 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
   const [activationModalOpen, setActivationModalOpen] = useState(false)
 
   const handleSubscribe = () => {
-    router.push(`/checkout?plan=${selectedPlanSlug}`)
+    // Go via /subscribe so the user picks Weekly or Monthly (and country)
+    // first — going straight to /checkout would drop them onto payment
+    // for a silently-defaulted duration.
+    router.push(`/subscribe?plan=${selectedPlanSlug}`)
   }
 
   if (allPlans.length === 0) {
@@ -521,15 +524,19 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
           ))}
         </div>
       ) : !isUnlocked ? (
-        // Check if needs activation fee payment
-        needsActivationFee ? (
+        // Check if needs activation fee payment — this covers both the
+        // 'pending_activation' state (first payment confirmed, activation
+        // fee still owed) and an active subscription with unpaid activation.
+        // Either way the next step is the activation fee, never another
+        // subscription purchase.
+        needsActivationFee || isPendingActivation ? (
           // Activation Fee Payment Interface
           <Card className="border-2 border-orange-200 bg-orange-50">
             <CardContent className="py-6 lg:py-8 text-center px-4">
               <Lock className="mx-auto mb-4 lg:mb-5 h-10 w-10 lg:h-14 lg:w-14 text-orange-600" />
               <h3 className="text-lg lg:text-xl font-semibold mb-2 text-orange-900">Activation Fee Required</h3>
               <p className="text-sm lg:text-base text-orange-800 mb-1">
-                You have an active subscription for <strong>{selectedPlan?.name}</strong>, but you need to pay the activation fee to unlock predictions.
+                You have subscribed to <strong>{selectedPlan?.name}</strong>, but you need to pay the activation fee to unlock predictions.
               </p>
               <p className="text-xs lg:text-sm text-orange-700 mb-4 lg:mb-6">
                 Complete your payment to access all premium predictions and features.
@@ -538,12 +545,32 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
                 onClick={() => {
                   if (selectedSubscription) {
                     setActivationModalOpen(true)
+                  } else {
+                    // Shouldn't happen (the states above imply a subscription),
+                    // but never leave the user on a dead button.
+                    router.push('/dashboard')
                   }
                 }} 
                 size="lg" 
                 className="bg-orange-600 hover:bg-orange-700 text-white font-semibold text-sm lg:text-base px-6 lg:px-8"
               >
                 Pay Activation Fee
+              </Button>
+            </CardContent>
+          </Card>
+        ) : selectedSubscription?.plan_status === 'pending' ? (
+          // First payment submitted, awaiting admin confirmation — don't
+          // ask for another subscription in the meantime.
+          <Card className="border-2 border-yellow-200 bg-yellow-50">
+            <CardContent className="py-4 lg:py-6 text-center px-4">
+              <Lock className="mx-auto mb-3 lg:mb-4 h-8 w-8 lg:h-12 lg:w-12 text-yellow-600" />
+              <h3 className="text-base lg:text-lg font-semibold mb-2">Payment Pending Review</h3>
+              <p className="text-xs lg:text-sm text-muted-foreground mb-3 lg:mb-4">
+                Your payment proof for {selectedPlan?.name} has been submitted and is awaiting admin confirmation.
+                Once confirmed you&apos;ll be able to pay the activation fee to unlock predictions.
+              </p>
+              <Button onClick={() => router.push('/dashboard')} size="sm" variant="outline" className="lg:size-lg text-xs lg:text-base">
+                Back to Dashboard
               </Button>
             </CardContent>
           </Card>

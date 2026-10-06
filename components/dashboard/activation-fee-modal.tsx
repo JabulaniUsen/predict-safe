@@ -61,6 +61,7 @@ export function ActivationFeeModal({
   const [countries, setCountries] = useState<Array<{ value: string; label: string }>>([])
   const [loadingCountries, setLoadingCountries] = useState(true)
   const [durationDays, setDurationDays] = useState<number>(30)
+  const [availableDurations, setAvailableDurations] = useState<number[]>([])
 
   // Fetch countries from API
   useEffect(() => {
@@ -90,35 +91,91 @@ export function ActivationFeeModal({
   useEffect(() => {
     if (open) {
       setSelectedCountry('')
-      fetchSubscriptionDuration()
+      fetchDurationsAndDefault()
       fetchData()
     }
   }, [open, planId, subscriptionId])
 
-  // Fetch subscription to get duration
-  const fetchSubscriptionDuration = async () => {
+  // Figure out which durations this plan sells an activation fee for, and
+  // which one to default to. The subscription's own dates are usually still
+  // null at this stage (they're only set when the admin activates), so the
+  // most reliable default is the duration of the original subscription
+  // purchase — otherwise a weekly subscriber would be shown (and charged)
+  // the monthly activation fee.
+  const fetchDurationsAndDefault = async () => {
     const supabase = createClient()
     try {
-      const { data: subscriptionData } = await supabase
-        .from('user_subscriptions')
-        .select('start_date, expiry_date')
-        .eq('id', subscriptionId)
-        .single()
+      const { data: activationPrices } = await supabase
+        .from('plan_prices')
+        .select('duration_days')
+        .eq('plan_id', planId)
+        .not('activation_fee', 'is', null)
+        .gt('activation_fee', 0)
 
-      const subscription = subscriptionData as { start_date: string | null; expiry_date: string | null } | null
+      const durations = Array.from(
+        new Set(
+          ((activationPrices as Array<{ duration_days: number }> | null) || [])
+            .map((p) => p.duration_days)
+            .filter((d): d is number => typeof d === 'number')
+        )
+      ).sort((a, b) => a - b)
+      setAvailableDurations(durations)
 
-      if (subscription?.start_date && subscription?.expiry_date) {
-        const start = new Date(subscription.start_date)
-        const expiry = new Date(subscription.expiry_date)
-        const days = Math.ceil((expiry.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-        // Round to nearest valid duration (7 or 30)
-        setDurationDays(days <= 14 ? 7 : 30)
-      } else {
-        // Default to 30 days if dates not available
-        setDurationDays(30)
+      let candidate: number | null = null
+
+      // 1. Duration of the original subscription purchase for this subscription
+      try {
+        const txResponse = (await supabase
+          .from('transactions')
+          .select('metadata')
+          .eq('subscription_id', subscriptionId)
+          .eq('payment_type', 'subscription')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()) as unknown as { data: { metadata: unknown } | null }
+
+        const txDuration = (txResponse?.data?.metadata as { duration_days?: unknown } | null)?.duration_days
+        if (typeof txDuration === 'number' && txDuration > 0) {
+          candidate = txDuration
+        }
+      } catch {
+        // RLS or missing link — fall through to the date-based default
       }
+
+      // 2. Derive from the subscription's own dates when available
+      if (candidate === null) {
+        try {
+          const { data: subscriptionData } = await supabase
+            .from('user_subscriptions')
+            .select('start_date, expiry_date')
+            .eq('id', subscriptionId)
+            .single()
+
+          const subscription = subscriptionData as { start_date: string | null; expiry_date: string | null } | null
+
+          if (subscription?.start_date && subscription?.expiry_date) {
+            const start = new Date(subscription.start_date)
+            const expiry = new Date(subscription.expiry_date)
+            const days = Math.ceil((expiry.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+            // Round to nearest valid duration (7 or 30)
+            candidate = days <= 14 ? 7 : 30
+          }
+        } catch {
+          // fall through to default below
+        }
+      }
+
+      // 3. Final default: monthly
+      if (candidate === null) candidate = 30
+
+      // Only offer durations the plan actually sells an activation fee for
+      if (durations.length > 0 && !durations.includes(candidate)) {
+        candidate = durations.includes(30) ? 30 : durations[0]
+      }
+
+      setDurationDays(candidate)
     } catch (error) {
-      console.error('Error fetching subscription duration:', error)
+      console.error('Error fetching activation durations:', error)
       // Default to 30 days on error
       setDurationDays(30)
     }
@@ -303,6 +360,17 @@ export function ActivationFeeModal({
     setProofPreview(null)
   }
 
+  const durationLabel = (days: number) =>
+    days === 7 ? 'Weekly' : days === 30 ? 'Monthly' : `${days} days`
+
+  const handleDurationChange = (days: number) => {
+    if (days === durationDays) return
+    setDurationDays(days)
+    // The fee changes with duration — the old proof is for the wrong amount
+    setPaymentProof(null)
+    setProofPreview(null)
+  }
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
     toast.success('Copied to clipboard!')
@@ -379,6 +447,7 @@ export function ActivationFeeModal({
           metadata: {
             payment_proof_url: proofUrl,
             payment_proof_path: proofPath,
+            duration_days: durationDays,
             payment_method_id: selectedPaymentMethod.id,
             payment_method_name: selectedPaymentMethod.name,
             payment_method_type: selectedPaymentMethod.type,
@@ -537,9 +606,34 @@ export function ActivationFeeModal({
               </div>
             ) : (
               <>
+                {/* Duration Selection - Weekly or Monthly activation */}
+                {availableDurations.length > 1 && (
+                  <div className="space-y-2">
+                    <Label>Select Duration</Label>
+                    <div className="inline-flex items-center gap-2 bg-white p-1 rounded-lg border-2 border-gray-200 shadow-sm">
+                      {availableDurations.map((days) => (
+                        <button
+                          key={days}
+                          type="button"
+                          onClick={() => handleDurationChange(days)}
+                          className={`px-4 sm:px-6 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-semibold transition-all ${
+                            durationDays === days
+                              ? 'bg-blue-600 text-white shadow-md'
+                              : 'text-gray-600 hover:text-blue-600'
+                          }`}
+                        >
+                          {durationLabel(days)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Amount Display */}
                 <div className="bg-blue-50 rounded-lg p-4 text-center">
-                  <p className="text-sm text-gray-600 mb-1">Activation Fee</p>
+                  <p className="text-sm text-gray-600 mb-1">
+                    Activation Fee{availableDurations.length > 0 ? ` (${durationLabel(durationDays)})` : ''}
+                  </p>
                   {activationPrice ? (
                     <div className="flex items-baseline justify-center gap-1">
                       <span className="text-3xl font-bold text-blue-600">{currency}</span>

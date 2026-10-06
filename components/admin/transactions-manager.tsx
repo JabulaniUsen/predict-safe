@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -9,12 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
-import { Database } from '@/types/database'
-import { CheckCircle2, X, Eye, ExternalLink, Loader2, XCircle, Trash2 } from 'lucide-react'
+import { CheckCircle2, Eye, ExternalLink, Loader2, XCircle, Trash2 } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
-
-type TransactionUpdate = Database['public']['Tables']['transactions']['Update']
-type UserSubscriptionUpdate = Database['public']['Tables']['user_subscriptions']['Update']
 
 interface TransactionsManagerProps {
   transactions: any[]
@@ -66,78 +61,22 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
   // straight to 'active', for plans that require a separate activation fee. Used both
   // when the plan already has "Requires Activation Fee" enabled, and when the admin
   // answers "Yes" to the activation-fee question for a plan that doesn't.
+  // Writes run through /api/admin/transactions (service role), so this works
+  // regardless of the live database's RLS policies on transactions.
   const moveToPendingActivation = async (tx: any) => {
     setLoading(true)
     try {
-      const supabase = createClient()
-
-      let subscription: any = null
-
-      if (tx.subscription_id) {
-        const subResultById = await supabase
-          .from('user_subscriptions')
-          .select('*')
-          .eq('id', tx.subscription_id)
-          .maybeSingle()
-
-        if (!subResultById.error && subResultById.data) {
-          subscription = subResultById.data
-        }
-      }
-
-      if (!subscription && tx.user_id && tx.plan_id) {
-        const subResult = await supabase
-          .from('user_subscriptions')
-          .select('*')
-          .eq('user_id', tx.user_id)
-          .eq('plan_id', tx.plan_id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-
-        if (!subResult.error && subResult.data) {
-          subscription = subResult.data
-        }
-      }
-
-      if (!subscription) {
-        toast.error('Subscription not found for this transaction.')
-        return
-      }
-
-      const updateSubData: UserSubscriptionUpdate = {
-        plan_status: 'pending_activation',
-        subscription_fee_paid: true,
-        updated_at: new Date().toISOString(),
-      }
-
-      const subResult: any = await supabase
-        .from('user_subscriptions')
-        // @ts-expect-error - Supabase type inference issue
-        .update(updateSubData)
-        .eq('id', subscription.id)
-      const { error: subError } = subResult
-
-      if (subError) throw subError
+      const response = await fetch('/api/admin/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'move_to_pending_activation', transactionId: tx.id }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result?.error || 'Failed to update subscription')
 
       const planName = (tx.plans as any)?.name || 'Subscription'
       const userEmail = (tx.users as any)?.email
       const userName = (tx.users as any)?.full_name
-
-      try {
-        await supabase
-          .from('notifications')
-          // @ts-expect-error - Supabase type inference issue
-          .insert({
-            user_id: tx.user_id,
-            type: 'payment_approved',
-            title: 'Payment Confirmed - Activation Fee Required',
-            message: `Your payment for ${planName} has been confirmed. Please log in to your dashboard and pay the required activation fee to activate your subscription.`,
-            read: false,
-          })
-      } catch (notifError) {
-        console.error('Error creating notification:', notifError)
-      }
 
       try {
         await fetch('/api/notifications/send-email', {
@@ -175,25 +114,19 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
 
     setLoading(true)
     try {
-      const supabase = createClient()
+      // Writes run through /api/admin/transactions (service role) so the
+      // confirm works regardless of the live database's RLS policies.
+      // The server marks the transaction completed and either moves the
+      // subscription to Pending Activation or tells us what to do next.
+      const response = await fetch('/api/admin/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'confirm', transactionId: selectedTransaction.id }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result?.error || 'Failed to confirm payment')
 
-      const isActivationFee = selectedTransaction.payment_type === 'activation'
-
-      // Mark the transaction as completed
-      const updateData: TransactionUpdate = {
-        status: 'completed',
-        updated_at: new Date().toISOString(),
-      }
-      const result: any = await supabase
-        .from('transactions')
-        // @ts-expect-error - Supabase type inference issue
-        .update(updateData)
-        .eq('id', selectedTransaction.id)
-      const { error: txError } = result
-
-      if (txError) throw txError
-
-      if (isActivationFee) {
+      if (result.next === 'activate') {
         // Confirming the activation-fee payment no longer activates the subscription
         // directly - it now surfaces in the "Ready to Activate" tab for a final,
         // explicit Activate step (mirrors the first-payment flow).
@@ -205,9 +138,7 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
         return
       }
 
-      const requiresActivation = Boolean((selectedTransaction.plans as any)?.requires_activation)
-
-      if (requiresActivation) {
+      if (result.next === 'move_to_pending_activation') {
         // Package already has "Requires Activation Fee" enabled - skip straight to
         // Pending Activation, don't prompt to activate immediately.
         await moveToPendingActivation(selectedTransaction)
@@ -246,277 +177,46 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
 
     setLoading(true)
     try {
-      const supabase = createClient()
+      // All writes run through /api/admin/transactions (service role) so
+      // activation works regardless of the live database's RLS policies on
+      // transactions / user_subscriptions.
+      const response = await fetch('/api/admin/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'activate', transactionId: selectedTransaction.id }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result?.error || 'Failed to activate subscription')
 
       // Check if this is an activation fee payment
       const isActivationFee = selectedTransaction.payment_type === 'activation'
-
-      // Log transaction details for debugging
-      console.log('Transaction details:', {
-        id: selectedTransaction.id,
-        subscription_id: selectedTransaction.subscription_id,
-        user_id: selectedTransaction.user_id,
-        plan_id: selectedTransaction.plan_id,
-        payment_type: selectedTransaction.payment_type,
-      })
-
-      // Find the subscription related to this transaction by querying the database directly
-      // First, try using subscription_id from transaction if available
-      let subscription: any = null
-      let subscriptionId: string | null = null
-
-      if (selectedTransaction.subscription_id) {
-        const subResultById = await supabase
-          .from('user_subscriptions')
-          .select('*')
-          .eq('id', selectedTransaction.subscription_id)
-          .maybeSingle()
-        
-        if (subResultById.error) {
-          console.error('Error fetching subscription by ID:', subResultById.error)
-        } else {
-          subscription = subResultById.data
-          subscriptionId = subscription?.id || null
-          console.log('Found subscription by subscription_id:', subscription)
-        }
-      }
-
-      // If not found by subscription_id, try by user_id and plan_id (get most recent pending one)
-      if (!subscription && selectedTransaction.user_id && selectedTransaction.plan_id) {
-        // First try to get the most recent pending subscription
-        const subResultPending = await supabase
-          .from('user_subscriptions')
-          .select('*')
-          .eq('user_id', selectedTransaction.user_id)
-          .eq('plan_id', selectedTransaction.plan_id)
-          .in('plan_status', ['pending', 'pending_activation'])
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-        
-        if (subResultPending.error) {
-          console.error('Error fetching pending subscription:', subResultPending.error)
-        } else if (subResultPending.data) {
-          subscription = subResultPending.data
-          subscriptionId = subscription?.id || null
-          console.log('Found pending subscription:', subscription)
-        } else {
-          // If no pending subscription, get the most recent one regardless of status
-          const subResult = await supabase
-            .from('user_subscriptions')
-            .select('*')
-            .eq('user_id', selectedTransaction.user_id)
-            .eq('plan_id', selectedTransaction.plan_id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-          
-          if (subResult.error) {
-            console.error('Error fetching subscription by user_id/plan_id:', subResult.error)
-          } else {
-            subscription = subResult.data
-            subscriptionId = subscription?.id || null
-            console.log('Found subscription by user_id/plan_id (most recent):', subscription)
-          }
-        }
-      }
-
-      if (!subscription || !subscriptionId) {
-        console.error('Subscription not found. Transaction:', selectedTransaction)
-        toast.error('Subscription not found for this transaction. Please check the database.')
-        setLoading(false)
-        return
-      }
-
-      console.log('Updating subscription:', {
-        subscriptionId,
-        currentStatus: subscription.plan_status,
-        userId: subscription.user_id,
-        planId: subscription.plan_id,
-        isActivationFee,
-      })
+      const planName = (selectedTransaction.plans as any)?.name || 'Subscription'
+      const userEmail = (selectedTransaction.users as any)?.email
+      const userName = (selectedTransaction.users as any)?.full_name
 
       if (isActivationFee) {
-        // For activation fee payments, update transaction status and subscription
-        // Update transaction status to completed
-        const txUpdateData: TransactionUpdate = {
-          status: 'completed',
-          updated_at: new Date().toISOString(),
-        }
-        const txResult: any = await supabase
-          .from('transactions')
-          // @ts-expect-error - Supabase type inference issue
-          .update(txUpdateData)
-          .eq('id', selectedTransaction.id)
-        const { error: txError } = txResult
-        if (txError) throw txError
-
-        // Get duration from subscription or default to 30 days
-        let durationDays = 30
-        if (subscription.expiry_date && subscription.start_date) {
-          const start = new Date(subscription.start_date)
-          const expiry = new Date(subscription.expiry_date)
-          durationDays = Math.ceil((expiry.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-        }
-
-        const startDate = subscription.start_date ? new Date(subscription.start_date) : new Date()
-        const expiryDate = subscription.expiry_date ? new Date(subscription.expiry_date) : new Date()
-        if (!subscription.expiry_date) {
-          expiryDate.setDate(expiryDate.getDate() + durationDays)
-        }
-
-        // Update subscription to active with activation fee paid
-        const updateData: UserSubscriptionUpdate = {
-          activation_fee_paid: true,
-          plan_status: 'active',
-          start_date: startDate.toISOString(),
-          expiry_date: expiryDate.toISOString(),
-          updated_at: new Date().toISOString(),
-        }
-
-        const result: any = await supabase
-          .from('user_subscriptions')
-          // @ts-expect-error - Supabase type inference issue
-          .update(updateData)
-          .eq('id', subscriptionId)
-          .select()
-        
-        const { data: updatedSub, error: subError } = result
-
-        if (subError) {
-          console.error('Error updating subscription:', subError)
-          throw subError
-        }
-
-        if (!updatedSub || updatedSub.length === 0) {
-          throw new Error(`Subscription update failed - no rows updated. Subscription ID: ${subscriptionId}`)
-        }
-
         toast.success('Activation fee approved! User can now access predictions.')
-        
-        // Notify user that activation fee was approved
-        try {
-          const planName = (selectedTransaction.plans as any)?.name || 'Subscription'
-          const userEmail = (selectedTransaction.users as any)?.email
-          const userName = (selectedTransaction.users as any)?.full_name
-
-          // Create notification for user
-          await supabase
-            .from('notifications')
-            // @ts-expect-error - Supabase type inference issue
-            .insert({
-              user_id: selectedTransaction.user_id,
-              type: 'payment_approved',
-              title: 'Activation Fee Approved',
-              message: `Your activation fee for ${planName} has been approved and your subscription is now active! You can now access all premium features.`,
-              read: false,
-            })
-
-          // Send email to user
-          try {
-            await fetch('/api/notifications/send-email', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                type: 'payment_approved',
-                userId: selectedTransaction.user_id,
-                planName,
-                userEmail,
-                userName,
-              }),
-            })
-          } catch (emailError) {
-            console.error('Error sending approval email:', emailError)
-            // Don't throw - notification is already created
-          }
-        } catch (notifError) {
-          console.error('Error creating approval notification:', notifError)
-          // Don't throw - subscription is already activated
-        }
       } else {
-        // For subscription payments, use existing logic
-      // Get duration from transaction metadata or default to 30 days
-      const metadata = selectedTransaction.metadata as any
-      const durationDays = metadata?.duration_days || 30
-
-      const startDate = new Date()
-      const expiryDate = new Date()
-      expiryDate.setDate(expiryDate.getDate() + durationDays)
-
-      // Update subscription to active
-      const updateData: UserSubscriptionUpdate = {
-        subscription_fee_paid: true,
-        plan_status: 'active',
-        start_date: startDate.toISOString(),
-        expiry_date: expiryDate.toISOString(),
-        updated_at: new Date().toISOString(),
+        toast.success('Subscription activated! User is now a premium member.')
       }
 
-      console.log('Update data:', updateData)
-
-      const result: any = await supabase
-        .from('user_subscriptions')
-        // @ts-expect-error - Supabase type inference issue
-        .update(updateData)
-        .eq('id', subscriptionId)
-        .select()
-      
-      const { data: updatedSub, error: subError } = result
-
-      if (subError) {
-        console.error('Error updating subscription:', subError)
-        throw subError
-      }
-
-      if (!updatedSub || updatedSub.length === 0) {
-          throw new Error(`Subscription update failed - no rows updated. Subscription ID: ${subscriptionId}`)
-      }
-
-      toast.success('Subscription activated! User is now a premium member.')
-      
-      // Notify user that payment was approved and subscription is active
+      // Send email to user (the in-app notification is created server-side)
       try {
-        const planName = (selectedTransaction.plans as any)?.name || 'Subscription'
-        const userEmail = (selectedTransaction.users as any)?.email
-        const userName = (selectedTransaction.users as any)?.full_name
-
-        // Create notification for user
-        await supabase
-          .from('notifications')
-          // @ts-expect-error - Supabase type inference issue
-          .insert({
-            user_id: selectedTransaction.user_id,
+        await fetch('/api/notifications/send-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
             type: 'payment_approved',
-            title: 'Payment Approved',
-            message: `Your payment for ${planName} has been approved and your subscription is now active! You can now access all premium features.`,
-            read: false,
-          })
-
-        // Send email to user
-        try {
-          await fetch('/api/notifications/send-email', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              type: 'payment_approved',
-              userId: selectedTransaction.user_id,
-              planName,
-              userEmail,
-              userName,
-            }),
-          })
-        } catch (emailError) {
-          console.error('Error sending approval email:', emailError)
-          // Don't throw - notification is already created
-        }
-      } catch (notifError) {
-        console.error('Error creating approval notification:', notifError)
-        // Don't throw - subscription is already activated
-      }
+            userId: selectedTransaction.user_id,
+            planName,
+            userEmail,
+            userName,
+          }),
+        })
+      } catch (emailError) {
+        console.error('Error sending approval email:', emailError)
       }
 
       setShowActivateDialog(false)
@@ -553,28 +253,26 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
 
     setLoading(true)
     try {
-      const supabase = createClient()
-
-      // Update transaction status to failed
-      const updateData: TransactionUpdate = {
-        status: 'failed',
-        updated_at: new Date().toISOString(),
-      }
-      const result: any = await supabase
-        .from('transactions')
-        // @ts-expect-error - Supabase type inference issue
-        .update(updateData)
-        .eq('id', selectedTransaction.id)
-      const { error: txError } = result
-
-      if (txError) throw txError
+      // Writes run through /api/admin/transactions (service role) so the
+      // rejection works regardless of the live database's RLS policies.
+      const response = await fetch('/api/admin/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'reject',
+          transactionId: selectedTransaction.id,
+          reason: rejectionReason || '',
+        }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result?.error || 'Failed to reject payment')
 
       // Get user email and plan name for notification
       const userEmail = (selectedTransaction.users as any)?.email
       const planName = (selectedTransaction.plans as any)?.name || 'Subscription'
       const userName = (selectedTransaction.users as any)?.full_name
 
-      // Send rejection email
+      // Send rejection email (the in-app notification is created server-side)
       try {
         const emailResponse = await fetch('/api/notifications/send-email', {
           method: 'POST',
@@ -596,62 +294,6 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
         }
       } catch (emailError) {
         console.error('Error sending rejection email:', emailError)
-        // Don't throw - transaction is already rejected
-      }
-
-      // Update subscription status if it exists (set to inactive or remove pending status)
-      try {
-        const subscription = subscriptions.find(
-          (sub: any) => sub.user_id === selectedTransaction.user_id && sub.plan_id === selectedTransaction.plan_id
-        )
-        
-        if (subscription) {
-          // If it's a subscription payment, set status to inactive
-          if (selectedTransaction.payment_type === 'subscription') {
-            await supabase
-              .from('user_subscriptions')
-              // @ts-expect-error - Supabase type inference issue
-              .update({
-                plan_status: 'inactive',
-                subscription_fee_paid: false,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', subscription.id)
-          } else if (selectedTransaction.payment_type === 'activation') {
-            // If it's an activation fee, just mark activation_fee_paid as false
-            await supabase
-              .from('user_subscriptions')
-              // @ts-expect-error - Supabase type inference issue
-              .update({
-                activation_fee_paid: false,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', subscription.id)
-          }
-        }
-      } catch (subError) {
-        console.error('Error updating subscription:', subError)
-        // Don't throw - transaction is already rejected
-      }
-
-      // Create notification for user with rejection reason
-      const notificationMessage = rejectionReason 
-        ? `Your payment for ${planName} has been rejected. Reason: ${rejectionReason}. Please resubmit your payment with a valid proof.`
-        : `Your payment for ${planName} has been rejected. Please resubmit your payment with a valid proof.`
-      
-      try {
-        await supabase
-          .from('notifications')
-          // @ts-expect-error - Supabase type inference issue
-          .insert({
-            user_id: selectedTransaction.user_id,
-            type: 'payment_rejected',
-            title: 'Payment Rejected',
-            message: notificationMessage,
-            read: false,
-          })
-      } catch (notifError) {
-        console.error('Error creating notification:', notifError)
         // Don't throw - transaction is already rejected
       }
 
@@ -681,48 +323,20 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
 
     setLoading(true)
     try {
-      const supabase = createClient()
-
-      // Reset the related subscription so it doesn't stay stuck in a pending state
-      try {
-        const subscription = subscriptions.find(
-          (sub: any) => sub.user_id === selectedTransaction.user_id && sub.plan_id === selectedTransaction.plan_id
-        )
-
-        if (subscription && subscription.plan_status !== 'active') {
-          if (selectedTransaction.payment_type === 'subscription') {
-            await supabase
-              .from('user_subscriptions')
-              // @ts-expect-error - Supabase type inference issue
-              .update({
-                plan_status: 'inactive',
-                subscription_fee_paid: false,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', subscription.id)
-          } else if (selectedTransaction.payment_type === 'activation') {
-            await supabase
-              .from('user_subscriptions')
-              // @ts-expect-error - Supabase type inference issue
-              .update({
-                activation_fee_paid: false,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', subscription.id)
-          }
-        }
-      } catch (subError) {
-        console.error('Error resetting subscription:', subError)
-        // Don't throw - still proceed with deleting the transaction
-      }
-
-      // Delete the transaction record
-      const { error: txError } = await supabase
-        .from('transactions')
-        .delete()
-        .eq('id', selectedTransaction.id)
-
-      if (txError) throw txError
+      // Writes run through /api/admin/transactions (service role) so the
+      // deletion works regardless of the live database's RLS policies.
+      // The server resets the related subscription and notifies the user.
+      const response = await fetch('/api/admin/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete',
+          transactionId: selectedTransaction.id,
+          reason: deleteReason || '',
+        }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result?.error || 'Failed to delete transaction')
 
       // Notify user that this payment record was removed and needs resubmission
       const userEmail = (selectedTransaction.users as any)?.email
@@ -746,23 +360,6 @@ export function TransactionsManager({ transactions: initialTransactions, subscri
         })
       } catch (emailError) {
         console.error('Error sending deletion email:', emailError)
-      }
-
-      try {
-        await supabase
-          .from('notifications')
-          // @ts-expect-error - Supabase type inference issue
-          .insert({
-            user_id: selectedTransaction.user_id,
-            type: 'payment_rejected',
-            title: 'Payment Removed',
-            message: deleteReason
-              ? `Your payment for ${planName} has been removed. Reason: ${deleteReason}. Please resubmit your payment with a valid proof.`
-              : `Your payment for ${planName} has been removed. Please resubmit your payment with a valid proof.`,
-            read: false,
-          })
-      } catch (notifError) {
-        console.error('Error creating notification:', notifError)
       }
 
       // Remove from local state immediately

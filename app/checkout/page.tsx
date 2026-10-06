@@ -56,6 +56,7 @@ function CheckoutContent() {
   const [plan, setPlan] = useState<Plan | null>(null)
   const [selectedPrice, setSelectedPrice] = useState<PlanPrice | null>(null)
   const [selectedDuration, setSelectedDuration] = useState<number>(durationParam ? parseInt(durationParam) : 30)
+  const [availableDurations, setAvailableDurations] = useState<number[]>([])
   const [user, setUser] = useState<any>(null)
   // Empty, not 'Nigeria'. PredictSafe is global; assuming a country and then
   // asking someone in Rwanda to pay against a Nigerian form is what made the
@@ -167,6 +168,33 @@ function CheckoutContent() {
 
         if (planData) {
           setPlan(planData)
+
+          // Find which durations this plan is actually sold in, so the
+          // user gets a Weekly/Monthly choice instead of landing straight
+          // on payment for a silently-defaulted duration.
+          const { data: allPricesData } = await supabase
+            .from('plan_prices')
+            .select('duration_days')
+            .eq('plan_id', planData.id)
+
+          const durations = Array.from(
+            new Set(
+              ((allPricesData as Array<{ duration_days: number }> | null) || [])
+                .map((p) => p.duration_days)
+                .filter((d): d is number => typeof d === 'number')
+            )
+          ).sort((a, b) => a - b)
+          setAvailableDurations(durations)
+
+          // No explicit duration in the URL: prefer Monthly when offered,
+          // otherwise fall back to the first duration the plan has. The
+          // effect re-runs on the corrected duration and prices correctly.
+          if (!durationParam && durations.length > 0 && !durations.includes(selectedDuration)) {
+            setSelectedDuration(durations.includes(30) ? 30 : durations[0])
+            setSelectedPrice(null)
+            setLoading(false)
+            return
+          }
           
           // Get price for selected duration and country
           // Use initialCountry (from URL or user profile) for price lookup
@@ -723,6 +751,19 @@ function CheckoutContent() {
     setProofPreview(null)
   }
 
+  const durationLabel = (days: number) =>
+    days === 7 ? 'Weekly' : days === 30 ? 'Monthly' : `${days} days`
+
+  const handleDurationChange = (days: number) => {
+    if (days === selectedDuration) return
+    setSelectedDuration(days)
+    // Price changes with duration — reset payment selection and proof
+    setSelectedPaymentMethod(null)
+    setShowPaymentConfirmation(false)
+    setPaymentProof(null)
+    setProofPreview(null)
+  }
+
   const handlePaymentMethodAction = async (method: PaymentMethod) => {
     setSelectedPaymentMethod(method)
     
@@ -817,7 +858,29 @@ function CheckoutContent() {
           <p className="text-lg text-gray-600 mb-4">{planDescription}</p>
           <div className="text-4xl md:text-5xl font-bold text-purple-900 mb-4">
             {currency}{formattedPrice}
-              </div>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">
+            {selectedDuration === 7 ? '1 Week' : selectedDuration === 30 ? '1 Month' : `${selectedDuration} days`} Subscription
+          </p>
+
+          {/* Duration Selection - Weekly or Monthly */}
+          {availableDurations.length > 1 && (
+            <div className="inline-flex items-center gap-2 bg-white p-1 rounded-lg border-2 border-gray-200 shadow-sm mb-4">
+              {availableDurations.map((days) => (
+                <button
+                  key={days}
+                  onClick={() => handleDurationChange(days)}
+                  className={`px-4 sm:px-6 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-semibold transition-all ${
+                    selectedDuration === days
+                      ? 'bg-purple-700 text-white shadow-md'
+                      : 'text-gray-600 hover:text-purple-700'
+                  }`}
+                >
+                  {durationLabel(days)}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Country Display with Change Button */}
           <div className="flex flex-wrap items-center justify-center gap-3 mb-2">
