@@ -69,8 +69,9 @@ export function predictionsForDate(
 /**
  * Manual reveal switch.
  *
- * Tips stay hidden from everyone (subscribers included, past games included)
- * until the admin reveals them after finishing edits. Rows written before
+ * Tips stay hidden on the public homescreen until the admin reveals them
+ * after finishing edits. Dashboard subscribers always see every tip in full
+ * - the reveal switch never gates paying users. Rows written before
  * migration 035 have no value - treat those as revealed so history stays
  * visible.
  */
