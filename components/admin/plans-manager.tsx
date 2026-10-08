@@ -866,6 +866,7 @@ export function PlansManager({ plans, subscriptions }: PlansManagerProps) {
                     })}
                     placeholder="Optional"
                   />
+                  <p className="text-xs text-muted-foreground">Leave empty or 0 for unlimited.</p>
                 </div>
               </div>
               <div className="flex items-center gap-6">

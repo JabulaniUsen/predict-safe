@@ -295,8 +295,15 @@ export function PredictionsList({ allPlans, subscriptions: initialSubscriptions 
       // locked visitor and the admin saw genuinely different games for the same
       // date. The paywall is now purely a row limit: same predictions, fewer of
       // them.
+      //
+      // A plan with no cap stores NULL - or 0, which the admin form also
+      // accepts for "unlimited". Either must mean "return everything": passing
+      // 0 straight into `.limit(0)` returns zero rows, which is why subscribers
+      // saw "No predictions available" on every date while the admin saw the
+      // games fine.
+      const maxPerDay = selectedPlan.max_predictions_per_day
       const limit = isUnlockedForFetch
-        ? selectedPlan.max_predictions_per_day ?? undefined
+        ? (typeof maxPerDay === 'number' && maxPerDay > 0 ? maxPerDay : undefined)
         : 3
 
       const { data, error } = await predictionsForDate(supabase, {
