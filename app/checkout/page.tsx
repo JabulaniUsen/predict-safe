@@ -1197,33 +1197,47 @@ function CheckoutContent() {
                     )}
                   </div>
 
-                  {/* Payment Link */}
-                  {(method as any).payment_link && (
-                    <a
-                      href={(method as any).payment_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block w-full text-center text-sm text-purple-700 hover:text-purple-900 underline mb-2"
+                  {/* Payment Link + Action Buttons.
+                    When the admin set a payment URL on the method, the user
+                    gets a prominent "Click to Make Payment" button (new tab)
+                    side by side with "I have made payment". */}
+                  {method.payment_link ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <Button asChild size="lg" variant="outline"
+                        className="w-full border-purple-600 text-purple-700 hover:bg-purple-50 hover:text-purple-800"
+                      >
+                        <a
+                          href={method.payment_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Click to Make Payment
+                        </a>
+                      </Button>
+                      <Button
+                        onClick={() => handlePaymentMethodAction(method)}
+                        className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                        size="lg"
+                      >
+                        I have made payment
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      onClick={() => handlePaymentMethodAction(method)}
+                      className={`w-full ${
+                        isPaystack
+                          ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                          : 'bg-purple-600 hover:bg-purple-700 text-white'
+                      }`}
+                      size="lg"
                     >
-                      Open Payment Page
-                    </a>
+                      {isPaystack || isOnlinePayment
+                        ? `Pay ${currency}${formattedPrice}`
+                        : 'I have made payment'
+                      }
+                    </Button>
                   )}
-
-                  {/* Action Button */}
-                  <Button
-                    onClick={() => handlePaymentMethodAction(method)}
-                    className={`w-full ${
-                      isPaystack
-                        ? 'bg-purple-600 hover:bg-purple-700 text-white'
-                        : 'bg-purple-600 hover:bg-purple-700 text-white'
-                    }`}
-                    size="lg"
-                  >
-                    {isPaystack || isOnlinePayment
-                      ? `Pay ${currency}${formattedPrice}`
-                      : 'I have made payment'
-                    }
-                  </Button>
                 </div>
               )
             })}

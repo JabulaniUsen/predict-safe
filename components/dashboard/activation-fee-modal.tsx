@@ -835,10 +835,23 @@ export function ActivationFeeModal({
           </div>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="flex-col sm:flex-row gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
+          {(selectedPaymentMethod as any)?.payment_link && (
+            <Button asChild variant="outline"
+              className="border-blue-600 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+            >
+              <a
+                href={(selectedPaymentMethod as any).payment_link}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Click to Make Payment
+              </a>
+            </Button>
+          )}
           <Button
             onClick={handleSubmit}
             disabled={!selectedPaymentMethod || !activationPrice || !paymentProof || submitting || uploading}

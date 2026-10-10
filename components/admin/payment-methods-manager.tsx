@@ -448,9 +448,12 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
       // Insert/update helper that tolerates databases where later columns
       // (payment_link, logo_url, countries) haven't been migrated yet or the
       // PostgREST schema cache is stale: retry without the missing column
-      // instead of failing the whole save.
-      const saveRow = async (payload: any, id: string | null) => {
+      // instead of failing the whole save. Returns the dropped columns so the
+      // caller can warn - otherwise e.g. a payment link looks saved but never
+      // appears for users.
+      const saveRow = async (payload: any, id: string | null): Promise<string[]> => {
         let attempt = { ...payload }
+        const dropped: string[] = []
         // eslint-disable-next-line no-constant-condition
         while (true) {
           const query = id
@@ -461,11 +464,12 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
                 .eq('id', id)
             : supabase.from('payment_methods').insert(attempt)
           const { error } = (await query) as { error: any }
-          if (!error) return
+          if (!error) return dropped
           const msg = String(error.message || '')
           const missing = msg.match(/Could not find the '(\w+)' column/)
           if (missing && missing[1] in attempt) {
             console.warn(`payment_methods.${missing[1]} missing in DB, retrying without it`)
+            dropped.push(missing[1])
             delete attempt[missing[1]]
             continue
           }
@@ -474,11 +478,21 @@ export function PaymentMethodsManager({ paymentMethods: initialPaymentMethods }:
       }
 
       if (editingMethod) {
-        await saveRow(methodData, editingMethod.id)
+        const dropped = await saveRow(methodData, editingMethod.id)
         toast.success('Payment method updated successfully!')
+        if (dropped.length > 0) {
+          toast.warning(
+            `Saved, but these were NOT stored (missing column in database - run migration 031_fix_payment_methods_visibility.sql in Supabase): ${dropped.join(', ')}`
+          )
+        }
       } else {
-        await saveRow(methodData, null)
+        const dropped = await saveRow(methodData, null)
         toast.success('Payment method created successfully!')
+        if (dropped.length > 0) {
+          toast.warning(
+            `Saved, but these were NOT stored (missing column in database - run migration 031_fix_payment_methods_visibility.sql in Supabase): ${dropped.join(', ')}`
+          )
+        }
       }
 
       setShowDialog(false)
