@@ -234,7 +234,9 @@ function AddPredictionWithAPIContent() {
           toast.info(
             `No selections met your filters. ${data.fixturesPriced} of ${eligible} evening matches had odds` +
               (data.leaguesFailed ? ` (${data.leaguesFailed} leagues did not respond)` : '') +
+              (data.leaguesRecovered ? ` (${data.leaguesRecovered} recovered on retry)` : '') +
               (skipped.length > 0 ? ` - skipped ${skipped.join(', ')}` : '') +
+              (data.oddsErrorSample ? ` Provider said: ${data.oddsErrorSample}` : '') +
               (isCorrectScorePlan
                 ? '. Correct scores price around 6.00-12.00 at ~5-15% probability, so keep confidence at 5-12% and leave the odds range empty.'
                 : '. Try lowering the minimum confidence or widening the odds range.')
@@ -242,7 +244,10 @@ function AddPredictionWithAPIContent() {
         } else {
           toast.success(
             `Found ${data.predictions.length} predictions from ${data.fixturesPriced} priced matches` +
-              (data.leaguesFailed ? ` (${data.leaguesFailed} leagues did not respond)` : '')
+              (data.leaguesFailed ? ` (${data.leaguesFailed} leagues did not respond` : '') +
+              (data.leaguesRecovered ? `, ${data.leaguesRecovered} recovered on retry` : '') +
+              (data.leaguesFailed ? ')' : '') +
+              (data.oddsErrorSample && data.leaguesFailed ? ` Provider said: ${data.oddsErrorSample}` : '')
           )
         }
       } else {

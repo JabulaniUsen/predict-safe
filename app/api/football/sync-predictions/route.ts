@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getFixtures, getOddsByLeague, Odds } from '@/lib/api-football'
+import { getFixtures, getOddsByLeague, FREE_PLAN_LEAGUES, Odds } from '@/lib/api-football'
 import { notifyPredictionDropped } from '@/lib/notifications'
 import { PLAN_TYPE_TO_SLUG } from '@/lib/constants'
 import { mapWithConcurrency } from '@/lib/utils/concurrency'
@@ -163,22 +163,85 @@ export async function POST(request: NextRequest) {
     })
 
     let leaguesFailed = 0
+    const oddsErrorSamples = new Map<string, number>()
+    const recordOddsError = (leagueId: string, oddsError: unknown) => {
+      leaguesFailed++
+      const msg =
+        oddsError instanceof Error ? oddsError.message : String(oddsError ?? 'unknown error')
+      // Distinguish "daily quota exhausted" from "throttled this minute" -
+      // the admin needs to know which one they're looking at.
+      const short =
+        msg.length > 160 ? `${msg.slice(0, 160)}…` : msg
+      oddsErrorSamples.set(short, (oddsErrorSamples.get(short) ?? 0) + 1)
+      console.error(`Error fetching odds for league ${leagueId}:`, oddsError)
+    }
+
+    // Rank leagues before pricing: curated leagues and the leagues with the
+    // most evening fixtures go first. The provider throttles when too many
+    // leagues are asked for at once, and whatever gets throttled comes back
+    // with no odds - so failures should land on the least valuable leagues,
+    // not on a random draw.
+    const curated = new Set(FREE_PLAN_LEAGUES)
+    const eligibleCountByLeague = new Map<string, number>()
+    eligibleFixtures.forEach((f) => {
+      if (!f.league_id) return
+      eligibleCountByLeague.set(f.league_id, (eligibleCountByLeague.get(f.league_id) ?? 0) + 1)
+    })
+    const rankedPairs = Array.from(leagueDatePairs.values()).sort((a, b) => {
+      const aCurated = curated.has(a.leagueId) ? 0 : 1
+      const bCurated = curated.has(b.leagueId) ? 0 : 1
+      if (aCurated !== bCurated) return aCurated - bCurated
+      return (
+        (eligibleCountByLeague.get(b.leagueId) ?? 0) -
+        (eligibleCountByLeague.get(a.leagueId) ?? 0)
+      )
+    })
+
+    const fetchOdds = async (
+      { leagueId, date: leagueDate }: { leagueId: string; date: string },
+      silent = false
+    ) => {
+      try {
+        return { ok: true as const, odds: await getOddsByLeague(leagueId, leagueDate) }
+      } catch (oddsError) {
+        // Retries must not double-count a league that already failed - it
+        // keeps its single failure unless the retry succeeds.
+        if (!silent) recordOddsError(leagueId, oddsError)
+        else console.error(`Retry failed for league ${leagueId}:`, oddsError)
+        return { ok: false as const, leagueId, date: leagueDate, odds: [] as Odds[] }
+      }
+    }
+
     // Concurrency 3, not 6: each league costs 1+ provider calls and the
     // per-minute quota is tight. Bursting harder just converts priced matches
     // into failed leagues.
-    const oddsResults = await mapWithConcurrency(
-      Array.from(leagueDatePairs.values()),
-      3,
-      async ({ leagueId, date: leagueDate }) => {
-        try {
-          return await getOddsByLeague(leagueId, leagueDate)
-        } catch (oddsError) {
-          leaguesFailed++
-          console.error(`Error fetching odds for league ${leagueId}:`, oddsError)
-          return [] as Odds[]
+    const firstPass = await mapWithConcurrency(rankedPairs, 3, (pair) => fetchOdds(pair))
+
+    // One recovery round for throttled leagues: per-minute limits reset
+    // quickly, and by now minutes have passed since the first attempts.
+    // Concurrency 2 to stay well under the limit this time.
+    const failedPairs = firstPass
+      .filter((r) => !r.ok)
+      .map((r) => ({ leagueId: (r as { leagueId: string }).leagueId, date: (r as { date: string }).date }))
+    let leaguesRecovered = 0
+    let secondPass: typeof firstPass = []
+    if (failedPairs.length > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 5000))
+      secondPass = await mapWithConcurrency(failedPairs, 2, async (pair) => {
+        const result = await fetchOdds(pair, true)
+        if (result.ok) {
+          leaguesFailed--
+          leaguesRecovered++
         }
-      }
-    )
+        return result
+      })
+    }
+
+    const oddsResults = [...firstPass, ...secondPass]
+      .filter((r) => r.ok)
+      .map((r) => r.odds)
+    const topOddsError =
+      [...oddsErrorSamples.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
 
     const oddsByMatchId = new Map<string, Odds>()
     oddsResults.flat().forEach((odds) => {
@@ -216,6 +279,8 @@ export async function POST(request: NextRequest) {
         fixturesEligible: eligibleFixtures.length,
         fixturesPriced: oddsByMatchId.size,
         leaguesFailed,
+        leaguesRecovered,
+        oddsErrorSample: topOddsError,
         skippedFinished,
         skippedTime,
         minConfidence: confidenceThreshold,
@@ -245,6 +310,8 @@ export async function POST(request: NextRequest) {
         fixturesEligible: eligibleFixtures.length,
         fixturesPriced: oddsByMatchId.size,
         leaguesFailed,
+        leaguesRecovered,
+        oddsErrorSample: topOddsError,
         skippedFinished,
         skippedTime,
       })
@@ -288,6 +355,8 @@ export async function POST(request: NextRequest) {
       fixturesEligible: eligibleFixtures.length,
       fixturesPriced: oddsByMatchId.size,
       leaguesFailed,
+      leaguesRecovered,
+      oddsErrorSample: topOddsError,
       skippedFinished,
       skippedTime,
       minConfidence: confidenceThreshold,

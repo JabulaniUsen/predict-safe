@@ -402,6 +402,11 @@ const PROVIDER_TTL_BY_PATH: Record<string, number> = {
   standings: 6 * 60 * 60 * 1000, // 6 hours
   teams: 24 * 60 * 60 * 1000, // 24 hours
   leagues: 24 * 60 * 60 * 1000, // 24 hours
+  // Pre-match odds move slowly relative to a tips-building session, and every
+  // cached league here is one fewer provider call against the per-minute
+  // quota. A re-sync within 10 minutes reuses priced leagues instead of
+  // re-burning quota and getting throttled again.
+  odds: 10 * 60 * 1000, // 10 minutes
 }
 
 function ttlForPath(path: string): number {
