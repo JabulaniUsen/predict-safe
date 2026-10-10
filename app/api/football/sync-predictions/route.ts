@@ -38,6 +38,15 @@ export async function POST(request: NextRequest) {
       limit,
       preview = false,
       strategy = 'safest',
+      // Kickoff window in UTC hours (provider match_time is UTC "HH:MM").
+      // The admin asked for evening games only (4-11pm WAT = 15-22 UTC) -
+      // morning games are already finished by the time tips go out and just
+      // burn odds quota. Null/undefined means no time filtering.
+      fromHour,
+      toHour,
+      // Skip finished/live fixtures. Morning games that already kicked off
+      // can never become user tips, so pricing them wastes provider calls.
+      upcomingOnly = true,
     } = body
 
     const isCorrectScorePlan = planType === 'correct_score'
@@ -58,6 +67,19 @@ export async function POST(request: NextRequest) {
     if (minOddsValue !== null && maxOddsValue !== null && minOddsValue >= maxOddsValue) {
       return NextResponse.json({ error: 'minOdds must be less than maxOdds' }, { status: 400 })
     }
+
+    const parseHour = (value: unknown): number | null => {
+      if (value === undefined || value === null || value === '') return null
+      const parsed = parseInt(String(value), 10)
+      if (Number.isNaN(parsed) || parsed < 0 || parsed > 23) return Number.NaN
+      return parsed
+    }
+    const fromHourValue = parseHour(fromHour)
+    const toHourValue = parseHour(toHour)
+    if (Number.isNaN(fromHourValue) || Number.isNaN(toHourValue)) {
+      return NextResponse.json({ error: 'fromHour and toHour must be hours 0-23' }, { status: 400 })
+    }
+    const hasWindow = fromHourValue !== null && toHourValue !== null
 
     const supabase = await createClient()
 
@@ -82,10 +104,57 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'No fixtures found', synced: 0 })
     }
 
+    // Narrow the slate BEFORE touching the odds provider. The old code priced
+    // every league on the card (~370 on a busy Saturday), blew through the
+    // per-minute rate limit, and came back with a handful of priced matches
+    // and hundreds of failed leagues. Morning games that already finished can
+    // never become tips, so they are dropped here rather than priced.
+    const kickoffHour = (matchTime: string): number | null => {
+      const match = /^(\d{1,2}):(\d{2})/.exec(matchTime || '')
+      if (!match) return null
+      const hour = parseInt(match[1], 10)
+      return hour >= 0 && hour <= 23 ? hour : null
+    }
+    const inWindow = (hour: number | null): boolean => {
+      if (!hasWindow || hour === null) return true
+      const from = fromHourValue as number
+      const to = toHourValue as number
+      // Overnight windows (e.g. 22-02) wrap past midnight.
+      return from <= to ? hour >= from && hour <= to : hour >= from || hour <= to
+    }
+
+    let skippedFinished = 0
+    let skippedTime = 0
+    const eligibleFixtures = fixtures.filter((f) => {
+      if (upcomingOnly && (f.match_status === 'Finished' || f.match_live === '1')) {
+        skippedFinished++
+        return false
+      }
+      if (hasWindow && !inWindow(kickoffHour(f.match_time))) {
+        skippedTime++
+        return false
+      }
+      return true
+    })
+
+    if (eligibleFixtures.length === 0) {
+      return NextResponse.json({
+        message: 'No fixtures left after kickoff filters',
+        synced: 0,
+        predictions: preview ? [] : undefined,
+        fixturesConsidered: fixtures.length,
+        fixturesEligible: 0,
+        fixturesPriced: 0,
+        leaguesFailed: 0,
+        skippedFinished,
+        skippedTime,
+      })
+    }
+
     // Odds come back per league/date rather than per fixture: a busy day has
     // hundreds of fixtures but only a couple of dozen distinct leagues.
     const leagueDatePairs = new Map<string, { leagueId: string; date: string }>()
-    fixtures.forEach((f) => {
+    eligibleFixtures.forEach((f) => {
       if (!f.league_id || !f.match_date) return
       leagueDatePairs.set(`${f.league_id}|${f.match_date}`, {
         leagueId: f.league_id,
@@ -94,9 +163,12 @@ export async function POST(request: NextRequest) {
     })
 
     let leaguesFailed = 0
+    // Concurrency 3, not 6: each league costs 1+ provider calls and the
+    // per-minute quota is tight. Bursting harder just converts priced matches
+    // into failed leagues.
     const oddsResults = await mapWithConcurrency(
       Array.from(leagueDatePairs.values()),
-      6,
+      3,
       async ({ leagueId, date: leagueDate }) => {
         try {
           return await getOddsByLeague(leagueId, leagueDate)
@@ -115,7 +187,7 @@ export async function POST(request: NextRequest) {
 
     const isCorrectScore = planType === 'correct_score'
 
-    const generated = buildPredictions(fixtures, oddsByMatchId, {
+    const generated = buildPredictions(eligibleFixtures, oddsByMatchId, {
       predictionDate: date,
       minConfidence: confidenceThreshold,
       minOdds: minOddsValue ?? undefined,
@@ -141,8 +213,11 @@ export async function POST(request: NextRequest) {
         predictions,
         preview: true,
         fixturesConsidered: fixtures.length,
+        fixturesEligible: eligibleFixtures.length,
         fixturesPriced: oddsByMatchId.size,
         leaguesFailed,
+        skippedFinished,
+        skippedTime,
         minConfidence: confidenceThreshold,
         minOdds: minOddsValue,
         maxOdds: maxOddsValue,
@@ -167,8 +242,11 @@ export async function POST(request: NextRequest) {
         message: 'No predictions matched the selected filters',
         synced: 0,
         fixturesConsidered: fixtures.length,
+        fixturesEligible: eligibleFixtures.length,
         fixturesPriced: oddsByMatchId.size,
         leaguesFailed,
+        skippedFinished,
+        skippedTime,
       })
     }
 
@@ -207,8 +285,11 @@ export async function POST(request: NextRequest) {
       message: 'Predictions synced successfully',
       synced: data?.length || 0,
       fixturesConsidered: fixtures.length,
+      fixturesEligible: eligibleFixtures.length,
       fixturesPriced: oddsByMatchId.size,
       leaguesFailed,
+      skippedFinished,
+      skippedTime,
       minConfidence: confidenceThreshold,
       minOdds: minOddsValue,
       maxOdds: maxOddsValue,

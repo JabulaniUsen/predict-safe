@@ -104,6 +104,13 @@ function AddPredictionWithAPIContent() {
   const [perFixture, setPerFixture] = useState<string>('1')
   const [minOdds, setMinOdds] = useState<string>('') // Optional minimum odds
   const [maxOdds, setMaxOdds] = useState<string>('') // Optional maximum odds
+  // Kickoff window in UTC hours (the provider's match_time is UTC). Defaults
+  // cover 4pm-11pm WAT (Lagos, UTC+1): 15:00-22:59 UTC. Morning games are
+  // already finished by the time tips go out, so they are excluded by default
+  // - they only burn odds quota and can never become user tips.
+  const [fromHour, setFromHour] = useState<string>('15')
+  const [toHour, setToHour] = useState<string>('22')
+  const [upcomingOnly, setUpcomingOnly] = useState<boolean>(true)
   // 'safest' takes each match's most probable selection (clusters ~1.20-1.50).
   // 'biggest_odds' takes the longest-priced selection still above the minimum
   // confidence - for high-odds VIP sheets. Long prices imply low probability,
@@ -202,6 +209,9 @@ function AddPredictionWithAPIContent() {
           perFixture: parseInt(perFixture, 10),
           strategy: pickStrategy,
           preview: true, // Enable preview mode
+          fromHour: fromHour !== '' ? parseInt(fromHour, 10) : undefined,
+          toHour: toHour !== '' ? parseInt(toHour, 10) : undefined,
+          upcomingOnly,
         }),
       })
 
@@ -217,9 +227,14 @@ function AddPredictionWithAPIContent() {
         setSelectedPredictions(new Set(data.predictions.map((_: any, index: number) => index)))
         
         if (data.predictions.length === 0) {
+          const eligible = data.fixturesEligible ?? data.fixturesConsidered
+          const skipped: string[] = []
+          if (data.skippedFinished) skipped.push(`${data.skippedFinished} already started/finished`)
+          if (data.skippedTime) skipped.push(`${data.skippedTime} outside the kickoff window`)
           toast.info(
-            `No selections met your filters. ${data.fixturesPriced} of ${data.fixturesConsidered} matches had odds` +
+            `No selections met your filters. ${data.fixturesPriced} of ${eligible} evening matches had odds` +
               (data.leaguesFailed ? ` (${data.leaguesFailed} leagues did not respond)` : '') +
+              (skipped.length > 0 ? ` - skipped ${skipped.join(', ')}` : '') +
               (isCorrectScorePlan
                 ? '. Correct scores price around 6.00-12.00 at ~5-15% probability, so keep confidence at 5-12% and leave the odds range empty.'
                 : '. Try lowering the minimum confidence or widening the odds range.')
@@ -323,8 +338,20 @@ function AddPredictionWithAPIContent() {
       // matches near midnight UTC)
       const date = prediction.kickoff_time.split(' ')[0]
 
+      // Scope the fixture fetch to this game's league: pulling the whole day
+      // downloads 1,500+ fixtures to find one row and regularly times out.
+      const fixturePromise = prediction.league_id
+        ? getFixtures(date, prediction.league_id, date)
+            .then((leagueFixtures) =>
+              Array.isArray(leagueFixtures) && leagueFixtures.length > 0
+                ? leagueFixtures
+                : getFixtures(date)
+            )
+            .catch(() => getFixtures(date))
+        : getFixtures(date)
+
       const [fixtures, odds, h2hData, standingsData] = await Promise.all([
-        getFixtures(date),
+        fixturePromise,
         getOdds(prediction.match_id).catch((oddsError) => {
           console.error('Error fetching odds:', oddsError)
           return [] as Odds[]
@@ -413,6 +440,52 @@ function AddPredictionWithAPIContent() {
                 <p className="text-xs text-muted-foreground">
                   Select the date for which you want to sync predictions
                 </p>
+              </div>
+
+              <div className="space-y-3 border-t pt-4">
+                <Label>Kickoff Window (UTC hours)</Label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="fromHour" className="text-xs">From hour</Label>
+                    <Input
+                      id="fromHour"
+                      type="number"
+                      min="0"
+                      max="23"
+                      placeholder="15"
+                      value={fromHour}
+                      onChange={(e) => setFromHour(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="toHour" className="text-xs">To hour</Label>
+                    <Input
+                      id="toHour"
+                      type="number"
+                      min="0"
+                      max="23"
+                      placeholder="22"
+                      value={toHour}
+                      onChange={(e) => setToHour(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Only matches kicking off between these UTC hours are priced. Provider times are
+                  UTC, so <strong>15-22 UTC = 4pm-11pm WAT</strong> (Lagos). Leave both empty to
+                  include the whole day. Filtering here saves odds quota - unpriced morning games
+                  can never become tips.
+                </p>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="upcomingOnly"
+                    checked={upcomingOnly}
+                    onCheckedChange={(checked) => setUpcomingOnly(checked === true)}
+                  />
+                  <Label htmlFor="upcomingOnly" className="text-xs font-normal">
+                    Only matches that haven&apos;t kicked off yet (skip finished & live games)
+                  </Label>
+                </div>
               </div>
 
               <div className="space-y-4">
