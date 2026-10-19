@@ -17,7 +17,7 @@ import { Plan, PlanPrice, PaymentMethod } from '@/types'
 import { Database } from '@/types/database'
 import { toast } from 'sonner'
 import { getCurrencySymbol as getCurrencySymbolUtil, getCurrencyFromCountry } from '@/lib/utils/currency'
-import { isMethodAvailableForCountry } from '@/lib/payment-methods'
+import { filterMethodsForCountry } from '@/lib/payment-methods'
 
 type CountryOption = 'Nigeria' | 'Ghana' | 'Kenya' | 'Other'
 type UserProfile = Pick<Database['public']['Tables']['users']['Row'], 'country'>
@@ -293,12 +293,11 @@ function CheckoutContent() {
 
       // Filter in memory based on countries array.
       // (Shared helper: missing/NULL/empty countries = all countries;
-      // crypto and Skrill are always available.)
-      const filteredMethods = methodsData?.filter((method: any) =>
-        isMethodAvailableForCountry(method, selectedCountry)
-      )
+      // crypto and Skrill are always available; a country with no local
+      // rail at all falls back to cryptocurrency.)
+      const filteredMethods = filterMethodsForCountry(methodsData, selectedCountry)
 
-      if (filteredMethods) {
+      if (methodsData) {
         setPaymentMethods(filteredMethods as PaymentMethod[])
         // Reset selected payment method if it's no longer available
         if (selectedPaymentMethod && !filteredMethods.find((m: any) => m.id === selectedPaymentMethod.id)) {

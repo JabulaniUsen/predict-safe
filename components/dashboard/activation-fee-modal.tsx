@@ -20,7 +20,7 @@ import { toast } from 'sonner'
 import Image from 'next/image'
 import { Combobox } from '@/components/ui/combobox'
 import { getCurrencyFromCountry, getCurrencySymbol as getCurrencySymbolUtil } from '@/lib/utils/currency'
-import { isMethodAvailableForCountry } from '@/lib/payment-methods'
+import { filterMethodsForCountry } from '@/lib/payment-methods'
 
 type CountryOption = 'Nigeria' | 'Ghana' | 'Kenya' | 'Other'
 
@@ -224,10 +224,12 @@ export function ActivationFeeModal({
       if (methodsData) {
         // Filter payment methods based on selected country
         // (Shared helper: missing/NULL/empty countries = all countries;
-        // crypto and Skrill are always available.)
-        const filteredMethods: PaymentMethod[] = methodsData.filter((method: any) =>
-          isMethodAvailableForCountry(method, selectedCountry)
-        ) as PaymentMethod[]
+        // crypto and Skrill are always available; a country with no local
+        // rail at all falls back to cryptocurrency.)
+        const filteredMethods = filterMethodsForCountry<PaymentMethod>(
+          methodsData as PaymentMethod[],
+          selectedCountry
+        )
 
         setPaymentMethods(filteredMethods)
         // Reset selected payment method if it's not in the filtered list

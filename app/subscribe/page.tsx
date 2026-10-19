@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Plan, PlanPrice, Country, PaymentMethod } from '@/types'
-import { isMethodAvailableForCountry } from '@/lib/payment-methods'
+import { filterMethodsForCountry } from '@/lib/payment-methods'
 import { Database } from '@/types/database'
 import Image from 'next/image'
 
@@ -164,12 +164,11 @@ function SubscribeContent() {
 
       // Filter payment methods based on selected country
       // (Shared helper: missing/NULL/empty countries = all countries;
-      // crypto and Skrill are always available.)
-      const filteredMethods = methodsData?.filter((method: any) =>
-        isMethodAvailableForCountry(method, selectedCountry)
-      )
+      // crypto and Skrill are always available; a country with no local
+      // rail at all falls back to cryptocurrency.)
+      const filteredMethods = filterMethodsForCountry(methodsData, selectedCountry)
 
-      if (filteredMethods) {
+      if (methodsData) {
         setPaymentMethods(filteredMethods)
       }
     }
@@ -404,12 +403,6 @@ function SubscribeContent() {
                   <p className="text-sm text-muted-foreground mt-2">
                     {selectedDuration === 7 ? '1 Week' : '1 Month'} Subscription
                   </p>
-                  {plan.requires_activation && selectedPrice.activation_fee && (
-                    <p className="text-sm text-muted-foreground mt-1">
-                      + {currency}
-                      {selectedPrice.activation_fee} activation fee (paid separately)
-                    </p>
-                  )}
                 </div>
               )}
 

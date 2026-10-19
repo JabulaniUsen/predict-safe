@@ -245,7 +245,7 @@ export function getCurrencySymbol(currencyCode: string): string {
     'LAK': '₭',
     'MNT': '₮',
     'KZT': '₸',
-    'UZS': 'лв',
+    'UZS': "so'm",
     'KGS': 'лв',
     'TJS': 'ЅМ',
     'TMT': 'm',
