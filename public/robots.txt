@@ -1,5 +1,9 @@
 # robots.txt for PredictSafe
 
+# NOTE: per-bot AI crawler rules (GPTBot, ClaudeBot, Google-Extended, ...) are
+# not set in this file. Cloudflare's "managed robots.txt" (AI Crawl Control)
+# prepends them at the edge, so change them in the Cloudflare dashboard.
+
 # Allow all search engines to crawl the site
 User-agent: *
 Allow: /
@@ -38,6 +42,6 @@ Allow: /match/
 # Allow tips landing pages
 Allow: /tips/
 
-# Sitemap location (update with your actual domain)
-Sitemap: https://predictsafe.com/sitemap.xml
+# Sitemap location (canonical www host, matching the URLs inside the sitemap)
+Sitemap: https://www.predictsafe.com/sitemap.xml
 

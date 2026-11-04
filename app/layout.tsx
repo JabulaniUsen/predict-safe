@@ -69,9 +69,9 @@ export const metadata: Metadata = {
     description: "Get accurate football predictions, betting tips, and expert analysis.",
   },
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://predictsafe.com'),
-  alternates: {
-    canonical: '/',
-  },
+  // No site-wide canonical: every page inherits root metadata, so a canonical
+  // of '/' here declared each article and page a duplicate of the homepage.
+  // Pages set their own self-referencing canonical instead.
 };
 
 // `themeColor` belongs on the viewport export, not on metadata, where it is

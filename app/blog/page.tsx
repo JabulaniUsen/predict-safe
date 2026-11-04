@@ -24,6 +24,9 @@ export const metadata: Metadata = {
     'betting guides',
     'football prediction analysis'
   ],
+  alternates: {
+    canonical: '/blog',
+  },
   openGraph: {
     title: 'Football Betting Tips & Predictions Blog | PredictSafe',
     description: 'Read expert football betting tips, predictions analysis, and betting strategies.',

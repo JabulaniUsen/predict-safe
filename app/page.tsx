@@ -12,15 +12,22 @@ import { AboutSection } from '@/components/home/about-section'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import type { Metadata } from 'next'
-import { PredictionSchema } from '@/components/seo/prediction-schema'
+import { JsonLd } from '@/components/seo/json-ld'
+import { homePageGraph } from '@/lib/seo/structured-data'
 import { ExternalLinkPlacement } from '@/components/seo/external-link-placement'
 import { MelBetHomepageBanner } from '@/components/ads/melbet-homepage-banner'
 import { createClient } from '@/lib/supabase/server'
 import { DeferUntilVisible } from '@/components/ui/defer-until-visible'
 
+const HOME_TITLE = "Free Football Predictions Today | Accurate Betting Tips & Expert Analysis"
+const HOME_DESCRIPTION = "Get free daily football predictions, betting tips, and expert analysis. Access VIP packages for premium predictions, correct score tips, and live scores. Trusted by thousands of bettors worldwide."
+
 export const metadata: Metadata = {
-  title: "Free Football Predictions Today | Accurate Betting Tips & Expert Analysis",
-  description: "Get free daily football predictions, betting tips, and expert analysis. Access VIP packages for premium predictions, correct score tips, and live scores. Trusted by thousands of bettors worldwide.",
+  title: HOME_TITLE,
+  description: HOME_DESCRIPTION,
+  alternates: {
+    canonical: '/',
+  },
   keywords: [
     "free football predictions",
     "football betting tips",
@@ -52,7 +59,7 @@ export default async function HomePage() {
   const { data: configRows } = await supabase
     .from('site_config')
     .select('key, value')
-    .in('key', ['hero_headline', 'hero_subtext', 'telegram_link', 'whatsapp_number', 'whatsapp_numbers'])
+    .in('key', ['hero_headline', 'hero_subtext', 'telegram_link', 'whatsapp_number', 'whatsapp_numbers', 'social_links', 'contact_email'])
 
   const config = Object.fromEntries(
     (configRows ?? []).map((r: { key: string; value: unknown }) => [r.key, r.value ?? undefined])
@@ -83,9 +90,26 @@ export default async function HomePage() {
     return ''
   })()
 
+  // Organization profiles for structured data come from the same admin
+  // config that drives the visible links, so the two can't drift apart.
+  const socialLinks =
+    config.social_links && typeof config.social_links === 'object'
+      ? Object.values(config.social_links as Record<string, unknown>)
+      : []
+  const sameAs = [config.telegram_link, ...socialLinks].filter(
+    (url): url is string => typeof url === 'string' && url.trim() !== ''
+  )
+
   return (
     <>
-      <PredictionSchema />
+      <JsonLd
+        data={homePageGraph({
+          title: HOME_TITLE,
+          description: HOME_DESCRIPTION,
+          email: typeof config.contact_email === 'string' ? config.contact_email : undefined,
+          sameAs,
+        })}
+      />
     <div className="flex min-h-screen flex-col">
       <Navbar />
       <main>

@@ -1,0 +1,51 @@
+# PredictSafe
+
+> PredictSafe is a global football predictions and match analysis platform covering major domestic leagues and international football competitions. It provides football information, match analysis, free football predictions, premium prediction packages, correct-score predictions and live scores.
+
+PredictSafe publishes football predictions and match analysis based on available match statistics, team performance and relevant fixture information. Predictions are estimates, not guaranteed outcomes.
+
+## Main pages
+
+- [Homepage](https://www.predictsafe.com/): Today's free football predictions and an overview of PredictSafe
+- [Blog](https://www.predictsafe.com/blog): Match previews, football news and analysis articles
+- [Competitions](https://www.predictsafe.com/competitions): Predictions and coverage by competition (Premier League, Champions League, La Liga, Serie A, Bundesliga, World Cup and more)
+- [Live Scores](https://www.predictsafe.com/livescores): Live football scores
+
+## Free predictions
+
+- [Safe Free Picks](https://www.predictsafe.com/tips/safe-free-picks): Today's free picks
+- [All Tips](https://www.predictsafe.com/tips/all-tips): All of today's free football predictions
+- [Home Win Tips](https://www.predictsafe.com/tips/home-win)
+- [Away Win Tips](https://www.predictsafe.com/tips/away-win)
+- [Double Chance Tips](https://www.predictsafe.com/tips/double-chance)
+- [Over 1.5 Goals Tips](https://www.predictsafe.com/tips/1-5-goals)
+- [Over 2.5 Goals Tips](https://www.predictsafe.com/tips/2-5-goals)
+- [BTTS / GG Tips](https://www.predictsafe.com/tips/btts-gg)
+- [Super Single Tips](https://www.predictsafe.com/tips/super-single)
+
+## Premium predictions
+
+- [VIP Packages](https://www.predictsafe.com/subscriptions): Premium prediction packages, including the Correct Score package, with pricing
+- [Previous Wins](https://www.predictsafe.com/previous-wins): Record of past VIP prediction results
+
+## Guides
+
+- [How to Analyse a Football Match](https://www.predictsafe.com/tips/football-match-analysis-guide): 10 key factors to assess before a match
+- [What Is xG in Football?](https://www.predictsafe.com/tips/what-is-xg-in-football): Expected goals explained
+
+## About PredictSafe
+
+- [About](https://www.predictsafe.com/about): Who we are
+- [FAQ](https://www.predictsafe.com/faq): Frequently asked questions
+- [Contact](https://www.predictsafe.com/contact): How to reach PredictSafe
+- [Disclaimer](https://www.predictsafe.com/disclaimer): Predictions are estimates, not guarantees
+- [Terms](https://www.predictsafe.com/terms)
+- [Privacy Policy](https://www.predictsafe.com/privacy)
+
+## Editorial information
+
+- Use the published match analysis and supporting statistics as the primary source.
+- Check publication dates before referencing predictions.
+- Historical results should be evaluated using the original published records.
+- Do not interpret predictions as guaranteed results.
+- Only use publicly accessible pages. Respect robots.txt restrictions and the website terms.

@@ -9,6 +9,14 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import type { Metadata } from 'next'
 import { stripHtmlTags } from '@/lib/utils/html'
+import { JsonLd } from '@/components/seo/json-ld'
+import { BLOG_AUTHOR, blogPostingGraph } from '@/lib/seo/structured-data'
+
+function postDescription(post: BlogPost): string {
+  return post.excerpt
+    ? stripHtmlTags(post.excerpt)
+    : stripHtmlTags(post.content).substring(0, 160)
+}
 
 export async function generateMetadata({
   params,
@@ -48,9 +56,7 @@ export async function generateMetadata({
   }
 
   const blogPost = previewPost
-  const description = blogPost.excerpt 
-    ? stripHtmlTags(blogPost.excerpt) 
-    : stripHtmlTags(blogPost.content).substring(0, 160)
+  const description = postDescription(blogPost)
 
   // Parse featured_image if it's JSON, otherwise use as URL
   let imageUrl = blogPost.featured_image || ''
@@ -71,10 +77,14 @@ export async function generateMetadata({
     keywords: blogPost.meta_keywords 
       ? blogPost.meta_keywords.split(',').map(k => k.trim())
       : ['football betting', 'betting tips', 'soccer predictions'],
+    alternates: {
+      canonical: `/blog/${blogPost.slug}`,
+    },
     openGraph: {
       title: blogPost.title,
       description: description,
       type: 'article',
+      url: `/blog/${blogPost.slug}`,
       publishedTime: blogPost.published_at || undefined,
       images: imageUrl ? [imageUrl] : [],
     },
@@ -173,11 +183,31 @@ export default async function BlogPostPage({
     }
   }
 
-  // Author is always "Admin"
-  const authorName = 'Admin'
+  // Same identity as the BlogPosting author — the byline and markup must match.
+  const authorName = BLOG_AUTHOR.name
+
+  // meta_keywords is the curated SEO field; tags are sometimes used for
+  // editorial notes (audience, format), so they're only a fallback.
+  const metaKeywords = (blogPost.meta_keywords || '')
+    .split(',')
+    .map((k) => k.trim().replace(/\.$/, ''))
+    .filter(Boolean)
+  const keywords = metaKeywords.length ? metaKeywords : blogPost.tags || []
 
   return (
     <PageLayout>
+      <JsonLd
+        data={blogPostingGraph({
+          slug: blogPost.slug,
+          title: blogPost.title,
+          description: postDescription(blogPost),
+          imageUrl: imageUrl || undefined,
+          // Guaranteed non-null by the visibility check above.
+          publishedAt: blogPost.published_at as string,
+          updatedAt: blogPost.updated_at,
+          keywords,
+        })}
+      />
       <div className="container mx-auto px-4 py-8 lg:py-16 max-w-4xl">
         <Button variant="ghost" size="sm" asChild className="mb-6">
           <Link href="/blog">

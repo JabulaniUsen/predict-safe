@@ -32,6 +32,15 @@ function generateSlug(title: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
+// A datetime-local input holds *local* wall-clock time, and `new Date(value)`
+// reads it back as local on save. Seeding it with toISOString() (UTC) shifted
+// a scheduled post by the editor's UTC offset every time it was re-saved.
+function toDateTimeLocalValue(iso: string): string {
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 function WriteBlogContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -156,7 +165,7 @@ function WriteBlogContent() {
           featured_image_width: imageWidth,
           featured_image_height: imageHeight,
           published: post.published || false,
-          scheduled_at: post.scheduled_at ? new Date(post.scheduled_at).toISOString().slice(0, 16) : '',
+          scheduled_at: post.scheduled_at ? toDateTimeLocalValue(post.scheduled_at) : '',
           meta_keywords: post.meta_keywords || '',
           tags: post.tags || [],
           competition_id: post.competition_id || '',
@@ -294,11 +303,10 @@ function WriteBlogContent() {
     // Handle scheduling / publishing. The public blog list requires
     // published=true AND a non-null past published_at, so every path that
     // publishes must guarantee a published_at, including editing a draft.
-    // Timestamps come from the browser clock, which can run fast — a
-    // future-dated published_at is hidden by RLS and the list/detail queries
-    // (`published_at <= NOW()`), producing a 404 on a "published" post. So
-    // only ever reuse an existing stamp when it is already in the past, and
-    // otherwise backdate slightly to guarantee immediate visibility.
+    // The stamp sent here is only a fallback: the browser clock can be hours
+    // off, and a future published_at is hidden by RLS (`published_at <= NOW()`)
+    // so the "published" post 404s. The blog_posts_stamp_published_at trigger
+    // (migration 038) overwrites it with the database clock.
     const pastPublishedAt =
       existingPublishedAt && new Date(existingPublishedAt).getTime() <= Date.now()
         ? existingPublishedAt
