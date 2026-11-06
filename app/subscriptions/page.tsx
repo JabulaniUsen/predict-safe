@@ -10,6 +10,7 @@ import { Check } from 'lucide-react'
 import { PlanWithPrice } from '@/types'
 import { Combobox } from '@/components/ui/combobox'
 import { getCurrencySymbol as getCurrencySymbolUtil, getCurrencyFromCountry } from '@/lib/utils/currency'
+import { getPublicPlanBenefits, getPublicPlanDescription } from '@/lib/utils/plan-display'
 
 interface Country {
   name: string
@@ -238,6 +239,7 @@ export default function SubscriptionsPage() {
               const weeklyPrice = getPriceForCountry(plan, 7)
               const monthlyPrice = getPriceForCountry(plan, 30)
               const isPopular = plan.slug === popularPlanSlug
+              const benefits = getPublicPlanBenefits(plan.benefits)
 
               return (
                 <div
@@ -319,15 +321,15 @@ export default function SubscriptionsPage() {
 
                       {/* Description */}
                       <p className="text-sm text-gray-600 mb-6 leading-relaxed">
-                        {plan.description || 'Premium predictions for serious bettors.'}
+                        {getPublicPlanDescription(plan.description) || 'Premium predictions for serious bettors.'}
                       </p>
 
                       {/* Features */}
                       <div className="mb-6 flex-1">
                         <h3 className="text-sm font-semibold text-gray-900 mb-3 uppercase">Features</h3>
-                        {plan.benefits && plan.benefits.length > 0 && (
+                        {benefits.length > 0 && (
                           <ul className="space-y-2.5">
-                            {plan.benefits.map((benefit, idx) => (
+                            {benefits.map((benefit, idx) => (
                               <li key={idx} className="flex items-start gap-2">
                                 <Check className="h-4 w-4 text-[#1e40af] flex-shrink-0 mt-0.5" />
                                 <span className="text-sm text-gray-900">{benefit}</span>
@@ -388,6 +390,7 @@ export default function SubscriptionsPage() {
               {plans.slice(4).map((plan) => {
                 const weeklyPrice = getPriceForCountry(plan, 7)
                 const monthlyPrice = getPriceForCountry(plan, 30)
+                const benefits = getPublicPlanBenefits(plan.benefits)
 
                 return (
                   <Card key={plan.id} className="h-full flex flex-col bg-white border border-gray-200 shadow-sm">
@@ -452,11 +455,11 @@ export default function SubscriptionsPage() {
                         )}
                       </div>
 
-                      <p className="text-sm text-gray-600 mb-6">{plan.description}</p>
+                      <p className="text-sm text-gray-600 mb-6">{getPublicPlanDescription(plan.description)}</p>
 
-                      {plan.benefits && plan.benefits.length > 0 && (
+                      {benefits.length > 0 && (
                         <ul className="flex-1 space-y-2 mb-6">
-                          {plan.benefits.slice(0, 3).map((benefit, idx) => (
+                          {benefits.slice(0, 3).map((benefit, idx) => (
                             <li key={idx} className="flex items-start gap-2">
                               <Check className="h-4 w-4 text-[#1e40af] flex-shrink-0 mt-0.5" />
                               <span className="text-sm text-gray-900">{benefit}</span>

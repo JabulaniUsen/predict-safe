@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { PlanWithPrice } from '@/types'
 import { Check } from 'lucide-react'
 import { getCurrencyFromCountry, getCurrencySymbol as getCurrencySymbolUtil } from '@/lib/utils/currency'
+import { getPublicPlanBenefits, getPublicPlanDescription } from '@/lib/utils/plan-display'
 
 type CountryOption = 'Nigeria' | 'Ghana' | 'Kenya' | 'Other'
 
@@ -240,6 +241,7 @@ export function VIPPackagesSection() {
                 ? getPriceForCountry(plan, 7)
                 : getPriceForCountry(plan, 30)
               const isPopular = plan.slug === popularPlanSlug
+              const benefits = getPublicPlanBenefits(plan.benefits)
               
               // Get currency from selected price - ensure we access it correctly
               const priceCurrency = selectedPrice ? (selectedPrice as any).currency : null
@@ -302,15 +304,15 @@ export function VIPPackagesSection() {
 
                       {/* Description */}
                       <p className="text-sm text-gray-600 mb-6 leading-relaxed">
-                        {plan.description || 'Premium predictions for serious bettors.'}
+                        {getPublicPlanDescription(plan.description) || 'Premium predictions for serious bettors.'}
                       </p>
 
                       {/* Features */}
                       <div className="mb-6 flex-1">
                         <h3 className="text-sm font-semibold text-gray-900 mb-3 uppercase">Features</h3>
-                        {plan.benefits && plan.benefits.length > 0 && (
+                        {benefits.length > 0 && (
                           <ul className="space-y-2.5">
-                            {plan.benefits.map((benefit, idx) => (
+                            {benefits.map((benefit, idx) => (
                               <li key={idx} className="flex items-start gap-2">
                                 <Check className="h-4 w-4 text-[#1e40af] flex-shrink-0 mt-0.5" />
                                 <span className="text-sm text-gray-900">{benefit}</span>
